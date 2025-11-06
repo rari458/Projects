@@ -4,7 +4,9 @@ import React, { useState, useContext } from 'react';
 import apiClient from '../api/axiosConfig.js';
 import { AuthContext } from '../context/AuthContext.jsx';
 
-const GOOGLE_AUTH_URL = 'http://localhost:5001/api/auth/google';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+
+const GOOGLE_AUTH_URL = `${API_BASE_URL}/auth/google`;
 
 function Auth() {
     const [isLogin, setIsLogin] = useState(true);
@@ -51,7 +53,7 @@ function Auth() {
 
     const handleGoogleLogin = () => {
         window.location.href = GOOGLE_AUTH_URL;
-    }
+    };
 
     return (
         <div className="auth-container">
