@@ -12,7 +12,7 @@ module.exports = function(passport) {
             {
                 clientID: process.env.GOOGLE_CLIENT_ID,
                 clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-                callbackURL: '/api/auth/google/callback',
+                callbackURL: 'https://stock-tracker-server.onrender.com/api/auth/google/callback',
             },
             async (accessToken, refreshToken, Profiler, done) => {
                 try {

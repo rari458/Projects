@@ -94,7 +94,10 @@ router.get('/google', passport.authenticate('google', {
 }));
 
 router.get('/google/callback',
-    passport.authenticate('google', { failureRedirect: 'http://localhost:5173/login', session: false }),
+    passport.authenticate('google', { 
+        failureRedirect: 'https://stock-tracker.vercel.app/login',
+        session: false 
+    }),
     (req, res) => {
         const user = req.user;
         const token = jwt.sign(
@@ -103,7 +106,7 @@ router.get('/google/callback',
             { expiresIn: '1h' }
         );
 
-        res.redirect(`http://localhost:5173/auth/callback?token=${token}&user=${JSON.stringify({id: user._id, email: user.email})}`);
+        res.redirect(`https://stock-tracker.vercel.app/auth/callback?token=${token}&user=${JSON.stringify({id: user._id, email: user.email})}`);
     }
 );
 
