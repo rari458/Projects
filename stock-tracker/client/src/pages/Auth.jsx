@@ -1,0 +1,110 @@
+// client/src/pages/Auth.jsx
+
+import React, { useState, useContext } from 'react';
+import apiClient from '../api/axiosConfig.js';
+import { AuthContext } from '../context/AuthContext.jsx';
+
+const GOOGLE_AUTH_URL = 'http://localhost:5001/api/auth/google';
+
+function Auth() {
+    const [isLogin, setIsLogin] = useState(true);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const { login } = useContext(AuthContext);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        const url = isLogin 
+          ? '/auth/login'
+          : '/auth/register';
+
+        try {
+            const response = await apiClient.post(url, {
+                email,
+                password,
+            });
+
+            const token = response.data.token;
+            console.log('성공! 토큰:', token);
+            login(response.data.token, response.data.user);
+        } catch (err) {
+            if (err.response && err.response.data.error) {
+                setError(err.response.data.error);
+            } else {
+                setError('오류가 발생했습니다. 다시 시도해 주세요.');
+            }
+            console.error('인증 오류:', err.response || err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const toggleMode = () => {
+        setIsLogin(!isLogin);
+        setError('');
+    };
+
+    const handleGoogleLogin = () => {
+        window.location.href = GOOGLE_AUTH_URL;
+    }
+
+    return (
+        <div className="auth-container">
+            <form className="auth-form" onSubmit={handleSubmit}>
+                <h2>{isLogin ? '로그인' : '회원가입'}</h2>
+                {error && <p className="error-message">{error}</p>}
+                <div className="form-group">
+                    <label htmlFor="email">이메일</label>
+                    <input
+                      type="email"
+                      id="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                </div>
+                <div className="form-group">
+                    <label htmlFor="password">비밀번호</label>
+                    <input
+                      type="password"
+                      id="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      disabled={loading}
+                    />  
+                </div>
+                <button type="submit" className="auth-button" disabled={loading}>
+                    {loading ? '처리 중...' : (isLogin ? '로그인' : '회원가입')}
+                </button>
+                <div className="divider">
+                    <span>또는</span>
+                </div>
+                <button
+                  type="button"
+                  className="google-button"
+                  onClick={handleGoogleLogin}
+                  disabled={loading}
+                >
+                    <svg viewBox="0 0 48 48" width="20px" height="20px"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
+                    Google 계정으로 {isLogin ? '로그인' : '계속하기'}
+                </button>
+                <p className="toogle-message">
+                    {isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?'}
+                    <button type="button" onClick={toggleMode} className="toggle-button">
+                        {isLogin ? '회원가입' : '로그인'}
+                    </button>
+                </p>
+            </form>
+        </div>
+    );
+}
+
+export default Auth;

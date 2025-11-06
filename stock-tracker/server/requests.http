@@ -1,0 +1,104 @@
+### 1. (테스트 1) 성공적인 회원가입
+POST http://localhost:5001/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "test-user@example.com",
+  "password": "password123"
+}
+
+
+### 2. (테스트 2) 이메일 중복 확인
+POST http://localhost:5001/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "test-user@example.com",
+  "password": "password123"
+}
+
+
+### 3. (테스트 3) 로그인 성공 (★토큰 캡처)
+POST http://localhost:5001/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "test-user@example.com",
+  "password": "password123"
+}
+
+
+# (중요!) 변수 할당 스크립트
+# 이 스크립트 위/아래로 빈 줄이 있는지 확인하세요.
+#@token = {{loginRequest.response.body.token}}
+
+
+### 4. (테스트 4) 로그인 실패 - 잘못된 비밀번호
+POST http://localhost:5001/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "test-user@example.com",
+  "password": "wrongpassword"
+}
+
+
+### 5. (테스트 5) 로그인 실패 - 존재하지 않는 이메일
+POST http://localhost:5001/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "nobody@example.com",
+  "password": "password123"
+}
+
+
+### 6. (테스트 6) 보호된 API 접근 (성공)
+POST http://localhost:5001/api/portfolio/add
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OTA3NmZlYTg5MzU2MGUwODkyMjdmZWIiLCJlbWFpbCI6InRlc3QtdXNlckBleGFtcGxlLmNvbSIsImlhdCI6MTc2MjI2MDc2MSwiZXhwIjoxNzYyMjY0MzYxfQ.nwFVrDPYPGcwhAZVuiHdIlh5FKaH-G-7FOYiU-bpaWg
+
+{
+  "symbol": "MSFT",
+  "shares": 5,
+  "pricePerShare": 450.00,
+  "transactionType": "buy"
+}
+
+
+### 7. (테스트 7) 보호된 API 접근 (실패 - 토큰 없음)
+POST http://localhost:5001/api/portfolio/add
+Content-Type: application/json
+
+{
+  "symbol": "TSLA",
+  "shares": 5,
+  "pricePerShare": 200.00,
+  "transactionType": "buy"
+}
+
+### 8. (테스트 8) 주식 검색 (성공)
+# (중요!) 이 테스트 전에 반드시 '로그인' 테스트를 실행해서 @token 변수를 채워야 함
+GET http://localhost:5001/api/stocks/search?q=AAPL
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OTA3NmZlYTg5MzU2MGUwODkyMjdmZWIiLCJlbWFpbCI6InRlc3QtdXNlckBleGFtcGxlLmNvbSIsImlhdCI6MTc2MjE3OTIzNywiZXhwIjoxNzYyMTgyODM3fQ.PVyn6o2qaAPisWYaxEjQ9BRJmm7iTZ_amY7g_OAb394
+
+
+### 9. (테스트 9) 주식 검색 (실패 - 토큰 없음)
+GET http://localhost:5001/api/stocks/search?q=Apple
+# Authorization 헤더 없음
+
+### 10. (테스트 10) 현재가 조회 (성공)
+# Authorization 헤더에 유효한 토큰 필요
+GET http://localhost:5001/api/stocks/quote?symbol=AAPL
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OTA3NmZlYTg5MzU2MGUwODkyMjdmZWIiLCJlbWFpbCI6InRlc3QtdXNlckBleGFtcGxlLmNvbSIsImlhdCI6MTc2MjE3OTk3MiwiZXhwIjoxNzYyMTgzNTcyfQ.TuLlTdeQbWbIl44TmWGmRSvfsYoZhA9Y9QXMiktLe70
+
+
+### 11. (테스트 11) 현재가 조회 (실패 - 토큰 없음)
+GET http://localhost:5001/api/stocks/quote?symbol=MSFT
+# Authorization 헤더 없음
+
+### 12. (테스트 12) 포트폴리오 요약 (성공)
+# (중요!) 이 테스트 전에 반드시 '로그인' 테스트를 실행해서 @token 변수를 채워야 함
+# 또는 토큰을 수동으로 붙여넣으세요.
+GET http://localhost:5001/api/portfolio/summary
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OTA3NmZlYTg5MzU2MGUwODkyMjdmZWIiLCJlbWFpbCI6InRlc3QtdXNlckBleGFtcGxlLmNvbSIsImlhdCI6MTc2MjI2MDc2MSwiZXhwIjoxNzYyMjY0MzYxfQ.nwFVrDPYPGcwhAZVuiHdIlh5FKaH-G-7FOYiU-bpaWg
