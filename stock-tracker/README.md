@@ -8,8 +8,8 @@ MERN 스택 (MongoDB, Express, React, Node.js)과 WebSocket을 활용하여 구�
 
 ## 🚀 라이브 데모 (Live Demo)
 
-* **프론트엔드 (Vercel):** `[Live Demo - (배포 예정)]`
-* **백엔드 (Render):** `[Live Demo - (배포 예정)]`
+* **프론트엔드 (Vercel):** [**https://projects-one-teal.vercel.app/**](https://projects-one-teal.vercel.app/)
+* **백엔드 (Render):** [**https://stock-tracker-server.onrender.com/**](https://stock-tracker-server.onrender.com/)
 
 ## ✨ 주요 기능 (Features)
 
