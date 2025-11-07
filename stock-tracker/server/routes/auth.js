@@ -95,7 +95,7 @@ router.get('/google', passport.authenticate('google', {
 
 router.get('/google/callback',
     passport.authenticate('google', { 
-        failureRedirect: 'https://stock-tracker.vercel.app/#/login',
+        failureRedirect: 'https://projects-one-teal.vercel.app/login',
         session: false 
     }),
     (req, res) => {
@@ -106,7 +106,7 @@ router.get('/google/callback',
             { expiresIn: '1h' }
         );
 
-        res.redirect(`https://stock-tracker.vercel.app/#/auth/callback?token=${token}&user=${JSON.stringify({id: user._id, email: user.email})}`);
+        res.redirect(`https://projects-one-teal.vercel.app/auth/callback?token=${token}&user=${JSON.stringify({id: user._id, email: user.email})}`);
     }
 );
 
