@@ -1,24 +1,19 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
+import { Routes, Route, Link } from "react-router-dom";
+import Dashboard from "./pages/Dashboard";
+import Backtest from "./pages/Backtest";
 
 export default function App() {
-  const [health, setHealth] = useState(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    fetch("http://localhost:8000/health")
-      .then((r) => r.json())
-      .then(setHealth)
-      .catch((e) => setError(String(e)));
-  }, []);
-
   return (
-    <div style={{ padding: 24, fontFamily: "ui-sans-serif, system-ui" }}>
-      <h1>QuantSuite Dashboard</h1>
-      <p>API Health:</p>
-      <pre>
-        {health ? JSON.stringify(health) : error ? `ERR: ${error}` : "loading..."}
-      </pre>
-      <small>Ensure FastAPI is running on http://localhost:8000</small>
+    <div style={{ padding: 24, fontFamily: "ui-sans-serif" }}>
+      <nav style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+        <Link to="/">Dashboard</Link> 
+        <Link to="/backtest">Backtest</Link>
+      </nav>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/backtest" element={<Backtest />} />
+      </Routes>
     </div>
   );
 }

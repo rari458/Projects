@@ -1,24 +1,68 @@
-#include "commons/csv.hpp"
-#include <fstream>
-#include <sstream>
-#include <stdexcept>
+// "csv.cpp"
+#include "csv.hpp"
 
 using namespace std;
 
 namespace commons {
-vector<Row> read_csv(const string& path) {
-    ifstream in(path);
-    if(!in.is_open()) throw runtime_error("Cannot open: " + path);
+
+vector<CsvRow> read_csv(const string& path) {
+    ifstream f(path);
+    if (!f.is_open()) {
+        throw runtime_error("Failed to open CSV: " + path);
+    }
+    
+    vector<CsvRow> rows;
     string line;
-    getline(in, line);
-    vector<Row> rows;
-    while(getline(in, line)) {
-        stringstream ss(line);
-        string date, close_s;
-        if (getline(ss, date, ',') && getline(ss, close_s, ',')) {
-            rows.push_back({date, stod(close_s)});
+
+    if (!getline(f, line)) {
+        return rows;
+    }
+
+    {
+        string lower = line;
+        for (char& c : lower) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+
+        if (lower.find("date") != string::npos &&
+            lower.find("close") != string::npos) {
+            
+        } else {
+            stringstream ss(line);
+            string dateStr, closeStr;
+            if (getline(ss, dateStr, ',') && 
+                getline(ss, closeStr, ',')) {
+                try {
+                    CsvRow row;
+                    row.date  = dateStr;
+                    row.close = stod(closeStr);
+                    rows.push_back(row);
+                } catch (...) {
+
+                }
+            }
         }
     }
+
+    while (getline(f, line)) {
+        if (line.size() < 3) continue;
+        if (!line.empty() && line[0] == '#') continue;
+
+        stringstream ss(line);
+        string dateStr, closeStr;
+
+        if (!getline(ss, dateStr, ',')) continue;
+        if (!getline(ss, closeStr, ',')) continue;
+
+        try {
+            CsvRow row;
+            row.date  = dateStr;
+            row.close = stod(closeStr);
+            rows.push_back(row);
+        } catch (...) {
+
+        }
+    }
+
     return rows;
 }
+
 }

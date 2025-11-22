@@ -1,9 +1,10 @@
-import React from 'react';
+import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App.jsx";
+import "./index.css";
+import BacktestPanel  from "./components/BacktestPanel";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <App />
+    <BacktestPanel />
   </React.StrictMode>
-);
+)
