@@ -1,0 +1,11 @@
+services:
+  quantlab:
+    build: .
+    container_name: quantlab_container
+    volumes:
+      # Map the local 'data' folder to '/app/data' inside the container
+      # This ensures files saved by the bot appear on your computer
+      - ./data:/app/data
+    environment:
+      # Pass environment variables if needed
+      - PYTHONUNBUFFERED=1
