@@ -6,7 +6,7 @@ import pandas as pd
 
 # 페이지 설정
 st.set_page_config(page_title="Settlo", layout="wide")
-API_URL = "http://127.0.0.1:8000"
+API_URL = "https://settlo-647487045104.asia-northeast3.run.app/"
 
 # 세션 상태 초기화
 if "user_id" not in st.session_state:
