@@ -2,10 +2,12 @@ FROM python:3.9-slim
 
 WORKDIR /code
 
+# 현재 위치에 있는 requirements.txt를 복사
 COPY ./requirements.txt /code/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
+# Projects/Settlo 폴더 내에 있는 app 폴더를 컨테이너의 /code/app으로 복사
 COPY ./app /code/app
 
-# Cloud Run은 포트를 환경변수 $PORT로 줍니다
+# 실행 경로 확인 (app.main:app)
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
