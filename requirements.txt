@@ -7,3 +7,4 @@ streamlit
 pandas
 python-multipart
 google-generativeai
+email-validator
