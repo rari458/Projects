@@ -1,0 +1,12 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+COPY ./requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
+
+COPY ./frontend.py /app/frontend.py
+COPY ./app /app/app 
+
+# Streamlit 포트 설정
+CMD ["sh", "-c", "streamlit run frontend.py --server.port=${PORT:-8080} --server.address=0.0.0.0"]

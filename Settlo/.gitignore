@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+*db
+settlo.db
+uploaded_files/
+venv/
+.venv/
+.DS_Store
+.vscode/

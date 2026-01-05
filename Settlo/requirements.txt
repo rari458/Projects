@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+requests
+streamlit
+pandas
+python-multipart
+google-generativeai
