@@ -8,3 +8,4 @@ pandas
 python-multipart
 google-generativeai
 email-validator
+python-dotenv
