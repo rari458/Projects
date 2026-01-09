@@ -8,7 +8,9 @@ import time
 st.set_page_config(page_title="Settlo", layout="wide", page_icon="🌏")
 
 # API 주소
-API_URL = "http://localhost:8000"
+#API_URL = "http://localhost:8000"
+
+API_URL = "https://settlo-647487045104.asia-northeast3.run.app"
 
 # 세션 상태 초기화
 if "access_token" not in st.session_state:
