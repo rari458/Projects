@@ -1,141 +1,192 @@
-# app/models.py (Detail Version 반영)
+# app/models.py (체크리스트 기능 추가된 최종본)
 
-from sqlalchemy import Column, Integer, String, Boolean, Date, ForeignKey, Enum, DateTime, Text
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text, Date, DateTime, Enum
 from sqlalchemy.orm import relationship
-from app.database import Base
+from sqlalchemy.sql import func
+from .database import Base
 import enum
 from datetime import datetime
 
-# --- Enums (기획서 반영) ---
+# --- Enums (기획서 반영, DB 저장 시 문자열로 사용될 수도 있음) ---
 class VisaType(str, enum.Enum):
     D2 = "D-2"
     D4 = "D-4"
 
-# 상태(Status): 처리 단계 세분화
 class StepStatus(str, enum.Enum):
-    WAITING = "대기"          # 요청 생성, 처리 전
-    REQUEST_DATA = "자료요청" # 추가 첨부 필요
-    IN_REVIEW = "검토중"      # 전문가/운영 검토 진행
-    IN_PROGRESS = "진행중"    # 실제 업무 처리 단계
-    COMPLETED = "완료"        # 해당 단계 종료
-    ON_HOLD = "보류"          # 사용자 사정으로 일시 중단
+    WAITING = "대기"
+    REQUEST_DATA = "자료요청"
+    IN_REVIEW = "검토중"
+    IN_PROGRESS = "진행중"
+    COMPLETED = "완료"
+    ON_HOLD = "보류"
 
 class DocStatus(str, enum.Enum):
     UNVERIFIED = "UNVERIFIED"
     VERIFIED = "VERIFIED"
     REVIEW_NEEDED = "REVIEW_NEEDED"
 
-# --- Tables ---
-
+# ---------------------------------------------------------
+# 1. 사용자 (User) - 프로필 정보 통합됨
+# ---------------------------------------------------------
 class User(Base):
     __tablename__ = "users"
+
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
+    username = Column(String, unique=True, index=True) # 아이디
+    email = Column(String, unique=True, index=True)    # 이메일
+    full_name = Column(String)                         # 이름
+    hashed_password = Column(String)                   # 비밀번호
     
-    profile = relationship("UserProfile", back_populates="user", uselist=False)
+    # [통합된 프로필 정보]
+    nationality = Column(String, nullable=True)        # 국적
+    visa_type = Column(String, nullable=True)          # 비자 타입
+    entry_date = Column(Date, nullable=True)           # 입국일
+    
+    # [관계 설정]
+    # 1:1 관계 (User <-> Roadmap)
     roadmap = relationship("Roadmap", back_populates="user", uselist=False)
+    
+    # 1:N 관계 (User <-> Documents, Posts, Comments, Logs)
     documents = relationship("Document", back_populates="user")
     posts = relationship("BoardPost", back_populates="author")
+    comments = relationship("BoardComment", back_populates="author")
+    step_comments = relationship("StepComment", back_populates="author")
+    audit_logs = relationship("AuditLog", back_populates="user")
 
-class UserProfile(Base):
-    __tablename__ = "user_profiles"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    full_name = Column(String)
-    nationality = Column(String)
-    visa_type = Column(Enum(VisaType))
-    university = Column(String)
-    entry_date = Column(Date)
-    
-    user = relationship("User", back_populates="profile")
+# (주의: class UserProfile은 삭제되었습니다!)
 
+# ---------------------------------------------------------
+# 2. 로드맵 (Roadmap)
+# ---------------------------------------------------------
 class Roadmap(Base):
     __tablename__ = "roadmaps"
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     title = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    steps = relationship("RoadmapStep", back_populates="roadmap")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # 관계 설정
     user = relationship("User", back_populates="roadmap")
+    steps = relationship("RoadmapStep", back_populates="roadmap", cascade="all, delete-orphan")
 
 class RoadmapStep(Base):
     __tablename__ = "roadmap_steps"
+
     id = Column(Integer, primary_key=True, index=True)
     roadmap_id = Column(Integer, ForeignKey("roadmaps.id"))
     
-    title = Column(String)       # 단계명
-    category = Column(String)    # 분류 (VISA, BANK, HOUSING 등)
-    description = Column(String) # 설명
-    
-    # [워크플로우 핵심]
-    status = Column(Enum(StepStatus), default=StepStatus.WAITING)
-    order_index = Column(Integer)
-    deadline = Column(Date)
-    
-    # 전문가 피드백/질문 (Question)
-    expert_comment = Column(Text, nullable=True) 
-    
-    roadmap = relationship("Roadmap", back_populates="steps")
-
-    # ▼ [추가] 댓글(Q&A)과의 관계 설정
-    comments = relationship("StepComment", back_populates="step", cascade="all, delete-orphan")
-
-class Document(Base):
-    __tablename__ = "documents"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    doc_type = Column(String)
-    s3_key = Column(String)
-    upload_date = Column(DateTime, default=datetime.utcnow)
-    
-    # [3. 보관함 기능] 유효기간 및 리스크 분석
-    expiry_date = Column(Date, nullable=True) 
-    risk_analysis = Column(Text, nullable=True) # JSON 형태 저장
-    verification_status = Column(Enum(DocStatus), default=DocStatus.UNVERIFIED)
-
-    user = relationship("User", back_populates="documents")
-
-# [3. 보관함 - 신뢰 장치] 감사 로그
-class AuditLog(Base):
-    __tablename__ = "audit_logs"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    action = Column(String) # "VIEW_DOC", "DOWNLOAD_DOC", "STATUS_CHANGE"
-    target_id = Column(Integer) # 문서 ID or 스텝 ID
-    timestamp = Column(DateTime, default=datetime.utcnow)
-
-# [4. 커뮤니티]
-class BoardPost(Base):
-    __tablename__ = "board_posts"
-    id = Column(Integer, primary_key=True, index=True)
     title = Column(String)
-    content = Column(String)
-    author_id = Column(Integer, ForeignKey("users.id"))
+    category = Column(String)     # ENTRY, HOUSING, VISA, BANK
+    description = Column(String)
+    status = Column(String, default="대기") # 대기, 진행중, 완료 등
+    order_index = Column(Integer)
+    deadline = Column(Date, nullable=True)
     
-    # ▼ [추가] 필터링과 결과 태그를 위한 컬럼
-    visa_type = Column(String, default="D-2")  # 예: D-2, D-4
-    result_tag = Column(String, default="TIP") # 예: SUCCESS(승인), FAIL(반려), TIP(정보)
+    # 관계 설정
+    roadmap = relationship("Roadmap", back_populates="steps")
+    comments = relationship("StepComment", back_populates="step", cascade="all, delete-orphan")
+    
+    # [NEW] 체크리스트 (1:N)
+    checklist = relationship("StepChecklist", back_populates="step", cascade="all, delete-orphan")
+    # [NEW] 이 단계에 첨부된 문서들
+    documents = relationship("Document", back_populates="step", cascade="all, delete-orphan")
 
-    comments = relationship("BoardComment", back_populates="post")
-    author = relationship("User", back_populates="posts")
-
-class BoardComment(Base):
-    __tablename__ = "board_comments"
+# [NEW] 체크리스트 테이블 (스케치 우측 하단 구현용)
+class StepChecklist(Base):
+    __tablename__ = "step_checklists"
+    
     id = Column(Integer, primary_key=True, index=True)
-    content = Column(String)
-    post_id = Column(Integer, ForeignKey("board_posts.id"))
-    author_id = Column(Integer, ForeignKey("users.id"))
-    post = relationship("BoardPost", back_populates="comments")
+    step_id = Column(Integer, ForeignKey("roadmap_steps.id"))
+    
+    item_content = Column(String)      # 예: "여권 사본", "재학증명서"
+    is_checked = Column(Boolean, default=False) # 체크 여부
+    
+    step = relationship("RoadmapStep", back_populates="checklist")
 
+# 단계별 질문/댓글 (Ticket System)
 class StepComment(Base):
     __tablename__ = "step_comments"
 
     id = Column(Integer, primary_key=True, index=True)
     step_id = Column(Integer, ForeignKey("roadmap_steps.id"))
-    author_id = Column(Integer, ForeignKey("users.id")) # 질문한 사람 (혹은 답변한 전문가)
+    author_id = Column(Integer, ForeignKey("users.id"))
     content = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
     step = relationship("RoadmapStep", back_populates="comments")
+    author = relationship("User", back_populates="step_comments")
+
+# ---------------------------------------------------------
+# 3. 문서 (Document)
+# ---------------------------------------------------------
+class Document(Base):
+    __tablename__ = "documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+    step_id = Column(Integer, ForeignKey("roadmap_steps.id"), nullable=True)
+    
+    doc_type = Column(String) # PASSPORT, ARC, SCHOOL_LETTER
+    s3_key = Column(String)   # 파일 경로
+    
+    verification_status = Column(String, default="UNVERIFIED")
+    risk_analysis = Column(Text, nullable=True) # AI 분석 결과 (JSON)
+    expiry_date = Column(Date, nullable=True)   # 만료일
+    
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # 관계 설정
+    user = relationship("User", back_populates="documents")
+
+    step = relationship("RoadmapStep", back_populates="documents")
+
+# ---------------------------------------------------------
+# 4. 커뮤니티 (Board)
+# ---------------------------------------------------------
+class BoardPost(Base):
+    __tablename__ = "board_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    author_id = Column(Integer, ForeignKey("users.id"))
+    
+    title = Column(String)
+    content = Column(Text)
+    visa_type = Column(String)  # D-2, D-4
+    result_tag = Column(String) # SUCCESS, FAIL, TIP
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # 관계 설정 (User.posts 와 매칭)
+    author = relationship("User", back_populates="posts")
+    comments = relationship("BoardComment", back_populates="post", cascade="all, delete-orphan")
+
+class BoardComment(Base):
+    __tablename__ = "board_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("board_posts.id"))
+    author_id = Column(Integer, ForeignKey("users.id"))
+    
+    content = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # 관계 설정
+    post = relationship("BoardPost", back_populates="comments")
+    author = relationship("User", back_populates="comments")
+
+# ---------------------------------------------------------
+# 5. 감사 로그 (Audit Log)
+# ---------------------------------------------------------
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    
+    action = Column(String) # LOGIN, UPLOAD, VIEW_ROADMAP
+    target_id = Column(Integer, nullable=True) # 관련된 문서나 글 ID
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="audit_logs")

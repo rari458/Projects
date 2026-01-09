@@ -1,12 +1,13 @@
-# app/main.py (최종 수정 버전)
+# app/main.py
 
 import json
 import shutil
 import os
-from datetime import datetime
-from typing import List
+from datetime import datetime, timedelta
+from typing import List, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer # 필수 라이브러리
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -22,6 +23,9 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Settlo API")
 
+# 토큰 인증을 위한 스킴 설정 (URL은 /token 엔드포인트를 가리킴)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
 def get_db():
     db = SessionLocal()
     try:
@@ -34,53 +38,109 @@ def health_check():
     return {"status": "ok", "message": "Settlo API Running"}
 
 # ---------------------------------------------------------
-# 1. 회원가입 및 로드맵
+# 1. 인증 (로그인 & 내 정보 조회)
 # ---------------------------------------------------------
-@app.post("/users/signup", response_model=schemas.UserResponse)
+
+@app.post("/token", response_model=schemas.Token)
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # 1. 유저 인증 확인
+    user = services.authenticate_user(db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # 2. 토큰 생성
+    access_token_expires = timedelta(minutes=services.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = services.create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    
+    # 3. 토큰과 함께 유저 정보 반환
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "user_id": user.id,
+        "user_name": user.full_name,
+        "visa_type": user.visa_type
+    }
+
+# [New] 토큰으로 내 정보 가져오기 API (프론트엔드 세션 복구용)
+@app.get("/users/me", response_model=schemas.User)
+def read_users_me(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    # services.py에 추가한 get_user_by_token 함수 사용
+    user = services.get_user_by_token(db, token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+# ---------------------------------------------------------
+# 2. 회원가입 및 프로필 관리
+# ---------------------------------------------------------
+
+@app.post("/users/signup", response_model=schemas.User)
 def create_user(user_data: schemas.UserCreate, db: Session = Depends(get_db)):
-    existing_user = db.query(models.User).filter(models.User.email == user_data.email).first()
-    if existing_user:
+    existing_email = db.query(models.User).filter(models.User.email == user_data.email).first()
+    existing_user = db.query(models.User).filter(models.User.username == user_data.username).first()
+    
+    if existing_email:
         raise HTTPException(status_code=400, detail="이미 등록된 이메일입니다.")
+    if existing_user:
+        raise HTTPException(status_code=400, detail="이미 존재하는 아이디입니다.")
 
     new_user = models.User(
+        username=user_data.username,
         email=user_data.email,
-        hashed_password=user_data.password + "_fakehash" 
+        full_name=user_data.full_name,
+        hashed_password=services.get_password_hash(user_data.password)
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    new_profile = models.UserProfile(
-        user_id=new_user.id,
-        full_name=user_data.full_name,
-        nationality=user_data.nationality,
-        visa_type=user_data.visa_type,
-        university=user_data.university,
-        entry_date=user_data.entry_date
-    )
-    db.add(new_profile)
+    return new_user
+
+@app.patch("/users/{user_id}/visa", response_model=schemas.User)
+def update_user_profile(user_id: int, user_update: schemas.UserUpdate, db: Session = Depends(get_db)):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user_update.visa_type is not None:
+        db_user.visa_type = user_update.visa_type
+    if user_update.nationality is not None:
+        db_user.nationality = user_update.nationality
+    if user_update.entry_date is not None:
+        db_user.entry_date = user_update.entry_date
+        
     db.commit()
-    db.refresh(new_profile)
+    db.refresh(db_user)
 
-    # 로드맵 자동 생성
-    services.generate_roadmap(db, new_user, new_profile)
+    if user_update.visa_type:
+        services.generate_roadmap(db, db_user) 
 
-    return {
-        "id": new_user.id,
-        "email": new_user.email,
-        "full_name": new_profile.full_name
-    }
+    return db_user
 
+# ---------------------------------------------------------
+# 3. 로드맵 조회 및 관리
+# ---------------------------------------------------------
 @app.get("/users/{user_id}/roadmap", response_model=schemas.RoadmapResponse)
 def get_my_roadmap(user_id: int, db: Session = Depends(get_db)):
     roadmap = db.query(models.Roadmap).filter(models.Roadmap.user_id == user_id).first()
+    
     if not roadmap:
-        raise HTTPException(status_code=404, detail="로드맵을 찾을 수 없습니다.")
+         return {"id": 0, "title": "설정 필요", "steps": []}
+         
     return roadmap
 
-# [수정] 상태 업데이트 모델
 class StepUpdate(BaseModel):
-    status: str  # "대기", "검토중", "완료" 등 한글 Enum 값
+    status: str
 
 @app.patch("/roadmap-steps/{step_id}")
 def update_step_status(step_id: int, request: StepUpdate, db: Session = Depends(get_db)):
@@ -88,147 +148,220 @@ def update_step_status(step_id: int, request: StepUpdate, db: Session = Depends(
     if not step:
         raise HTTPException(status_code=404, detail="단계를 찾을 수 없습니다.")
     
-    # [핵심 수정] 전달받은 상태 값을 그대로 적용 (단순 COMPLETED 체크 X)
-    # models.StepStatus Enum에 없는 값이면 에러가 날 수 있으나, Frontend에서 맞춰서 보냄
     step.status = request.status 
-        
     db.commit()
     return {"id": step.id, "status": step.status}
 
-class VisaUpdate(BaseModel):
-    visa_type: str
-
-@app.patch("/users/{user_id}/visa")
-def update_user_visa(user_id: int, request: VisaUpdate, db: Session = Depends(get_db)):
-    updated_profile = services.update_visa_and_roadmap(db, user_id, request.visa_type)
-    if not updated_profile:
-        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
-    return {"status": "updated", "new_visa": updated_profile.visa_type}
-
-# [신규] 로드맵 단계별 질문/댓글 달기 (Q&A)
 @app.post("/roadmap-steps/{step_id}/comments", response_model=schemas.StepCommentResponse)
 def create_step_comment(step_id: int, comment: schemas.StepCommentCreate, user_id: int, db: Session = Depends(get_db)):
-    # 1. 단계 존재 확인
     step = db.query(models.RoadmapStep).filter(models.RoadmapStep.id == step_id).first()
     if not step:
         raise HTTPException(status_code=404, detail="단계를 찾을 수 없습니다.")
     
-    # 2. 댓글 저장
     new_comment = models.StepComment(
         step_id=step_id,
         author_id=user_id,
-        content=comment.content
+        content=comment.content,
+        created_at=datetime.now()
     )
     db.add(new_comment)
-    
-    # 3. (옵션) 질문이 달리면 상태를 '자료요청'이나 '검토중'으로 자동 변경할 수도 있음
-    # step.status = models.StepStatus.REQUEST_DATA 
-    
     db.commit()
     db.refresh(new_comment)
     return new_comment
 
 # ---------------------------------------------------------
-# 2. 문서 업로드 및 AI 분석
+# 4. 문서 업로드 및 AI 분석
 # ---------------------------------------------------------
 @app.post("/users/{user_id}/documents", response_model=None)
 def upload_document(
     user_id: int, 
-    doc_type: str, 
+    doc_type: str,
+    step_id: Optional[int] = None,
     file: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
-    file_location = f"{UPLOAD_DIR}/{datetime.now().timestamp()}_{file.filename}"
-    
-    with open(file_location, "wb+") as file_object:
-        shutil.copyfileobj(file.file, file_object)
-    
-    new_doc = models.Document(
-        user_id=user_id,
-        doc_type=doc_type,
-        s3_key=file_location,
-        verification_status=models.DocStatus.UNVERIFIED
-    )
-    db.add(new_doc)
-    db.commit()
-    db.refresh(new_doc)
-    
-    return {"filename": file.filename, "saved_path": file_location, "status": "Uploaded"}
+    try:
+        # 파일명 안전하게 생성 (타임스탬프 정수형 변환)
+        safe_filename = f"{int(datetime.now().timestamp())}_{file.filename}"
+        file_location = os.path.join(UPLOAD_DIR, safe_filename)
+        
+        # 파일 저장
+        with open(file_location, "wb+") as file_object:
+            shutil.copyfileobj(file.file, file_object)
+        
+        # DB 기록
+        new_doc = models.Document(
+            user_id=user_id,
+            step_id=step_id,
+            doc_type=doc_type,
+            s3_key=file_location,
+            verification_status="REVIEW_NEEDED" if step_id else "UNVERIFIED"
+        )
+        db.add(new_doc)
+        db.commit()
+        db.refresh(new_doc)
 
-# ---------------------------------------------------------
-# [신규] 파트너 비교 데이터 제공 API
-# ---------------------------------------------------------
-@app.get("/partners/{category}")
-def get_partners(category: str):
-    """
-    해당 카테고리(VISA, HOUSING 등)의 '직접 진행 vs 전문가 위임' 비교 데이터와 파트너 리스트 반환
-    """
-    # 실제로는 DB에서 가져와야 하지만, 데모용 Mock Data 사용
-    comparison = {
-        "self": {"cost": 30000, "time": "5일 (방문 2회)", "difficulty": "높음"},
-        "expert": {"cost": 150000, "time": "1일 (방문 0회)", "difficulty": "낮음"}
-    }
-    
-    partners = [
-        {"id": 1, "name": "김정수 행정사", "rating": 4.9, "review_count": 120, "price": 150000},
-        {"id": 2, "name": "Global Visa Center", "rating": 4.7, "review_count": 85, "price": 140000},
-    ]
-    
-    if category == "HOUSING":
-        comparison = {
-            "self": {"cost": 0, "time": "14일 (발품 10회)", "difficulty": "매우 높음"},
-            "expert": {"cost": 300000, "time": "3일 (추천 3개)", "difficulty": "낮음"}
+        # 로드맵 단계 상태 업데이트 (대기 -> 검토중)
+        if step_id:
+            step = db.query(models.RoadmapStep).filter(models.RoadmapStep.id == step_id).first()
+            if step and step.status == "대기":
+                step.status = "검토중"
+                db.commit()
+
+        return {
+            "id": new_doc.id,
+            "filename": file.filename, 
+            "saved_path": file_location,
+            "status": new_doc.verification_status
         }
-        partners = [
-            {"id": 3, "name": "외국인 친화 부동산", "rating": 4.8, "price": "법정 수수료"},
-            {"id": 4, "name": "Campus Home", "rating": 4.5, "price": "수수료 10% 할인"}
-        ]
+    except Exception as e:
+        # 에러 발생 시 500 에러 반환
+        raise HTTPException(status_code=500, detail=f"파일 업로드 실패: {str(e)}")
 
-    return {"comparison": comparison, "partners": partners}
-
-# ---------------------------------------------------------
-# [수정] 문서 분석 API (만료일 저장 & 로그 기록)
-# ---------------------------------------------------------
 @app.post("/documents/{doc_id}/analyze")
 def analyze_document(doc_id: int, user_id: int = 1, db: Session = Depends(get_db)): 
-    # user_id는 데모용 기본값 1, 실제론 토큰에서 추출
-    
     document = db.query(models.Document).filter(models.Document.id == doc_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="문서 없음")
     
-    # [Log] 분석 시도 기록
     services.log_action(db, document.user_id, "ANALYZE_DOC", doc_id)
     
     try:
-        # AI 분석 호출
         ai_result_text = services.analyze_document_with_ai(document.s3_key, document.doc_type)
-        
-        # JSON 텍스트 파싱 (Expiry Date 추출을 위해)
-        # Gemini가 가끔 ```json ... ``` 형태로 줄 때가 있어 처리 필요
         clean_json = ai_result_text.replace("```json", "").replace("```", "").strip()
         parsed_result = json.loads(clean_json)
         
-        # DB 업데이트
-        document.risk_analysis = clean_json # 원본 텍스트 저장
+        document.risk_analysis = clean_json
         document.verification_status = parsed_result.get("verification", "UNVERIFIED")
         
-        # [핵심] 만료일 저장
         expiry = parsed_result.get("expiry_date")
         if expiry:
             try:
                 document.expiry_date = datetime.strptime(expiry, "%Y-%m-%d").date()
             except:
-                pass # 날짜 변환 실패 시 무시
+                pass
 
         db.commit()
         return {"status": "Analysis Completed", "result": parsed_result}
-        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"오류: {str(e)}")
 
 # ---------------------------------------------------------
-# 3. AI 챗봇
+# 5. 파트너 비교 & 기관 찾기
+# ---------------------------------------------------------
+@app.get("/partners/{category}")
+def get_partners(category: str):
+    # 프론트엔드에서 요구하는 Rich Data 형식으로 변경
+    return {
+        "category": category,
+        "comparison": {
+            "self": {
+                "title": "혼자 하기 (DIY)",
+                "cost": 0 if category == "BANK" else 30000 if category == "VISA" else 0,
+                "time": "4~5시간 (이동 포함)",
+                "stress": "High (복잡함)",
+                "success_rate": "85% (서류 미비 반려 위험)"
+            },
+            "expert": {
+                "title": "파트너 위임 (Pro)",
+                "cost": 50000 if category == "VISA" else 0,
+                "time": "10분 (비대면)",
+                "stress": "Zero",
+                "success_rate": "99.9% (보장)",
+                "partners": [
+                    {"name": "김정수 행정사", "rating": 4.9, "badge": "CERTIFIED", "review_cnt": 128, "sla": "10분 내 응답"},
+                    {"name": "Global Visa Lab", "rating": 4.7, "badge": "BEST PRICE", "review_cnt": 85, "sla": "1시간 내 응답"}
+                ]
+            }
+        }
+    }
+
+@app.get("/agencies")
+def get_agencies(category: str):
+    agencies = []
+    
+    # ---------------------------------------------------------
+    # 1. 연세대 (Sinchon) - 서대문구/마포구
+    # ---------------------------------------------------------
+    if category in ["BANK", "ALL"]:
+        agencies.append({"id": 1, "name": "우리은행 연세금융센터", "category": "BANK", "lat": 37.5643, "lon": 126.9365, "address": "연세대학교 공학원 1층", "rating": 4.5})
+        agencies.append({"id": 2, "name": "신한은행 신촌지점", "category": "BANK", "lat": 37.5552, "lon": 126.9369, "address": "서울 서대문구 신촌로 99", "rating": 4.2})
+    
+    if category in ["OFFICE", "ALL"]:
+        agencies.append({"id": 3, "name": "서대문구청", "category": "OFFICE", "lat": 37.5791, "lon": 126.9368, "address": "서울 서대문구 연희로 248", "rating": 3.8})
+        agencies.append({"id": 4, "name": "신촌동 주민센터", "category": "OFFICE", "lat": 37.5598, "lon": 126.9425, "address": "서울 서대문구 신촌역로 22-8", "rating": 4.0})
+    
+    if category in ["IMMIGRATION", "ALL"]:
+        # 연세대 관할: 서울남부(목동)
+        agencies.append({"id": 5, "name": "서울출입국·외국인청 (목동)", "category": "IMMIGRATION", "lat": 37.5195, "lon": 126.8679, "address": "서울 양천구 목동동로 151 (관할)", "rating": 2.5})
+
+    # ---------------------------------------------------------
+    # 2. 서울대 (Gwanak) - 관악구
+    # ---------------------------------------------------------
+    if category in ["BANK", "ALL"]:
+        agencies.append({"id": 11, "name": "신한은행 서울대지점", "category": "BANK", "lat": 37.4593, "lon": 126.9535, "address": "서울대 학생회관 1층", "rating": 4.8})
+        agencies.append({"id": 12, "name": "농협은행 서울대지점", "category": "BANK", "lat": 37.4645, "lon": 126.9550, "address": "서울대 행정관", "rating": 4.1})
+    
+    if category in ["OFFICE", "ALL"]:
+        agencies.append({"id": 13, "name": "관악구청", "category": "OFFICE", "lat": 37.4784, "lon": 126.9516, "address": "서울 관악구 관악로 145", "rating": 4.3})
+        agencies.append({"id": 14, "name": "낙성대동 주민센터", "category": "OFFICE", "lat": 37.4765, "lon": 126.9635, "address": "서울 관악구 남부순환로 1922", "rating": 3.9})
+
+    # ---------------------------------------------------------
+    # 3. 고려대 (Anam) - 성북구
+    # ---------------------------------------------------------
+    if category in ["BANK", "ALL"]:
+        agencies.append({"id": 21, "name": "하나은행 고려대점", "category": "BANK", "lat": 37.5890, "lon": 127.0330, "address": "고려대 중앙광장", "rating": 4.6})
+    
+    if category in ["OFFICE", "ALL"]:
+        agencies.append({"id": 23, "name": "성북구청", "category": "OFFICE", "lat": 37.5894, "lon": 127.0167, "address": "서울 성북구 보문로 168", "rating": 4.0})
+    
+    if category in ["IMMIGRATION", "ALL"]:
+        # 고려대 관할: 세종로출장소
+        agencies.append({"id": 25, "name": "세종로출장소 (종로)", "category": "IMMIGRATION", "lat": 37.5705, "lon": 126.9830, "address": "서울 종로구 종로 38 (관할)", "rating": 3.0})
+
+    # ---------------------------------------------------------
+    # 4. 한양대 (Seoul) - 성동구
+    # ---------------------------------------------------------
+    if category in ["BANK", "ALL"]:
+        agencies.append({"id": 31, "name": "신한은행 한양대점", "category": "BANK", "lat": 37.5572, "lon": 127.0453, "address": "한양대 동문회관", "rating": 4.3})
+    
+    if category in ["OFFICE", "ALL"]:
+        agencies.append({"id": 32, "name": "성동구청", "category": "OFFICE", "lat": 37.5635, "lon": 127.0365, "address": "서울 성동구 고산자로 270", "rating": 4.1})
+
+    return agencies
+
+# ---------------------------------------------------------
+# [UPGRADE] 파트너 비교 데이터 (기획서 SLA/인증 반영)
+# ---------------------------------------------------------
+@app.get("/partners/{category}")
+def get_partner_comparison(category: str):
+    # 실제로는 DB에서 가져와야 함
+    return {
+        "category": category,
+        "comparison": {
+            "self": {
+                "title": "혼자 하기 (DIY)",
+                "cost": 0 if category == "BANK" else 30000 if category == "VISA" else 0,
+                "time": "4~5시간 (이동 포함)",
+                "stress": "High (복잡함)",
+                "success_rate": "85% (서류 미비 반려 위험)"
+            },
+            "expert": {
+                "title": "파트너 위임 (Pro)",
+                "cost": 50000 if category == "VISA" else 0, # 부동산/은행은 수수료 구조가 다름
+                "time": "10분 (비대면)",
+                "stress": "Zero",
+                "success_rate": "99.9% (보장)",
+                "partners": [
+                    {"name": "김정수 행정사", "rating": 4.9, "badge": "CERTIFIED", "review_cnt": 128, "sla": "10분 내 응답"},
+                    {"name": "Global Visa Lab", "rating": 4.7, "badge": "BEST PRICE", "review_cnt": 85, "sla": "1시간 내 응답"}
+                ]
+            }
+        }
+    }
+
+# ---------------------------------------------------------
+# 6. AI 챗봇 & 커뮤니티
 # ---------------------------------------------------------
 class ChatRequest(BaseModel):
     message: str
@@ -238,10 +371,6 @@ def chat_with_ai(request: ChatRequest):
     response = services.get_chat_response(request.message)
     return {"reply": response}
 
-
-# ---------------------------------------------------------
-# 4. 커뮤니티
-# ---------------------------------------------------------
 @app.post("/community/posts", response_model=schemas.PostResponse)
 def create_post(post: schemas.PostCreate, user_id: int, db: Session = Depends(get_db)):
     new_post = models.BoardPost(
@@ -258,14 +387,9 @@ def create_post(post: schemas.PostCreate, user_id: int, db: Session = Depends(ge
 
 @app.get("/community/posts", response_model=List[schemas.PostResponse])
 def get_posts(visa_filter: str = None, db: Session = Depends(get_db)):
-    """
-    visa_filter가 있으면 해당 비자 글만, 없으면 전체 글 조회
-    """
     query = db.query(models.BoardPost)
-    
     if visa_filter and visa_filter != "ALL":
         query = query.filter(models.BoardPost.visa_type == visa_filter)
-        
     return query.order_by(models.BoardPost.id.desc()).all()
 
 @app.post("/community/posts/{post_id}/comments", response_model=schemas.CommentResponse)
@@ -278,78 +402,54 @@ def create_comment(post_id: int, comment: schemas.CommentCreate, user_id: int, d
     db.refresh(new_comment)
     return new_comment
 
-# --- [추가] 게시글 수정용 데이터 모델 ---
 class PostUpdate(BaseModel):
     title: str
     content: str
 
-# 4. 게시글 수정 (PUT)
 @app.put("/community/posts/{post_id}")
 def update_post(post_id: int, post_update: PostUpdate, user_id: int, db: Session = Depends(get_db)):
-    # 게시글 찾기
     post = db.query(models.BoardPost).filter(models.BoardPost.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
-    
-    # 작성자 확인 (본인만 수정 가능)
     if post.author_id != user_id:
         raise HTTPException(status_code=403, detail="수정 권한이 없습니다.")
     
-    # 내용 업데이트
     post.title = post_update.title
     post.content = post_update.content
     db.commit()
     return {"status": "updated", "id": post.id}
 
-# 5. 게시글 삭제 (DELETE)
 @app.delete("/community/posts/{post_id}")
 def delete_post(post_id: int, user_id: int, db: Session = Depends(get_db)):
     post = db.query(models.BoardPost).filter(models.BoardPost.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
-    
-    # 작성자 확인
     if post.author_id != user_id:
         raise HTTPException(status_code=403, detail="삭제 권한이 없습니다.")
     
-    # 삭제 실행
-    # (주의: 실제 서비스에선 댓글도 같이 지우거나(cascade), '삭제됨' 상태로 변경하는 게 안전함)
-    # 여기서는 간단히 해당 글에 달린 댓글 먼저 지우고 글을 지웁니다.
     db.query(models.BoardComment).filter(models.BoardComment.post_id == post_id).delete()
     db.delete(post)
     db.commit()
-    
     return {"status": "deleted", "id": post_id}
 
-# ---------------------------------------------------------
-# [신규] 5. 기관 리스트 (지도 서비스)
-# ---------------------------------------------------------
-@app.get("/agencies")
-def get_agencies(category: str = "ALL"):
-    """
-    카테고리별(BANK, OFFICE, IMMIGRATION) 주변 기관 좌표 반환 (Mock Data)
-    """
-    # 기준: 서울시청 좌표 (37.5665, 126.9780)
-    base_lat = 37.5665
-    base_lon = 126.9780
+@app.patch("/checklist-items/{item_id}")
+def update_checklist_item(item_id: int, update: schemas.ChecklistUpdate, db: Session = Depends(get_db)):
+    item = db.query(models.StepChecklist).filter(models.StepChecklist.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
     
-    agencies = []
-    
-    # 1. 은행 (BANK)
-    if category in ["ALL", "BANK"]:
-        agencies.append({"name": "우리은행 본점", "lat": base_lat + 0.002, "lon": base_lon + 0.001, "type": "BANK", "address": "서울 중구 소공로"})
-        agencies.append({"name": "신한은행 시청역점", "lat": base_lat - 0.002, "lon": base_lon + 0.002, "type": "BANK", "address": "서울 중구 세종대로"})
-        agencies.append({"name": "하나은행 광화문점", "lat": base_lat + 0.005, "lon": base_lon - 0.003, "type": "BANK", "address": "서울 종로구"})
+    item.is_checked = update.is_checked
+    db.commit()
+    return {"id": item.id, "is_checked": item.is_checked}
 
-    # 2. 관공서 (OFFICE - 구청, 주민센터)
-    if category in ["ALL", "OFFICE"]:
-        agencies.append({"name": "서울시청 민원실", "lat": base_lat, "lon": base_lon, "type": "OFFICE", "address": "서울 중구 세종대로 110"})
-        agencies.append({"name": "종로구청", "lat": base_lat + 0.012, "lon": base_lon + 0.005, "type": "OFFICE", "address": "서울 종로구 삼봉로"})
-
-    # 3. 출입국사무소 (IMMIGRATION)
-    if category in ["ALL", "IMMIGRATION"]:
-        # (거리가 좀 멀지만 지도 확인용으로 추가)
-        agencies.append({"name": "서울출입국·외국인청 (목동)", "lat": 37.517, "lon": 126.867, "type": "IMMIGRATION", "address": "서울 양천구 목동동로"})
-        agencies.append({"name": "세종로출장소", "lat": 37.570, "lon": 126.980, "type": "IMMIGRATION", "address": "서울 종로구 종로1가"})
-
-    return agencies
+# ---------------------------------------------------------
+# 7. 감사 로그 & 알림 (Trust System)
+# ---------------------------------------------------------
+@app.get("/users/{user_id}/audit-logs")
+def get_audit_logs(user_id: int, db: Session = Depends(get_db)):
+    # 최신순으로 10개만 가져오기
+    logs = db.query(models.AuditLog)\
+             .filter(models.AuditLog.user_id == user_id)\
+             .order_by(models.AuditLog.timestamp.desc())\
+             .limit(10).all()
+    return logs

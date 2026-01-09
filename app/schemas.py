@@ -1,21 +1,74 @@
-# app/schemas.py (최종 수정 버전)
-
 from pydantic import BaseModel, EmailStr
-from datetime import date, datetime # <--- datetime 추가됨
 from typing import Optional, List
-from app.models import VisaType, StepStatus
+from datetime import date, datetime
 
-# --- 1. 유저 프로필 입력용 (회원가입 시 받는 정보) ---
+# [NEW] 문서 정보 간략 보기 스키마
+class DocumentResponse(BaseModel):
+    id: int
+    doc_type: str
+    verification_status: str
+    uploaded_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# --- 0. 토큰 (로그인용) ---
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    
+    # 프론트엔드 편의를 위해 추가한 필드들
+    user_id: int
+    user_name: str
+    visa_type: Optional[str] = None 
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+# --- 1. 유저 스키마 ---
+
+# 회원가입 시 받는 정보
 class UserCreate(BaseModel):
-    email: EmailStr
+    username: str
     password: str
+    email: EmailStr
     full_name: str
-    nationality: str
-    visa_type: VisaType  # "D-2", "D-4" 등
-    university: Optional[str] = None
-    entry_date: date
 
-# --- [New] 로드맵 단계별 댓글(Q&A) 스키마 (RoadmapStepResponse보다 먼저 와야 함) ---
+# 내 정보 업데이트용
+class UserUpdate(BaseModel):
+    nationality: Optional[str] = None
+    visa_type: Optional[str] = None
+    entry_date: Optional[date] = None
+
+# 유저 정보 조회용
+class User(BaseModel):
+    id: int
+    username: str
+    email: str
+    full_name: str
+    nationality: Optional[str] = None
+    visa_type: Optional[str] = None
+    entry_date: Optional[date] = None
+
+    class Config:
+        from_attributes = True
+
+# --- 2. 로드맵/댓글/체크리스트 스키마 ---
+
+# [NEW] 체크리스트 항목 응답용
+class ChecklistItemResponse(BaseModel):
+    id: int
+    item_content: str
+    is_checked: bool
+
+    class Config:
+        from_attributes = True
+
+# [NEW] 체크리스트 상태 변경 요청용 (이게 없어서 에러가 났습니다!)
+class ChecklistUpdate(BaseModel):
+    is_checked: bool
+
+# 단계별 댓글(티켓)
 class StepCommentBase(BaseModel):
     content: str
 
@@ -26,44 +79,39 @@ class StepCommentResponse(StepCommentBase):
     id: int
     author_id: int
     created_at: datetime
+    
     class Config:
         from_attributes = True
 
-# --- 2. 로드맵 단계 출력용 (앱에 보여줄 정보) ---
+# 로드맵 단계 출력용
 class RoadmapStepResponse(BaseModel):
     id: int
     title: str
     description: Optional[str] = None
-    status: StepStatus
+    status: str
     order_index: int
     deadline: Optional[date] = None
     category: str
     
-    # [New] 이 단계에 달린 댓글(티켓) 리스트
+    # 댓글과 체크리스트 포함
     comments: List[StepCommentResponse] = [] 
+    checklist: List[ChecklistItemResponse] = []  # <--- 체크리스트 추가됨
+    documents: List[DocumentResponse] = []
 
-    class Config:
-        from_attributes = True # (구 orm_mode)
-
-# --- 3. 최종 응답용 (유저 정보 + 생성된 로드맵) ---
-class UserResponse(BaseModel):
-    id: int
-    email: str
-    full_name: str
-    
     class Config:
         from_attributes = True
 
-# --- 4. 로드맵 전체 조회용 (로드맵 정보 + 단계 리스트) ---
+# 로드맵 전체 조회용
 class RoadmapResponse(BaseModel):
     id: int
     title: str
-    steps: List[RoadmapStepResponse] = [] # 위에서 정의한 StepResponse 사용
+    steps: List[RoadmapStepResponse] = []
 
     class Config:
         from_attributes = True
 
-# --- 5. 커뮤니티용 스키마 ---
+# --- 3. 게시판/커뮤니티 스키마 ---
+
 class CommentBase(BaseModel):
     content: str
 
@@ -88,6 +136,7 @@ class PostCreate(PostBase):
 class PostResponse(PostBase):
     id: int
     author_id: int
-    comments: List[CommentResponse] = [] # 게시글 볼 때 댓글도 같이 봄
+    comments: List[CommentResponse] = []
+    
     class Config:
         from_attributes = True
