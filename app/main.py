@@ -373,12 +373,16 @@ def chat_with_ai(request: ChatRequest):
 
 @app.post("/community/posts", response_model=schemas.PostResponse)
 def create_post(post: schemas.PostCreate, user_id: int, db: Session = Depends(get_db)):
+    is_admin = (user_id == 1)
+
     new_post = models.BoardPost(
-        title=post.title, 
+        title=post.title,
         content=post.content, 
         author_id=user_id,
         visa_type=post.visa_type,
-        result_tag=post.result_tag
+        category=post.category,
+        result_tag=post.result_tag,
+        is_verified=is_admin
     )
     db.add(new_post)
     db.commit()
@@ -386,10 +390,23 @@ def create_post(post: schemas.PostCreate, user_id: int, db: Session = Depends(ge
     return new_post
 
 @app.get("/community/posts", response_model=List[schemas.PostResponse])
-def get_posts(visa_filter: str = None, db: Session = Depends(get_db)):
+def get_posts(
+    visa_filter: str = None, 
+    category: str = None,     # [NEW] 카테고리 필터
+    verified_only: bool = False, # [NEW] 검증글 필터
+    db: Session = Depends(get_db)
+):
     query = db.query(models.BoardPost)
+    
     if visa_filter and visa_filter != "ALL":
         query = query.filter(models.BoardPost.visa_type == visa_filter)
+        
+    if category:
+        query = query.filter(models.BoardPost.category == category)
+        
+    if verified_only:
+        query = query.filter(models.BoardPost.is_verified == True)
+        
     return query.order_by(models.BoardPost.id.desc()).all()
 
 @app.post("/community/posts/{post_id}/comments", response_model=schemas.CommentResponse)
@@ -453,3 +470,20 @@ def get_audit_logs(user_id: int, db: Session = Depends(get_db)):
              .order_by(models.AuditLog.timestamp.desc())\
              .limit(10).all()
     return logs
+
+@app.post("/reservations")
+def create_reservation(res: schemas.ReservationCreate, user_id: int, db: Session = Depends(get_db)):
+    new_res = models.Reservation(
+        user_id=user_id,
+        partner_name=res.partner_name,
+        reservation_date=res.reservation_date,
+        reservation_time=res.reservation_time,
+        memo=res.memo
+    )
+    db.add(new_res)
+    db.commit()
+    return {"status": "success", "msg": "예약이 확정되었습니다."}
+
+@app.get("/users/{user_id}/reservations")
+def get_reservations(user_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Reservation).filter(models.Reservation.user_id == user_id).all()

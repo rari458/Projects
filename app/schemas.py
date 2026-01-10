@@ -130,13 +130,31 @@ class PostBase(BaseModel):
     visa_type: str
     result_tag: str
 
-class PostCreate(PostBase):
-    pass
+class PostCreate(BaseModel):
+    title: str
+    content: str
+    visa_type: str
+    category: str
+    result_tag: Optional[str] = None
 
-class PostResponse(PostBase):
+class PostResponse(BaseModel):
     id: int
+    title: str
+    content: str
     author_id: int
+    visa_type: str
+    category: str
+    result_tag: Optional[str] = None
+    is_verified: bool
+    created_at: datetime
+
     comments: List[CommentResponse] = []
     
     class Config:
         from_attributes = True
+
+class ReservationCreate(BaseModel):
+    partner_name: str
+    reservation_date: str
+    reservation_time: str
+    memo: Optional[str] = None

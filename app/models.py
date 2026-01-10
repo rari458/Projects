@@ -53,6 +53,10 @@ class User(Base):
     step_comments = relationship("StepComment", back_populates="author")
     audit_logs = relationship("AuditLog", back_populates="user")
 
+    # [NEW] 예약 내역 관계 추가 (Priority 3 권장사항 반영)
+    # 이제 user.reservations 로 해당 유저의 예약 목록을 조회할 수 있습니다.
+    reservations = relationship("Reservation", back_populates="user")
+
 # (주의: class UserProfile은 삭제되었습니다!)
 
 # ---------------------------------------------------------
@@ -154,7 +158,10 @@ class BoardPost(Base):
     title = Column(String)
     content = Column(Text)
     visa_type = Column(String)  # D-2, D-4
-    result_tag = Column(String) # SUCCESS, FAIL, TIP
+
+    category = Column(String)
+    result_tag = Column(String, nullable=True) # SUCCESS, FAIL, TIP
+    is_verified = Column(Boolean, default=False)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -190,3 +197,17 @@ class AuditLog(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="audit_logs")
+
+class Reservation(Base):
+    __tablename__ = "reservations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    partner_name = Column(String)       # 예약한 파트너/기관 이름
+    reservation_date = Column(String)   # YYYY-MM-DD
+    reservation_time = Column(String)   # HH:MM
+    memo = Column(String, nullable=True)
+    status = Column(String, default="CONFIRMED") # 예약 확정
+    created_at = Column(DateTime, default=datetime.now)
+
+    user = relationship("User", back_populates="reservations")
