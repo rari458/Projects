@@ -287,22 +287,47 @@ def main_dashboard():
         except: pass
 
     # =========================================================================
-    # [탭 1] 홈 화면 (탐색 & 미리보기)
+    # [탭 1] 홈 화면 (탐색 & 미리보기 & 기관별 리스트)
     # =========================================================================
     with tab_home:
+        # 화면 상태 관리를 위한 변수 초기화
+        if "selected_category" not in st.session_state:
+            st.session_state.selected_category = None
+
         # [화면 A] 기본 홈 화면
         if st.session_state.page_view == "HOME":
             st.subheader(f"안녕하세요, {st.session_state.user_name}님!")
             st.markdown("한국 정착을 위한 필수 과정을 안내해 드립니다.")
             
-            # 1. 상단 아이콘
+            # 1. 상단 아이콘 (클릭 시 카테고리별 리스트로 이동)
             st.markdown("##### 🏛️ 기관별 업무 탐색")
             c1, c2, c3, c4, c5 = st.columns(5)
-            c1.button("🏫\n학교", use_container_width=True)
-            c2.button("🏢\n행정", use_container_width=True)
-            c3.button("🏦\n은행", use_container_width=True)
-            c4.button("📡\n통신", use_container_width=True)
-            c5.button("🏠\n주거", use_container_width=True)
+            
+            # 각 버튼에 기능 연결 (Method A: 백엔드 데이터 수정 전제하에 표준 카테고리 코드 사용)
+            if c1.button("🏫\n학교", use_container_width=True):
+                st.session_state.selected_category = "SCHOOL"
+                st.session_state.page_view = "CATEGORY_LIST"
+                st.rerun()
+            
+            if c2.button("🏢\n행정", use_container_width=True):
+                st.session_state.selected_category = "VISA" # 행정/비자 관련
+                st.session_state.page_view = "CATEGORY_LIST"
+                st.rerun()
+
+            if c3.button("🏦\n은행", use_container_width=True):
+                st.session_state.selected_category = "BANK"
+                st.session_state.page_view = "CATEGORY_LIST"
+                st.rerun()
+
+            if c4.button("📡\n통신", use_container_width=True):
+                st.session_state.selected_category = "SIM"
+                st.session_state.page_view = "CATEGORY_LIST"
+                st.rerun()
+
+            if c5.button("🏠\n주거", use_container_width=True):
+                st.session_state.selected_category = "HOUSING"
+                st.session_state.page_view = "CATEGORY_LIST"
+                st.rerun()
 
             st.divider()
 
@@ -325,11 +350,55 @@ def main_dashboard():
             else:
                 st.info("현재 대기 중인 우선 항목이 없습니다! 워크플로우 탭을 확인해보세요.")
 
-        # [화면 B] 항목 상세 미리보기 (Preview)
+        # [화면 B] 카테고리별 전체 리스트 보기 (NEW!)
+        elif st.session_state.page_view == "CATEGORY_LIST":
+            cat = st.session_state.selected_category
+            # 사용자에게 보여줄 카테고리 한글명 매핑
+            cat_name_map = {
+                "SCHOOL": "학교/수강신청", 
+                "VISA": "행정/비자", 
+                "BANK": "은행/금융", 
+                "SIM": "통신/유심", 
+                "HOUSING": "주거/부동산"
+            }
+            cat_name = cat_name_map.get(cat, cat)
+
+            # 상단 네비게이션
+            if st.button(f"← {cat_name} 탐색 종료 (홈으로)", key="back_from_cat"):
+                st.session_state.page_view = "HOME"
+                st.rerun()
+
+            st.subheader(f"📂 {cat_name} 관련 업무")
+            
+            # 선택된 카테고리에 해당하는 항목 필터링
+            filtered_steps = [s for s in steps if s.get('category') == cat]
+
+            if filtered_steps:
+                for step in filtered_steps:
+                    with st.container(border=True):
+                        c1, c2 = st.columns([4, 1])
+                        with c1:
+                            st.markdown(f"**{step['title']}**")
+                            # 상태에 따라 텍스트 색상 다르게 표시
+                            status_color = "blue" if step['status'] == "진행중" else "green" if step['status'] == "완료" else "gray"
+                            st.caption(f"상태: :{status_color}[{step['status']}] | {step['description'][:30]}...")
+                        with c2:
+                            # 여기서 '상세'를 누르면 해당 항목의 프리뷰(정보) 화면으로 이동
+                            if st.button("상세", key=f"cat_view_{step['id']}"):
+                                st.session_state.selected_step = step
+                                st.session_state.page_view = "PREVIEW"
+                                st.rerun()
+            else:
+                st.info(f"아직 '{cat_name}' 카테고리에 등록된 항목이 없습니다.")
+                st.caption("관리자나 시스템이 해당 카테고리의 로드맵을 생성해야 보입니다.")
+
+        # [화면 C] 항목 상세 미리보기 (Preview)
         elif st.session_state.page_view == "PREVIEW":
             step = st.session_state.selected_step
             if step:
-                if st.button("← 홈으로 돌아가기"):
+                # 뒤로가기 로직: 직전 화면(카테고리 리스트)이 아니라 홈으로 보내는 게 깔끔함 (또는 상태 관리 필요)
+                if st.button("← 뒤로가기"):
+                    # 편의상 홈으로 이동 (직전 카테고리 기억 로직은 복잡해질 수 있어 생략)
                     st.session_state.page_view = "HOME"
                     st.rerun()
                 
@@ -348,6 +417,7 @@ def main_dashboard():
                 
                 st.divider()
                 
+                # '바로 시작하기' 버튼
                 if st.button("🚀 바로 시작하기 (워크플로우에 추가)", type="primary", use_container_width=True):
                     try:
                         requests.patch(f"{API_URL}/roadmap-steps/{step['id']}", json={"status": "진행중"})
@@ -815,6 +885,7 @@ def main_dashboard():
 # ==========================================
 if st.session_state.access_token is None:
     login_page()
+
 elif st.session_state.user_id is None:
     headers = {"Authorization": f"Bearer {st.session_state.access_token}"}
     try:
@@ -832,7 +903,9 @@ elif st.session_state.user_id is None:
     except:
         st.session_state.access_token = None
         st.rerun()
-elif st.session_state.visa_type is None:
-    setup_profile_page()
-else:
+
+elif st.session_state.is_admin or st.session_state.visa_type is not None:
     main_dashboard()
+
+else:
+    setup_profile_page()

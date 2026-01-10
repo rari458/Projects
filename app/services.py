@@ -56,48 +56,57 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-
 # Gemini 설정
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
 
-
 # ---------------------------------------------------------
-# [공통 내부 함수] 로드맵 단계 생성
+# [공통 내부 함수] 로드맵 단계 생성 (카테고리 매핑 수정됨)
 # ---------------------------------------------------------
 def _create_roadmap_steps(db: Session, roadmap_id: int, visa_type_str: str, entry_date: date):
     if not entry_date:
         entry_date = date.today()
 
-    # 데이터 구조: 단계 정보 + 해당 단계의 체크리스트 아이템들
     steps_data = []
 
-    # 1. 입국
+    # 1. [통신] 휴대폰 개통 (SIM) - 가장 시급
+    steps_data.append({
+        "info": {
+            "title": "휴대폰 개통 (유심/eSIM)",
+            "category": "SIM", # 프론트엔드 '통신' 버튼 대응
+            "description": "본인 인증을 위해 필수. 알뜰폰 또는 메이저 통신사 가입.",
+            "order": 1,
+            "deadline": entry_date + timedelta(days=2)
+        },
+        "items": ["여권", "신용카드(결제용)", "입국 확인증"]
+    })
+
+    # 2. [행정] 입국 신고 (VISA로 통합 -> 행정 버튼에서 보임)
     steps_data.append({
         "info": {
             "title": "입국 신고 및 자가격리 확인",
-            "category": "ENTRY",
+            "category": "VISA", # 'ENTRY' 대신 'VISA'(행정)로 통합
             "description": "공항 도착 후 검역 절차 확인. 짐 찾기 전 Q-Code 준비.",
-            "order": 1,
+            "order": 2,
             "deadline": entry_date + timedelta(days=1)
         },
         "items": ["Q-Code 발급", "입국심사 확인증", "세관신고서"]
     })
     
-    # 2. 주거
+    # 3. [주거] 부동산 계약 (HOUSING)
     steps_data.append({
         "info": {
             "title": "부동산 임대차 계약 (주거 확보)",
             "category": "HOUSING",
             "description": "학교 근처 원룸/고시텔 계약. 보증금 보호 조항 확인 필수.",
-            "order": 2,
+            "order": 3,
             "deadline": entry_date + timedelta(days=7)
         },
         "items": ["여권 사본", "보증금 예산 확보", "표준임대차계약서 확인", "등기부등본 열람"]
     })
 
-    # 3. 비자 (D-2 / D-4 분기)
+    # 4. [행정] 비자/등록증 (VISA)
     visa_str = str(visa_type_str)
     if "D-2" in visa_str:
         steps_data.append({
@@ -105,7 +114,7 @@ def _create_roadmap_steps(db: Session, roadmap_id: int, visa_type_str: str, entr
                 "title": "외국인 등록증 신청 (D-2)",
                 "category": "VISA",
                 "description": "입국 후 90일 이내 필수. 하이코리아 방문 예약 필요.",
-                "order": 3,
+                "order": 4,
                 "deadline": entry_date + timedelta(days=90)
             },
             "items": ["통합신청서", "여권 원본 및 사본", "재학증명서", "거주숙소제공확인서", "수수료(3만원)"]
@@ -116,29 +125,39 @@ def _create_roadmap_steps(db: Session, roadmap_id: int, visa_type_str: str, entr
                 "title": "외국인 등록증 신청 (D-4)",
                 "category": "VISA",
                 "description": "어학연수생 필수 등록. 출석률 증빙 필요 가능성 있음.",
-                "order": 3,
+                "order": 4,
                 "deadline": entry_date + timedelta(days=90)
             },
             "items": ["통합신청서", "여권", "어학당 재학증명서", "거주지 입증서류", "수수료"]
         })
 
-    # 4. 금융
+    # 5. [금융] 은행 (BANK)
     steps_data.append({
         "info": {
             "title": "은행 계좌 개설 및 카드 발급",
             "category": "BANK",
             "description": "외국인등록증 수령 후 방문 권장. (여권만으로는 한도제한 계좌)",
-            "order": 4,
+            "order": 5,
             "deadline": entry_date + timedelta(days=14)
         },
         "items": ["외국인등록증", "여권", "재학증명서(용도증빙)", "현금(초기 입금용)"]
     })
 
-    # DB 저장 로직
+    # 6. [학교] 수강신청 (SCHOOL) - 추가됨
+    steps_data.append({
+        "info": {
+            "title": "수강신청 및 학생증 발급",
+            "category": "SCHOOL", # 프론트엔드 '학교' 버튼 대응
+            "description": "학교 포털 가입 및 필수 교양 과목 신청. 학생증 사진 준비.",
+            "order": 6,
+            "deadline": entry_date + timedelta(days=10)
+        },
+        "items": ["학번 조회", "수강편람 확인", "증명사진(jpg)"]
+    })
+
+    # DB 저장 로직 (기존과 동일)
     for step_dict in steps_data:
         info = step_dict["info"]
-        
-        # 1. 단계(Step) 생성
         new_step = models.RoadmapStep(
             roadmap_id=roadmap_id,
             title=info["title"],
@@ -149,9 +168,8 @@ def _create_roadmap_steps(db: Session, roadmap_id: int, visa_type_str: str, entr
             status="대기"
         )
         db.add(new_step)
-        db.flush() # ID 생성을 위해 flush (commit 전)
+        db.flush()
 
-        # 2. 체크리스트(Items) 생성
         for item_text in step_dict["items"]:
             new_checklist = models.StepChecklist(
                 step_id=new_step.id,
@@ -161,7 +179,6 @@ def _create_roadmap_steps(db: Session, roadmap_id: int, visa_type_str: str, entr
             db.add(new_checklist)
     
     db.commit()
-
 
 # ---------------------------------------------------------
 # 1. 로드맵 생성 로직
