@@ -27,6 +27,8 @@ if "page_view" not in st.session_state:
     st.session_state.page_view = "HOME" # HOME, PREVIEW, DETAIL
 if "selected_step" not in st.session_state:
     st.session_state.selected_step = None
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
 
 # ==========================================
 # 1. 로그인 / 회원가입 화면
@@ -52,6 +54,7 @@ def login_page():
                         st.session_state.user_id = token_data.get("user_id")
                         st.session_state.user_name = token_data.get("user_name")
                         st.session_state.visa_type = token_data.get("visa_type")
+                        st.session_state.is_admin = token_data.get("is_admin", False)
                         st.success("로그인 성공!")
                         st.rerun()
                     else:
@@ -117,6 +120,73 @@ def setup_profile_page():
 # 3. 메인 대시보드
 # ==========================================
 def main_dashboard():
+    if st.session_state.get("is_admin", False):
+        with st.sidebar:
+            st.header("🔒 Admin Mode")
+            if st.button("로그아웃", width="stretch"):
+                for key in list(st.session_state.keys()): del st.session_state[key]
+                st.rerun()
+        
+        st.title("🔒 관리자(Admin) 대시보드")
+        st.info(f"관리자 계정({st.session_state.user_name})으로 접속했습니다.")
+        
+        ad_tab1, ad_tab2, ad_tab3 = st.tabs(["📄 문서 검토 대기", "📅 예약 현황", "📢 정보글 검증"])
+        
+        # 1. 문서 검토
+        with ad_tab1:
+            try:
+                pending_docs = requests.get(f"{API_URL}/admin/pending-documents").json()
+                if not pending_docs: st.success("대기 중인 문서가 없습니다.")
+                else:
+                    for doc in pending_docs:
+                        with st.container(border=True):
+                            c1, c2, c3 = st.columns([2, 2, 1])
+                            c1.markdown(f"**Doc ID: {doc['id']}** ({doc['doc_type']})")
+                            c1.caption(f"User: {doc['user_id']} | Date: {doc['uploaded_at'][:10]}")
+                            
+                            # AI 분석 요약 표시
+                            import json
+                            try:
+                                summary = json.loads(doc['risk_analysis']).get('summary', '-')
+                                c2.info(f"AI: {summary}")
+                            except: c2.caption("AI 데이터 없음")
+                            
+                            with c3:
+                                if st.button("✅ 승인", key=f"ok_{doc['id']}", use_container_width=True):
+                                    requests.patch(f"{API_URL}/documents/{doc['id']}/status", json={"status": "VERIFIED"})
+                                    st.rerun()
+                                if st.button("🚫 반려", key=f"no_{doc['id']}", use_container_width=True):
+                                    requests.patch(f"{API_URL}/documents/{doc['id']}/status", json={"status": "REJECTED"})
+                                    st.rerun()
+            except: st.error("문서 로드 실패")
+
+        # 2. 예약 현황
+        with ad_tab2:
+            try:
+                res_list = requests.get(f"{API_URL}/admin/reservations").json()
+                if res_list:
+                    df = pd.DataFrame(res_list)[['partner_name', 'reservation_date', 'reservation_time', 'user_id', 'memo']]
+                    df.columns = ['담당자', '날짜', '시간', '유저ID', '요청메모']
+                    st.dataframe(df, use_container_width=True)
+                else: st.info("예약 내역 없음")
+            except: st.error("예약 로드 실패")
+
+        # 3. 정보글 검증
+        with ad_tab3:
+            try:
+                posts = requests.get(f"{API_URL}/community/posts?category=INFO").json()
+                unverified = [p for p in posts if not p['is_verified']]
+                if not unverified: st.success("검증 대기 글이 없습니다.")
+                else:
+                    for p in unverified:
+                        with st.expander(f"{p['title']} (User: {p['author_id']})"):
+                            st.write(p['content'])
+                            if st.button("🏅 검증 마크 부여", key=f"v_post_{p['id']}"):
+                                requests.patch(f"{API_URL}/community/posts/{p['id']}/verify", json={"is_verified": True})
+                                st.rerun()
+            except: st.error("글 로드 실패")
+
+        return # [중요] 관리자면 여기서 함수 종료! (아래 학생 화면 실행 안 함)
     # --- [NEW] 예약 모달 함수 정의 ---
     @st.dialog("📅 전문가 상담 예약")
     def open_reservation_dialog(partner_name):
@@ -408,63 +478,105 @@ def main_dashboard():
                         st.button("완료 (체크리스트 확인 필요)", disabled=True, use_container_width=True)
 
     # =========================================================================
-    # [탭 3] 문서 지갑 (통합 완료)
+    # [탭 3] 문서 지갑 (업그레이드: 목록 조회 + 업로드)
     # =========================================================================
     with tab_wallet:
-        st.subheader("📂 문서 지갑")
-        doc_option = st.radio("문서 종류", ["🛂 여권/등록증", "📜 임대차/근로 계약서"], horizontal=True)
-        doc_type_code = "PASSPORT" if "여권" in doc_option else "CONTRACT"
-        
-        up_file = st.file_uploader("파일 업로드", type=['png', 'jpg', 'pdf'], key="wallet_up")
-        
-        if up_file and st.button("업로드 및 AI 정밀 분석", key="wallet_btn"):
-            files = {"file": (up_file.name, up_file, up_file.type)}
-            with st.spinner("AI가 문서를 꼼꼼히 살피고 있습니다..."):
-                try:
-                    res = requests.post(f"{API_URL}/users/{st.session_state.user_id}/documents?doc_type={doc_type_code}", files=files)
-                    if res.status_code == 200:
-                        new_doc_id = res.json().get("id")
-                        if not new_doc_id:
-                            st.error("문서 ID 오류")
+        st.subheader("📂 내 문서 보관함")
+
+        # 1. 새 문서 추가 (공간 절약을 위해 접어둠)
+        with st.expander("➕ 새 문서 등록 및 분석하기", expanded=False):
+            st.info("여권이나 계약서를 업로드하면 AI가 진위 여부와 독소 조항을 분석합니다.")
+            doc_option = st.radio("문서 종류", ["🛂 여권/등록증", "📜 임대차/근로 계약서"], horizontal=True)
+            doc_type_code = "PASSPORT" if "여권" in doc_option else "CONTRACT"
+            
+            up_file = st.file_uploader("파일 선택", type=['png', 'jpg', 'pdf'], key="wallet_up")
+            
+            if up_file and st.button("업로드 및 분석 시작", key="wallet_btn"):
+                files = {"file": (up_file.name, up_file, up_file.type)}
+                with st.spinner("AI가 문서를 분석 중입니다..."):
+                    try:
+                        res = requests.post(f"{API_URL}/users/{st.session_state.user_id}/documents?doc_type={doc_type_code}", files=files)
+                        if res.status_code == 200:
+                            new_doc_id = res.json().get("id")
+                            # 분석 요청
+                            requests.post(f"{API_URL}/documents/{new_doc_id}/analyze?user_id={st.session_state.user_id}")
+                            st.success("등록 및 분석 완료! 아래 목록에서 확인하세요.")
+                            time.sleep(1)
+                            st.rerun() # 목록 갱신을 위해 리로딩
                         else:
-                            an_res = requests.post(f"{API_URL}/documents/{new_doc_id}/analyze?user_id={st.session_state.user_id}")
-                            if an_res.status_code == 200:
-                                result = an_res.json().get('result', {})
-                                st.divider()
-                                if doc_type_code == "CONTRACT":
-                                    raw_score = result.get('risk_score', 0)
-                                    try: score = int(raw_score)
-                                    except: score = 0
-                                    color = "red" if score >= 70 else "orange" if score >= 30 else "green"
-                                    st.markdown(f"### 위험도: :{color}[{score}점]")
-                                    st.info(f"**요약:** {result.get('summary', '내용 없음')}")
-                                    if result.get('risk_factors'):
-                                        st.markdown("#### 🚫 주의해야 할 조항")
-                                        for risk in result['risk_factors']:
-                                            with st.expander(f"⚠️ {risk.get('reason')}", expanded=True):
-                                                st.markdown(f"**원문:** `{risk.get('clause')}`")
-                                                if risk.get('suggestion'):
-                                                    st.info(f"💡 **수정 제안** {risk.get('suggestion')}")
-                                else:
-                                    st.success("분석 완료!")
-                                    st.json(result)
-                            else: st.warning("분석 실패")
-                    else: st.error("업로드 실패")
-                except Exception as e: st.error(f"오류: {e}")
+                            st.error("업로드 실패")
+                    except Exception as e:
+                        st.error(f"오류: {e}")
 
         st.divider()
-        with st.expander("🛡️ 문서 접근 및 보안 로그 (Trust Log)"):
-            try:
-                logs_res = requests.get(f"{API_URL}/users/{st.session_state.user_id}/audit-logs")
-                if logs_res.status_code == 200:
-                    logs = logs_res.json()
-                    if logs:
-                        df_logs = pd.DataFrame(logs)
-                        df_logs = df_logs[['timestamp', 'action', 'target_id']]
-                        df_logs.columns = ["시간", "활동 내용", "대상 ID"]
-                        st.dataframe(df_logs, width="stretch")
-                    else: st.caption("아직 기록된 로그가 없습니다.")
-            except: st.caption("로그를 불러올 수 없습니다.")
+
+        # 2. 저장된 문서 목록 조회
+        st.markdown("### 📜 저장된 문서")
+        try:
+            # Backend에서 문서 목록 가져오기
+            my_docs = requests.get(f"{API_URL}/users/{st.session_state.user_id}/documents").json()
+            
+            if not my_docs:
+                st.info("아직 저장된 문서가 없습니다. 위에서 문서를 추가해보세요!")
+            else:
+                for doc in my_docs:
+                    # 상태별 아이콘 및 색상 매핑
+                    status_map = {
+                        "VERIFIED": ("✅ 승인됨", "green"),
+                        "REVIEW_NEEDED": ("🟡 검토중", "orange"),
+                        "REJECTED": ("🚫 반려됨", "red"),
+                        "UNVERIFIED": ("⏳ 미인증", "gray")
+                    }
+                    # 기본값 처리
+                    stat_text, stat_color = status_map.get(doc.get('verification_status', 'UNVERIFIED'), ("미확인", "gray"))
+                    
+                    icon = "🛂" if doc['doc_type'] == "PASSPORT" else "📜"
+                    
+                    # 문서 카드 UI
+                    with st.container(border=True):
+                        c1, c2, c3 = st.columns([0.5, 3, 1.5])
+                        with c1: st.markdown(f"## {icon}")
+                        with c2:
+                            st.markdown(f"**{doc['doc_type']}**")
+                            # 날짜 포맷팅 (문자열 슬라이싱 활용)
+                            uploaded_date = doc['uploaded_at'][:10] if 'uploaded_at' in doc else "날짜없음"
+                            st.caption(f"등록일: {uploaded_date}")
+                        with c3:
+                            st.markdown(f":{stat_color}[**{stat_text}**]")
+                        
+                        # 상세 내용 (AI 분석 결과 등)
+                        with st.expander("상세 보기"):
+                            # 저장된 파일 경로 (실제 서비스에선 다운로드 링크 제공)
+                            st.caption(f"파일 경로: {doc.get('s3_key', 'N/A')}")
+                            
+                            # AI 분석 결과 파싱 및 표시
+                            import json
+                            if doc.get('risk_analysis'):
+                                try:
+                                    analysis = json.loads(doc['risk_analysis'])
+                                    
+                                    # 계약서일 경우
+                                    if doc['doc_type'] == "CONTRACT":
+                                        score = int(analysis.get('risk_score', 0))
+                                        st.metric("위험도 점수", f"{score}점")
+                                        st.write(f"**요약:** {analysis.get('summary')}")
+                                        if analysis.get('risk_factors'):
+                                            st.error("발견된 위험 조항:")
+                                            for risk in analysis['risk_factors']:
+                                                st.markdown(f"- {risk['reason']}")
+                                    
+                                    # 여권/신분증일 경우
+                                    else:
+                                        st.write(f"**요약:** {analysis.get('summary')}")
+                                        if analysis.get('expiry_date'):
+                                            st.warning(f"만료일: {analysis['expiry_date']}")
+                                except:
+                                    st.caption("분석 데이터 형식이 올바르지 않습니다.")
+                            else:
+                                st.info("AI 분석 데이터가 없습니다.")
+
+        except Exception as e:
+            st.error(f"목록을 불러오는 중 오류가 발생했습니다: {e}")
 
     # =========================================================================
     # [탭 4] AI 상담사 (통합 완료)
@@ -712,6 +824,7 @@ elif st.session_state.user_id is None:
             st.session_state.user_id = u['id']
             st.session_state.user_name = u['full_name']
             st.session_state.visa_type = u['visa_type']
+            st.session_state.is_admin = u.get("is_admin", False)
             st.rerun()
         else:
             st.session_state.access_token = None

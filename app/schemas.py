@@ -5,8 +5,11 @@ from datetime import date, datetime
 # [NEW] 문서 정보 간략 보기 스키마
 class DocumentResponse(BaseModel):
     id: int
+    user_id: int
     doc_type: str
+    s3_key: str
     verification_status: str
+    risk_analysis: Optional[str] = None
     uploaded_at: datetime
     
     class Config:
@@ -20,7 +23,8 @@ class Token(BaseModel):
     # 프론트엔드 편의를 위해 추가한 필드들
     user_id: int
     user_name: str
-    visa_type: Optional[str] = None 
+    visa_type: Optional[str] = None
+    is_admin: bool = False
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -49,6 +53,7 @@ class User(BaseModel):
     nationality: Optional[str] = None
     visa_type: Optional[str] = None
     entry_date: Optional[date] = None
+    is_admin: bool = False
 
     class Config:
         from_attributes = True
@@ -158,3 +163,11 @@ class ReservationCreate(BaseModel):
     reservation_date: str
     reservation_time: str
     memo: Optional[str] = None
+
+# 문서 상태 변경 (승인/반려) 요청
+class StatusUpdate(BaseModel):
+    status: str
+
+# 커뮤니티 글 검증 마크 부여 요청
+class PostVerifyUpdate(BaseModel):
+    is_verified: bool

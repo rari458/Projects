@@ -64,7 +64,8 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
         "token_type": "bearer",
         "user_id": user.id,
         "user_name": user.full_name,
-        "visa_type": user.visa_type
+        "visa_type": user.visa_type,
+        "is_admin": user.is_admin
     }
 
 # [New] 토큰으로 내 정보 가져오기 API (프론트엔드 세션 복구용)
@@ -93,12 +94,15 @@ def create_user(user_data: schemas.UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="이미 등록된 이메일입니다.")
     if existing_user:
         raise HTTPException(status_code=400, detail="이미 존재하는 아이디입니다.")
+    
+    is_admin_user = (user_data.username == "admin")
 
     new_user = models.User(
         username=user_data.username,
         email=user_data.email,
         full_name=user_data.full_name,
-        hashed_password=services.get_password_hash(user_data.password)
+        hashed_password=services.get_password_hash(user_data.password),
+        is_admin=is_admin_user
     )
     db.add(new_user)
     db.commit()
@@ -487,3 +491,38 @@ def create_reservation(res: schemas.ReservationCreate, user_id: int, db: Session
 @app.get("/users/{user_id}/reservations")
 def get_reservations(user_id: int, db: Session = Depends(get_db)):
     return db.query(models.Reservation).filter(models.Reservation.user_id == user_id).all()
+
+class StatusUpdate(BaseModel):
+    status: str
+
+@app.patch("/documents/{doc_id}/status")
+def update_document_status(doc_id: int, update: StatusUpdate, db: Session = Depends(get_db)):
+    doc = db.query(models.Document).filter(models.Document.id == doc_id).first()
+    if not doc: raise HTTPException(status_code=404, detail="Not Found")
+    doc.verification_status = update.status
+    db.commit()
+    return {"status": "ok"}
+
+class PostVerifyUpdate(BaseModel):
+    is_verified: bool
+
+@app.patch("/community/posts/{post_id}/verify")
+def verify_community_post(post_id: int, update: PostVerifyUpdate, db: Session = Depends(get_db)):
+    post = db.query(models.BoardPost).filter(models.BoardPost.id == post_id).first()
+    if not post: raise HTTPException(status_code=404, detail="Not Found")
+    post.is_verified = update.is_verified
+    db.commit()
+    return {"status": "ok"}
+
+@app.get("/admin/pending-documents")
+def get_pending_documents(db: Session = Depends(get_db)):
+    return db.query(models.Document).filter(models.Document.verification_status == "REVIEW_NEEDED").all()
+
+@app.get("/admin/reservations")
+def get_all_reservations(db: Session = Depends(get_db)):
+    return db.query(models.Reservation).order_by(models.Reservation.created_at.desc()).all()
+
+# [NEW] 내 문서 목록 조회 (문서 지갑용)
+@app.get("/users/{user_id}/documents", response_model=List[schemas.DocumentResponse])
+def get_user_documents(user_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Document).filter(models.Document.user_id == user_id).order_by(models.Document.uploaded_at.desc()).all()

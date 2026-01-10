@@ -36,6 +36,8 @@ class User(Base):
     email = Column(String, unique=True, index=True)    # 이메일
     full_name = Column(String)                         # 이름
     hashed_password = Column(String)                   # 비밀번호
+
+    is_admin = Column(Boolean, default=False)
     
     # [통합된 프로필 정보]
     nationality = Column(String, nullable=True)        # 국적
