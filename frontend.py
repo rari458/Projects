@@ -12,6 +12,208 @@ st.set_page_config(page_title="Settlo", layout="wide", page_icon="🌏")
 API_URL = "https://settlo-647487045104.asia-northeast3.run.app"
 
 # --------------------------------------------------------------------------
+# [Data] 국가 목록 (주요 유학생 출신 국가 포함)
+# --------------------------------------------------------------------------
+COUNTRY_LIST = [
+    "Antigua and Barbuda (ATG)",
+    "Arab Republic of Egypt (EGY)",
+    "Argentine Republic (ARG)",
+    "Barbados (BRB)",
+    "Belize (BLZ)",
+    "Bolivarian Republic of Venezuela (VEN)",
+    "Bosnia and Herzegovina (BIH)",
+    "Brunei Darussalam (BRN)",
+    "Burkina Faso (BFA)",
+    "Canada (CAN)",
+    "Central African Republic (CAF)",
+    "Commonwealth of Australia (AUS)",
+    "Commonwealth of Dominica (DMA)",
+    "Commonwealth of the Bahamas (BHS)",
+    "Co-operative Republic of Guyana (GUY)",
+    "Czech Republic (CZE)",
+    "Democratic People's Republic of Korea (PRK)",
+    "Democratic Republic of Sao Tome and Principe (STP)",
+    "Democratic Republic of the Congo (COD)",
+    "Democratic Republic of Timor-Leste (TLS)",
+    "Democratic Socialist Republic of Sri Lanka (LKA)",
+    "Dominican Republic (DOM)",
+    "Federal Democratic Republic of Ethiopia (ETH)",
+    "Federal Democratic Republic of Nepal (NPL)",
+    "Federal Republic of Germany (DEU)",
+    "Federal Republic of Nigeria (NGA)",
+    "Federal Republic of Somalia (SOM)",
+    "Federated States of Micronesia (FSM)",
+    "Federative Republic of Brazil (BRA)",
+    "French Republic (FRA)",
+    "Gabonese Republic (GAB)",
+    "Georgia (GEO)",
+    "Grand Duchy of Luxembourg (LUX)",
+    "Grenada (GRD)",
+    "Hashemite Kingdom of Jordan (JOR)",
+    "Hellenic Republic (GRC)",
+    "Holy See (VAT)",
+    "Hungary (HUN)",
+    "Iceland (ISL)",
+    "Independent State of Papua New Guinea (PNG)",
+    "Independent State of Samoa (WSM)",
+    "Ireland (IRL)",
+    "Islamic Republic of Afghanistan (AFG)",
+    "Islamic Republic of Iran (IRN)",
+    "Islamic Republic of Mauritania (MRT)",
+    "Islamic Republic of Pakistan (PAK)",
+    "Italian Republic (ITA)",
+    "Jamaica (JAM)",
+    "Japan (JPN)",
+    "Kingdom of Bahrain (BHR)",
+    "Kingdom of Belgium (BEL)",
+    "Kingdom of Bhutan (BTN)",
+    "Kingdom of Cambodia (KHM)",
+    "Kingdom of Denmark (DNK)",
+    "Kingdom of Eswatini (SWZ)",
+    "Kingdom of Lesotho (LSO)",
+    "Kingdom of Morocco (MAR)",
+    "Kingdom of Norway (NOR)",
+    "Kingdom of Saudi Arabia (SAU)",
+    "Kingdom of Spain (ESP)",
+    "Kingdom of Sweden (SWE)",
+    "Kingdom of Thailand (THA)",
+    "Kingdom of the Netherlands (NLD)",
+    "Kingdom of Tonga (TON)",
+    "Kyrgyz Republic (KGZ)",
+    "Lao People's Democratic Republic (LAO)",
+    "Lebanese Republic (LBN)",
+    "Malaysia (MYS)",
+    "Mongolia (MNG)",
+    "Montenegro (MNE)",
+    "New Zealand (NZL)",
+    "Oriental Republic of Uruguay (URY)",
+    "People's Democratic Republic of Algeria (DZA)",
+    "People's Republic of Bangladesh (BGD)",
+    "People's Republic of China (CHN)",
+    "Plurinational State of Bolivia (BOL)",
+    "Portuguese Republic (PRT)",
+    "Principality of Andorra (AND)",
+    "Principality of Liechtenstein (LIE)",
+    "Principality of Monaco (MCO)",
+    "Republic of Albania (ALB)",
+    "Republic of Angola (AGO)",
+    "Republic of Armenia (ARM)",
+    "Republic of Austria (AUT)",
+    "Republic of Azerbaijan (AZE)",
+    "Republic of Belarus (BLR)",
+    "Republic of Benin (BEN)",
+    "Republic of Botswana (BWA)",
+    "Republic of Bulgaria (BGR)",
+    "Republic of Burundi (BDI)",
+    "Republic of Cabo Verde (CPV)",
+    "Republic of Cameroon (CMR)",
+    "Republic of Chad (TCD)",
+    "Republic of Chile (CHL)",
+    "Republic of Colombia (COL)",
+    "Republic of Costa Rica (CRI)",
+    "Republic of Cote d'Ivoire (CIV)",
+    "Republic of Croatia (HRV)",
+    "Republic of Cuba (CUB)",
+    "Republic of Cyprus (CYP)",
+    "Republic of Djibouti (DJI)",
+    "Republic of Ecuador (ECU)",
+    "Republic of El Salvador (SLV)",
+    "Republic of Equatorial Guinea (GNQ)",
+    "Republic of Estonia (EST)",
+    "Republic of Fiji (FJI)",
+    "Republic of Finland (FIN)",
+    "Republic of Ghana (GHA)",
+    "Republic of Guatemala (GTM)",
+    "Republic of Guinea (GIN)",
+    "Republic of Guinea-Bissau (GNB)",
+    "Republic of Haiti (HTI)",
+    "Republic of Honduras (HND)",
+    "Republic of India (IND)",
+    "Republic of Indonesia (IDN)",
+    "Republic of Iraq (IRQ)",
+    "Republic of Kazakhstan (KAZ)",
+    "Republic of Kenya (KEN)",
+    "Republic of Kiribati (KIR)",
+    "Republic of Korea (KOR)",
+    "Republic of Latvia (LVA)",
+    "Republic of Liberia (LBR)",
+    "Republic of Lithuania (LTU)",
+    "Republic of Madagascar (MDG)",
+    "Republic of Malawi (MWI)",
+    "Republic of Maldives (MDV)",
+    "Republic of Mali (MLI)",
+    "Republic of Malta (MLT)",
+    "Republic of Mauritius (MUS)",
+    "Republic of Moldova (MDA)",
+    "Republic of Mozambique (MOZ)",
+    "Republic of Namibia (NAM)",
+    "Republic of Nauru (NRU)",
+    "Republic of Nicaragua (NIC)",
+    "Republic of North Macedonia (MKD)",
+    "Republic of Palau (PLW)",
+    "Republic of Panama (PAN)",
+    "Republic of Paraguay (PRY)",
+    "Republic of Peru (PER)",
+    "Republic of Poland (POL)",
+    "Republic of Rwanda (RWA)",
+    "Republic of San Marino (SMR)",
+    "Republic of Senegal (SEN)",
+    "Republic of Serbia (SRB)",
+    "Republic of Seychelles (SYC)",
+    "Republic of Sierra Leone (SLE)",
+    "Republic of Singapore (SGP)",
+    "Republic of Slovenia (SVN)",
+    "Republic of South Africa (ZAF)",
+    "Republic of South Sudan (SSD)",
+    "Republic of Suriname (SUR)",
+    "Republic of Tajikistan (TJK)",
+    "Republic of the Congo (COG)",
+    "Republic of the Gambia (GMB)",
+    "Republic of the Marshall Islands (MHL)",
+    "Republic of the Niger (NER)",
+    "Republic of the Philippines (PHL)",
+    "Republic of the Sudan (SDN)",
+    "Republic of the Union of Myanmar (MMR)",
+    "Republic of Trinidad and Tobago (TTO)",
+    "Republic of Tunisia (TUN)",
+    "Republic of Türkiye (TUR)",
+    "Republic of Uganda (UGA)",
+    "Republic of Uzbekistan (UZB)",
+    "Republic of Vanuatu (VUT)",
+    "Republic of Yemen (YEM)",
+    "Republic of Zambia (ZMB)",
+    "Republic of Zimbabwe (ZWE)",
+    "Romania (ROU)",
+    "Russian Federation (RUS)",
+    "Saint Kitts and Nevis (KNA)",
+    "Saint Lucia (LCA)",
+    "Saint Vincent and the Grenadines (VCT)",
+    "Slovak Republic (SVK)",
+    "Socialist Republic of Viet Nam (VNM)",
+    "Solomon Islands (SLB)",
+    "State of Eritrea (ERI)",
+    "State of Israel (ISR)",
+    "State of Kuwait (KWT)",
+    "State of Libya (LBY)",
+    "State of Palestine (PSE)",
+    "State of Qatar (QAT)",
+    "Sultanate of Oman (OMN)",
+    "Swiss Confederation (CHE)",
+    "Syrian Arab Republic (SYR)",
+    "Togolese Republic (TGO)",
+    "Turkmenistan (TKM)",
+    "Tuvalu (TUV)",
+    "Ukraine (UKR)",
+    "Union of the Comoros (COM)",
+    "United Arab Emirates (ARE)",
+    "United Kingdom of Great Britain and Northern Ireland (GBR)",
+    "United Mexican States (MEX)",
+    "United Republic of Tanzania (TZA)",
+    "United States of America (USA)",
+    "Other"
+]
+
+# --------------------------------------------------------------------------
 # [i18n] 다국어 번역 딕셔너리 (한국어 / English)
 # --------------------------------------------------------------------------
 TL = {
@@ -118,7 +320,23 @@ TL = {
         "admin_tabs": ["📄 문서 검토 대기", "📅 예약 현황", "📢 정보글 검증"],
         "btn_approve": "✅ 승인",
         "btn_reject": "🚫 반려",
-        "btn_verify": "🏅 검증 마크 부여"
+        "btn_verify": "🏅 검증 마크 부여",
+        "setup_title": "👋 환영합니다!",
+        "setup_desc": "맞춤형 서비스를 위해 초기 정보를 설정해주세요.",
+        "label_nat": "국적 (Nationality)",
+        "label_entry": "입국일 (Entry Date)",
+        "btn_start_app": "설정 저장 및 시작하기",
+        "btn_edit": "✏️ 수정",
+        "btn_delete": "🗑️ 삭제",
+        "btn_update": "수정 완료",
+        "msg_delete_confirm": "삭제되었습니다.",
+        "msg_update_success": "수정되었습니다.",
+        "label_comment": "댓글 작성",
+        "btn_add_comment": "💬 댓글 등록",
+        "header_comments": "댓글 ({count})",
+        "msg_no_comments": "첫 번째 댓글을 남겨보세요!",
+        "label_edit_title": "제목 수정",
+        "label_edit_content": "내용 수정"
     },
     "EN": {
         "title": "🌏 Settlo",
@@ -223,7 +441,23 @@ TL = {
         "admin_tabs": ["📄 Pending Docs", "📅 Reservations", "📢 Verify Info"],
         "btn_approve": "✅ Approve",
         "btn_reject": "🚫 Reject",
-        "btn_verify": "🏅 Verify Post"
+        "btn_verify": "🏅 Verify Post",
+        "setup_title": "👋 Welcome!",
+        "setup_desc": "Please set up your profile for personalized service.",
+        "label_nat": "Nationality",
+        "label_entry": "Entry Date",
+        "btn_start_app": "Save & Start",
+        "btn_edit": "✏️ Edit",
+        "btn_delete": "🗑️ Delete",
+        "btn_update": "Update",
+        "msg_delete_confirm": "Deleted successfully.",
+        "msg_update_success": "Updated successfully.",
+        "label_comment": "Write a comment",
+        "btn_add_comment": "💬 Add Comment",
+        "header_comments": "Comments ({count})",
+        "msg_no_comments": "Be the first to comment!",
+        "label_edit_title": "Edit Title",
+        "label_edit_content": "Edit Content"
     }
 }
 
@@ -312,25 +546,27 @@ def login_page():
                     st.warning("Please fill all fields.")
 
 # ==========================================
-# 2. 초기 정보 설정
+# 2. 초기 정보 설정 (수정됨)
 # ==========================================
 def setup_profile_page():
-    # 간단하게 언어 토글 추가
+    # [i18n] 간단하게 언어 토글 추가
     lang_opt = st.radio("Language / 언어", ["한국어", "English"], horizontal=True, key="setup_lang")
     st.session_state.language = "KO" if lang_opt == "한국어" else "EN"
 
-    st.title("👋 Welcome / 환영합니다!")
-    st.info("Setup your profile / 프로필을 설정해주세요.")
+    st.title(get_txt("setup_title"))
+    st.info(get_txt("setup_desc"))
     
     with st.form("setup_form"):
         col1, col2 = st.columns(2)
         with col1:
-            nationality = st.text_input("Nationality (국적)", placeholder="Korea")
-            entry_date = st.date_input("Entry Date (입국일)", date.today())
+            # [수정] text_input -> selectbox로 변경 (COUNTRY_LIST 활용)
+            nationality = st.selectbox(get_txt("label_nat"), COUNTRY_LIST, index=COUNTRY_LIST.index("Republic of Korea (KOR)") if "Republic of Korea (KOR)" in COUNTRY_LIST else 0)
+            entry_date = st.date_input(get_txt("label_entry"), date.today())
         with col2:
-            visa = st.selectbox("Visa Type (비자)", ["D-2", "D-4"])
+            visa = st.selectbox(get_txt("label_visa"), ["D-2", "D-4"])
         
-        if st.form_submit_button("Start / 시작하기"):
+        # use_container_width=True 제거
+        if st.form_submit_button(get_txt("btn_start_app")):
             if st.session_state.user_id:
                 payload = {"nationality": nationality, "visa_type": visa, "entry_date": str(entry_date)}
                 try:
@@ -381,20 +617,21 @@ def main_dashboard():
                                 c2.info(f"AI: {summary}")
                             except: c2.caption("No AI Data")
                             with c3:
-                                if st.button(get_txt("btn_approve"), key=f"ok_{doc['id']}", use_container_width=True):
+                                if st.button(get_txt("btn_approve"), key=f"ok_{doc['id']}", width="stretch"):
                                     requests.patch(f"{API_URL}/documents/{doc['id']}/status", json={"status": "VERIFIED"})
                                     st.rerun()
-                                if st.button(get_txt("btn_reject"), key=f"no_{doc['id']}", use_container_width=True):
+                                if st.button(get_txt("btn_reject"), key=f"no_{doc['id']}", width="stretch"):
                                     requests.patch(f"{API_URL}/documents/{doc['id']}/status", json={"status": "REJECTED"})
                                     st.rerun()
-            except: st.error("Load Failed")
+            except Exception as e:
+                st.error(f"Load Failed: {e}")
         
         with ad_tab2:
             try:
                 res_list = requests.get(f"{API_URL}/admin/reservations").json()
                 if res_list:
                     df = pd.DataFrame(res_list)[['partner_name', 'reservation_date', 'reservation_time', 'user_id', 'memo']]
-                    st.dataframe(df, use_container_width=True)
+                    st.dataframe(df, width="stretch")
                 else: st.info("No reservations.")
             except: st.error("Load Failed")
             
@@ -503,57 +740,21 @@ def main_dashboard():
                 steps = res.json().get('steps', [])
         except: pass
 
-    # [탭 1] 홈 화면
+    # =========================================================================
+    # [탭 1] 홈 화면 (탐색 & 미리보기 & 기관별 리스트)
+    # =========================================================================
     with tab_home:
-        if st.session_state.page_view == "HOME":
-            st.subheader(get_txt("home_greeting").format(name=st.session_state.user_name))
-            st.markdown(get_txt("home_desc"))
-            
-            st.markdown(get_txt("home_sec1"))
-            c1, c2, c3, c4, c5 = st.columns(5)
-            if c1.button(get_txt("btn_school"), use_container_width=True):
-                st.session_state.selected_category = "SCHOOL"
-                st.session_state.page_view = "CATEGORY_LIST"
-                st.rerun()
-            if c2.button(get_txt("btn_admin"), use_container_width=True):
-                st.session_state.selected_category = "VISA"
-                st.session_state.page_view = "CATEGORY_LIST"
-                st.rerun()
-            if c3.button(get_txt("btn_bank"), use_container_width=True):
-                st.session_state.selected_category = "BANK"
-                st.session_state.page_view = "CATEGORY_LIST"
-                st.rerun()
-            if c4.button(get_txt("btn_sim"), use_container_width=True):
-                st.session_state.selected_category = "SIM"
-                st.session_state.page_view = "CATEGORY_LIST"
-                st.rerun()
-            if c5.button(get_txt("btn_house"), use_container_width=True):
-                st.session_state.selected_category = "HOUSING"
-                st.session_state.page_view = "CATEGORY_LIST"
-                st.rerun()
+        # 화면 상태 관리를 위한 변수 초기화
+        if "selected_category" not in st.session_state:
+            st.session_state.selected_category = None
 
-            st.divider()
-            st.markdown(get_txt("home_sec2"))
-            waiting_steps = [s for s in steps if s['status'] == '대기']
-            if waiting_steps:
-                for step in waiting_steps:
-                    with st.container(border=True):
-                        c1, c2 = st.columns([4, 1])
-                        with c1:
-                            st.markdown(f"**{step['title']}**")
-                            st.caption(f"{step['description'][:40]}...")
-                        with c2:
-                            if st.button(get_txt("btn_view"), key=f"pre_{step['id']}"):
-                                st.session_state.selected_step = step
-                                st.session_state.page_view = "PREVIEW"
-                                st.rerun()
-            else: st.info(get_txt("msg_no_priority"))
-
-        # 카테고리별 리스트
-        elif st.session_state.page_view == "CATEGORY_LIST":
+        # ---------------------------------------------------------
+        # [화면 A] 카테고리별 전체 리스트 보기
+        # ---------------------------------------------------------
+        if st.session_state.page_view == "CATEGORY_LIST":
             cat = st.session_state.selected_category
             # 카테고리 이름 i18n 처리
-            cat_key = f"cat_{cat.lower()}" # SCHOOL -> cat_school
+            cat_key = f"cat_{cat.lower()}" if cat else "cat_visa"
             cat_name = get_txt(cat_key) 
             
             if st.button(get_txt("back_home").format(cat=cat_name), key="back_from_cat"):
@@ -575,33 +776,109 @@ def main_dashboard():
                                 st.session_state.selected_step = step
                                 st.session_state.page_view = "PREVIEW"
                                 st.rerun()
-            else: st.info(get_txt("msg_no_cat_items").format(cat=cat_name))
+            else:
+                st.info(get_txt("msg_no_cat_items").format(cat=cat_name))
 
-        # 프리뷰
+        # ---------------------------------------------------------
+        # [화면 B] 항목 상세 미리보기 (Preview)
+        # ---------------------------------------------------------
         elif st.session_state.page_view == "PREVIEW":
             step = st.session_state.selected_step
             if step:
                 if st.button(get_txt("back_prev")):
                     st.session_state.page_view = "HOME"
                     st.rerun()
+                
                 st.title(step['title'])
                 st.markdown(f"**{step['description']}**")
+                
                 st.info(get_txt("preview_insight"))
+                
                 c1, c2 = st.columns(2)
                 c1.metric(get_txt("metric_time"), "1~3 Days") 
                 c2.metric(get_txt("metric_visit"), "1 Visit")
+                
                 st.markdown(get_txt("preview_sec1"))
                 st.write(get_txt("preview_txt1"))
                 st.write(get_txt("preview_txt2"))
+                
                 st.divider()
-                if st.button(get_txt("btn_start"), type="primary", use_container_width=True):
+                
+                # [수정됨] 워크플로우 추가 버튼 (에러 핸들링 강화)
+                if st.button(get_txt("btn_start"), type="primary", width="stretch"):
                     try:
-                        requests.patch(f"{API_URL}/roadmap-steps/{step['id']}", json={"status": "진행중"})
-                        st.toast(get_txt("toast_start").format(title=step['title']))
-                        time.sleep(1)
-                        st.session_state.page_view = "HOME" 
-                        st.rerun()
-                    except: st.error("Error")
+                        res = requests.patch(f"{API_URL}/roadmap-steps/{step['id']}", json={"status": "진행중"})
+                        
+                        if res.status_code == 200:
+                            st.toast(get_txt("toast_start").format(title=step['title']))
+                            time.sleep(1)
+                            st.session_state.page_view = "HOME" 
+                            st.rerun()
+                        else:
+                            st.error(f"Failed to start: {res.status_code} - {res.text}")
+                            
+                    except Exception as e: 
+                        st.error(f"Connection Error: {e}")
+
+        # ---------------------------------------------------------
+        # [화면 C] 기본 메인 홈 화면 (그 외 모든 경우)
+        # ---------------------------------------------------------
+        else:
+            # 다른 탭에서 왔을 때 page_view가 WORKFLOW 등으로 되어있을 수 있으므로 강제 보정은 하지 않더라도
+            # else로 받아주면 화면이 렌더링 됩니다.
+            
+            st.subheader(get_txt("home_greeting").format(name=st.session_state.user_name))
+            st.markdown(get_txt("home_desc"))
+            
+            # 1. 상단 아이콘
+            st.markdown(get_txt("home_sec1"))
+            c1, c2, c3, c4, c5 = st.columns(5)
+            
+            if c1.button(get_txt("btn_school"), width="stretch"):
+                st.session_state.selected_category = "SCHOOL"
+                st.session_state.page_view = "CATEGORY_LIST"
+                st.rerun()
+            
+            if c2.button(get_txt("btn_admin"), width="stretch"):
+                st.session_state.selected_category = "VISA"
+                st.session_state.page_view = "CATEGORY_LIST"
+                st.rerun()
+
+            if c3.button(get_txt("btn_bank"), width="stretch"):
+                st.session_state.selected_category = "BANK"
+                st.session_state.page_view = "CATEGORY_LIST"
+                st.rerun()
+
+            if c4.button(get_txt("btn_sim"), width="stretch"):
+                st.session_state.selected_category = "SIM"
+                st.session_state.page_view = "CATEGORY_LIST"
+                st.rerun()
+
+            if c5.button(get_txt("btn_house"), width="stretch"):
+                st.session_state.selected_category = "HOUSING"
+                st.session_state.page_view = "CATEGORY_LIST"
+                st.rerun()
+
+            st.divider()
+
+            # 2. 우선 항목 리스트
+            st.markdown(get_txt("home_sec2"))
+            waiting_steps = [s for s in steps if s['status'] == '대기']
+            
+            if waiting_steps:
+                for step in waiting_steps:
+                    with st.container(border=True):
+                        col_txt, col_btn = st.columns([4, 1])
+                        with col_txt:
+                            st.markdown(f"**{step['title']}**")
+                            st.caption(f"{step['description'][:40]}...")
+                        with col_btn:
+                            if st.button(get_txt("btn_view"), key=f"pre_{step['id']}"):
+                                st.session_state.selected_step = step
+                                st.session_state.page_view = "PREVIEW"
+                                st.rerun()
+            else:
+                st.info(get_txt("msg_no_priority"))
 
     # [탭 2] 워크플로우
     with tab_workflow:
@@ -644,18 +921,35 @@ def main_dashboard():
                 with c1:
                     st.markdown(get_txt("step_s1"))
                     st.markdown(get_txt("step_checklist"))
+
                     if step.get('checklist'):
                         all_chk = True
-                        for item in step['checklist']:
-                            chk = st.checkbox(item['item_content'], value=item['is_checked'], key=f"chk_{item['id']}")
+
+                        def update_checklist_state(item_id, current_state):
+                            new_state = not current_state
+                            try:
+                                requests.patch(f"{API_URL}/checklist-items/{item_id}", json={"is_checked": new_state})
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
+                        for i, item in enumerate(step['checklist']):
+                            key = f"chk_{step['id']}_{item['id']}"
+
+                            chk = st.checkbox(
+                                item['item_content'],
+                                value=item['is_checked'],
+                                key=key,
+                                on_change=update_checklist_state,
+                                args=(item['id'], item['is_checked'])
+                            )
+
                             if not chk: all_chk = False
-                            if chk != item['is_checked']:
-                                requests.patch(f"{API_URL}/checklist-items/{item['id']}", json={"is_checked": chk})
-                                st.rerun()
-                    else: 
+                    else:
                         st.caption(get_txt("no_checklist"))
                         all_chk = True
+
                     st.markdown("---")
+                    
                     st.markdown(get_txt("step_s2"))
                     if step.get('documents'):
                         for doc in step['documents']:
@@ -663,36 +957,57 @@ def main_dashboard():
                     
                     with st.form(f"up_{step['id']}"):
                         dtype = "CONTRACT" if step['category'] == "HOUSING" else "PASSPORT"
-                        up = st.file_uploader(get_txt("label_file"), type=['jpg','pdf'])
-                        if st.form_submit_button("Submit") and up:
-                            files = {"file": (up.name, up, up.type)}
-                            res = requests.post(f"{API_URL}/users/{st.session_state.user_id}/documents?doc_type={dtype}&step_id={step['id']}", files=files)
-                            if res.status_code == 200:
-                                st.success(get_txt("file_submit_success"))
-                                time.sleep(1)
-                                st.rerun()
+                        
+                        # 다국어 라벨 적용
+                        label_txt = get_txt("label_file")
+                        up = st.file_uploader(label_txt, type=['jpg','pdf'])
+                        
+                        # 버튼 클릭 시 처리
+                        if st.form_submit_button("Submit"):
+                            if up:
+                                files = {"file": (up.name, up, up.type)}
+                                try:
+                                    # API 호출
+                                    res = requests.post(
+                                        f"{API_URL}/users/{st.session_state.user_id}/documents?doc_type={dtype}&step_id={step['id']}", 
+                                        files=files
+                                    )
+                                    
+                                    # [성공 시]
+                                    if res.status_code == 200:
+                                        st.success(get_txt("file_submit_success"))
+                                        time.sleep(1)
+                                        st.rerun()
+                                    # [실패 시 - 에러 메시지 출력]
+                                    else:
+                                        st.error(f"제출 실패 ({res.status_code}): {res.text}")
+                                except Exception as e:
+                                    st.error(f"연결 오류: {e}")
+                            else:
+                                st.warning("파일을 먼저 선택해주세요.") # 파일 없이 버튼 눌렀을 때
                 with c2:
                     st.markdown(get_txt("map_nearby"))
                     st.divider()
                     st.markdown(get_txt("help_title"))
                     c_faq, c_exp = st.columns(2)
-                    c_faq.button(get_txt("btn_faq"), use_container_width=True)
-                    if c_exp.button(get_txt("btn_ask"), use_container_width=True):
+                    c_faq.button(get_txt("btn_faq"), width="stretch")
+                    if c_exp.button(get_txt("btn_ask"), width="stretch"):
                         open_reservation_dialog("Expert")
                 
                 st.divider()
                 if step['status'] != "완료":
                     if all_chk:
-                        if st.button(get_txt("btn_finish"), type="primary", use_container_width=True):
+                        if st.button(get_txt("btn_finish"), type="primary", width="stretch"):
                             requests.patch(f"{API_URL}/roadmap-steps/{step['id']}", json={"status": "완료"})
                             st.balloons()
                             st.session_state.page_view = "WORKFLOW"
                             st.rerun()
-                    else: st.button(get_txt("btn_finish_disable"), disabled=True, use_container_width=True)
+                    else: st.button(get_txt("btn_finish_disable"), disabled=True, width="stretch")
 
     # [탭 3] 문서 지갑
     with tab_wallet:
         st.subheader(get_txt("wallet_title"))
+
         with st.expander(get_txt("wallet_add"), expanded=False):
             st.info(get_txt("wallet_info"))
             doc_opts = get_txt("opt_doc") # 리스트 반환
@@ -713,29 +1028,39 @@ def main_dashboard():
                             time.sleep(1)
                             st.rerun()
                         else: st.error("Upload Failed")
-                    except: st.error("Error")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
         st.divider()
+
         st.markdown(get_txt("wallet_list"))
         try:
             my_docs = requests.get(f"{API_URL}/users/{st.session_state.user_id}/documents").json()
             if not my_docs: st.info(get_txt("msg_no_docs"))
             else:
                 for doc in my_docs:
+                    status_key = doc.get('verification_status')
+
                     stat_map = {
                         "VERIFIED": (get_txt("stat_verified"), "green"),
                         "REVIEW_NEEDED": (get_txt("stat_review"), "orange"),
                         "REJECTED": (get_txt("stat_rejected"), "red"),
-                        "UNVERIFIED": (get_txt("stat_unverified"), "gray")
+                        "UNVERIFIED": (get_txt("stat_unverified"), "gray"),
+                        None: (get_txt("stat_review"), "orange")
                     }
-                    txt, color = stat_map.get(doc.get('verification_status'), ("Unknown", "gray"))
+
+                    txt, color = stat_map.get(status_key, (get_txt("stat_review"), "orange"))
+
                     icon = "🛂" if doc['doc_type'] == "PASSPORT" else "📜"
+
                     with st.container(border=True):
                         c1, c2, c3 = st.columns([0.5, 3, 1.5])
                         with c1: st.markdown(f"## {icon}")
                         with c2:
                             st.markdown(f"**{doc['doc_type']}**")
-                            st.caption(f"{doc['uploaded_at'][:10]}")
+                            date_str = doc.get('uploaded_at', '')[:10] if doc.get('uploaded_at') else datetime.today().strftime("%Y-%m-%d")
+                            st.caption(f"{date_str}")
                         with c3: st.markdown(f":{color}[**{txt}**]")
+
                         with st.expander(get_txt("exp_details")):
                             st.caption(f"Path: {doc.get('s3_key', 'N/A')}")
                             import json
@@ -746,7 +1071,8 @@ def main_dashboard():
                                     if doc['doc_type'] == "CONTRACT":
                                         st.metric("Risk Score", f"{an.get('risk_score', 0)}")
                                 except: pass
-        except: pass
+        except Exception as e:
+            st.error(f"Failed to load documents: {e}")
 
     # [탭 4] AI 상담
     with tab_chat:
@@ -772,11 +1098,83 @@ def main_dashboard():
                         st.info("Recommended Partner")
                         st.button("Book Now", key="now_v")
                     st.session_state.messages.append({"role": "assistant", "content": ai_text, "action": ai_act})
-            except: st.error("Error")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    # ---------------------------------------------------------
+    # [Helper] 게시글 카드 렌더링 함수 (수정/삭제/댓글 통합)
+    # ---------------------------------------------------------
+    def render_post_card(post, current_user_id):
+        with st.container(border=True):
+            # 1. 헤더 (상태 아이콘 & 제목 & 작성자)
+            c1, c2 = st.columns([5, 1])
+            with c1:
+                icon = "✅" if post.get('is_verified') else "📝"
+                if post.get('result_tag') == "SUCCESS": icon = "🟢 [승인]"
+                elif post.get('result_tag') == "FAIL": icon = "🔴 [반려]"
+                
+                st.markdown(f"### {icon} {post['title']}")
+                st.caption(f"User: {post['author_id']} | Date: {post.get('created_at', '')[:10]}")
+            
+            # 2. 본인 글 수정/삭제 버튼 (작성자만 보임)
+            if current_user_id == post['author_id']:
+                with c2:
+                    # 수정 기능 (Popover 사용)
+                    with st.popover(get_txt("btn_edit")):
+                        with st.form(key=f"edit_form_{post['id']}"):
+                            new_title = st.text_input(get_txt("label_edit_title"), value=post['title'])
+                            new_content = st.text_area(get_txt("label_edit_content"), value=post['content'])
+                            if st.form_submit_button(get_txt("btn_update")):
+                                try:
+                                    requests.put(f"{API_URL}/community/posts/{post['id']}?user_id={current_user_id}", 
+                                                 json={"title": new_title, "content": new_content})
+                                    st.success(get_txt("msg_update_success"))
+                                    time.sleep(0.5)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Update Failed: {e}")
+                    
+                    # 삭제 기능
+                    if st.button(get_txt("btn_delete"), key=f"del_{post['id']}"):
+                        try:
+                            requests.delete(f"{API_URL}/community/posts/{post['id']}?user_id={current_user_id}")
+                            st.toast(get_txt("msg_delete_confirm"))
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Delete Failed: {e}")
+
+            # 3. 본문 내용
+            st.write(post['content'])
+            st.divider()
+            
+            # 4. 댓글 영역
+            comments = post.get('comments', [])
+            st.caption(get_txt("header_comments").format(count=len(comments)))
+            
+            if comments:
+                for c in comments:
+                    st.markdown(f"**User {c['author_id']}**: {c['content']}")
+            else:
+                st.caption(get_txt("msg_no_comments"))
+            
+            # 댓글 작성 폼
+            with st.form(key=f"comment_form_{post['id']}", clear_on_submit=True):
+                c_col1, c_col2 = st.columns([4, 1])
+                new_comment = c_col1.text_input(get_txt("label_comment"), label_visibility="collapsed")
+                if c_col2.form_submit_button(get_txt("btn_add_comment")):
+                    if new_comment:
+                        try:
+                            requests.post(f"{API_URL}/community/posts/{post['id']}/comments?user_id={current_user_id}", 
+                                          json={"content": new_comment})
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
 
     # [탭 5] 커뮤니티
     with tab_community:
         st.subheader(get_txt("com_title"))
+
         with st.expander(get_txt("com_write")):
             with st.form("new_post"):
                 c1, c2 = st.columns(2)
@@ -784,29 +1182,48 @@ def main_dashboard():
                 board_opts = get_txt("opt_board")
                 cat_type = c1.selectbox(get_txt("label_board"), board_opts)
                 v_type = c2.selectbox("Visa", ["D-2", "D-4"])
+
+                res_tag = "NONE"
+                if cat_type == board_opts[0]:
+                    res_tag_display = st.radio("Result", ["Success (승인)", "Fail (반려)"], horizontal=True)
+                    res_tag = "SUCCESS" if "Success" in res_tag_display else "FAIL"
+
                 title = st.text_input(get_txt("label_title"))
                 content = st.text_area(get_txt("label_content"))
+
                 if st.form_submit_button(get_txt("btn_register")):
                     # 인덱스로 카테고리 매핑
                     cat_map = ["REVIEW", "INFO", "QNA"]
                     cat_code = cat_map[board_opts.index(cat_type)]
                     
-                    payload = {"title": title, "content": content, "visa_type": v_type, "category": cat_code}
-                    requests.post(f"{API_URL}/community/posts?user_id={st.session_state.user_id}", json=payload)
-                    st.success(get_txt("msg_reg_success"))
-                    st.rerun()
+                    payload = {
+                        "title": title,
+                        "content": content,
+                        "visa_type": v_type,
+                        "category": cat_code,
+                        "result_tag": res_tag
+                    }
+                    try:
+                        requests.post(f"{API_URL}/community/posts?user_id={st.session_state.user_id}", json=payload)
+                        st.success(get_txt("msg_reg_success"))
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to post: {e}")
         
         st.divider()
+
         t1, t2, t3 = st.tabs(get_txt("tabs_com"))
+
         with t1: # Review
             try:
                 posts = requests.get(f"{API_URL}/community/posts?category=REVIEW").json()
                 if not posts: st.info(get_txt("msg_no_posts"))
-                for p in posts:
-                    with st.container(border=True):
-                        st.markdown(f"**{p['title']}**")
-                        st.write(p['content'])
-            except: pass
+                else:
+                    for p in posts:
+                        render_post_card(p, st.session_state.user_id)
+            except Exception as e: st.error(f"Load Error: {e}")
+
         with t2: # Info
             show_v = st.toggle(get_txt("toggle_verified"))
             url = f"{API_URL}/community/posts?category=INFO"
@@ -814,20 +1231,19 @@ def main_dashboard():
             try:
                 posts = requests.get(url).json()
                 if not posts: st.info(get_txt("msg_no_posts"))
-                for p in posts:
-                    icon = "✅" if p['is_verified'] else ""
-                    with st.expander(f"{icon} {p['title']}"):
-                        st.write(p['content'])
-            except: pass
+                else:
+                    for p in posts:
+                        render_post_card(p, st.session_state.user_id)
+            except Exception as e: st.error(f"Load Error: {e}")
+
         with t3: # QnA
             try:
                 posts = requests.get(f"{API_URL}/community/posts?category=QNA").json()
                 if not posts: st.info(get_txt("msg_no_posts"))
-                for p in posts:
-                    with st.container(border=True):
-                        st.markdown(f"❓ **{p['title']}**")
-                        st.write(p['content'])
-            except: pass
+                else:
+                    for p in posts:
+                        render_post_card(p, st.session_state.user_id)
+            except Exception as e: st.error(f"Load Error: {e}")
 
     # [탭 6] 지도
     with tab_map:
@@ -840,14 +1256,14 @@ def main_dashboard():
         cat_map = ["BANK", "OFFICE", "IMMIGRATION"]
         cat_code = cat_map[agency_opts.index(opt)]
         
-        # [복구된 부분] 대학교별 중심 좌표 데이터
+        # [복구 확인 완료] 대학교별 중심 좌표 데이터
         univ_coords = {
             "연세대학교 (Sinchon)": [37.565784, 126.938572],
             "서울대학교 (Gwanak)": [37.459882, 126.951905],
             "고려대학교 (Anam)": [37.589400, 127.032300],
             "한양대학교 (Seoul)": [37.557232, 127.045322]
         }
-        # 중심점 계산 로직 복구
+        # 중심점 계산 로직
         center = univ_coords.get(my_univ, [37.5665, 126.9780])
 
         try:
@@ -858,7 +1274,7 @@ def main_dashboard():
                     st.map(pd.DataFrame(data), latitude='lat', longitude='lon', size=200, color='#0044ff')
                     st.markdown(get_txt("map_rec").format(univ=my_univ))
                     
-                    # [복구된 부분] 거리 계산 필터링
+                    # [복구 확인 완료] 거리 계산 필터링
                     nearby = [x for x in data if abs(x['lat']-center[0])<0.03 and abs(x['lon']-center[1])<0.03]
                     
                     if nearby:
@@ -873,26 +1289,35 @@ def main_dashboard():
 # ==========================================
 # 4. 앱 실행 분기
 # ==========================================
-if st.session_state.access_token is None:
-    login_page()
-elif st.session_state.user_id is None:
-    headers = {"Authorization": f"Bearer {st.session_state.access_token}"}
-    try:
-        res = requests.get(f"{API_URL}/users/me", headers=headers)
-        if res.status_code == 200:
-            u = res.json()
-            st.session_state.user_id = u['id']
-            st.session_state.user_name = u['full_name']
-            st.session_state.visa_type = u['visa_type']
-            st.session_state.is_admin = u.get("is_admin", False)
-            st.rerun()
-        else:
+try:
+    if st.session_state.access_token is None:
+        login_page()
+    elif st.session_state.user_id is None:
+        headers = {"Authorization": f"Bearer {st.session_state.access_token}"}
+        try:
+            res = requests.get(f"{API_URL}/users/me", headers=headers)
+            if res.status_code == 200:
+                u = res.json()
+                st.session_state.user_id = u['id']
+                st.session_state.user_name = u['full_name']
+                st.session_state.visa_type = u['visa_type']
+                st.session_state.is_admin = u.get("is_admin", False)
+                st.rerun()
+            else:
+                st.session_state.access_token = None
+                st.rerun()
+        except Exception:
             st.session_state.access_token = None
             st.rerun()
-    except:
-        st.session_state.access_token = None
+    elif st.session_state.is_admin or st.session_state.visa_type is not None:
+        main_dashboard()
+    else:
+        setup_profile_page()
+
+except Exception as e:
+    # 앱이 멈추지 않고 에러 메시지를 보여주며 복구할 수 있게 함
+    st.error(f"알 수 없는 오류가 발생했습니다: {e}")
+    # 세션이 꼬였을 때를 대비한 탈출 버튼
+    if st.button("강제 로그아웃 (오류 해결용)"):
+        st.session_state.clear()
         st.rerun()
-elif st.session_state.is_admin or st.session_state.visa_type is not None:
-    main_dashboard()
-else:
-    setup_profile_page()
