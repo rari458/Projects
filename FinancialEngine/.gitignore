@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+*.pkl
+parameters.json
+
+# C++ (CMake)
+build/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+*.cmake
+
+# Rust (Cargo)
+market_data_feeder/target/
+**/*.rs.bk
+
+# OS generated files
+.DS_Store
