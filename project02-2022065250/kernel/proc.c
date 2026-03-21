@@ -269,14 +269,25 @@ growproc(int n)
 {
   uint64 sz;
   struct proc *p = myproc();
+  struct proc *main_proc = p;
 
-  sz = p->sz;
+  if(p->is_thread)
+    main_proc = p->parent;
+
+  sz = main_proc->sz;
   if(n > 0){
     if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
       return -1;
     }
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+  }
+
+  main_proc->sz = sz;
+  for(struct proc *pp = proc; pp < &proc[NPROC]; pp++){
+    if(pp->is_thread && pp->parent == main_proc){
+      pp->sz = sz;
+    }
   }
   p->sz = sz;
   return 0;
@@ -632,21 +643,35 @@ int
 kill(int pid)
 {
   struct proc *p;
+  struct proc *victim = 0;
 
   for(p = proc; p < &proc[NPROC]; p++){
     acquire(&p->lock);
     if(p->pid == pid){
+      victim = p;
       p->killed = 1;
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
       }
-      release(&p->lock);
-      return 0;
     }
     release(&p->lock);
   }
-  return -1;
+
+  if (victim == 0) return -1;
+
+  for (p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if (p->is_thread && p->parent == victim) {
+      p->killed = 1;
+      if (p->state == SLEEPING) {
+        p->state = RUNNABLE;
+      }
+    }
+    release(&p->lock);
+  }
+
+  return 0;
 }
 
 void

@@ -8,6 +8,7 @@
 #include "elf.h"
 
 extern struct proc proc[NPROC];
+extern struct spinlock wait_lock;
 
 static int loadseg(pde_t *, uint64, struct inode *, uint, uint);
 
@@ -146,7 +147,10 @@ exec(char *path, char **argv)
         acquire(&pp->lock);
         if (pp->state == ZOMBIE) {
           if (pp->pagetable == oldpagetable) {
-            uvmunmap(oldpagetable, pp->trapframe_va, 1, 0);
+            if (pp->trapframe_va != TRAPFRAME) {
+              uvmunmap(oldpagetable, pp->trapframe_va, 1, 0);
+            }
+            pp->pagetable = 0;
           }
           release(&pp->lock);
           break;
@@ -156,6 +160,16 @@ exec(char *path, char **argv)
       }
     }
   }
+
+  if (p->is_thread) uvmunmap(oldpagetable, p->trapframe_va, 1, 0);
+
+  if (p->is_thread) {
+    acquire(&main_t->lock);
+    main_t->pagetable = 0;
+    release(&main_t->lock);
+  }
+
+  p->is_thread = 0;
 
   proc_freepagetable(oldpagetable, oldsz);
 
