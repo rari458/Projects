@@ -132,26 +132,6 @@ exec(char *path, char **argv)
 
   struct proc *main_t = p->is_thread ? p->parent : p;
 
-  if (p->is_thread) {
-    acquire(&wait_lock);
-    struct proc *old_main = main_t;
-
-    p->is_thread = 0;
-    old_main->is_thread = 1;
-
-    int temp_pid = p->pid;
-    p->pid = old_main->pid;
-    old_main->pid = temp_pid;
-
-    p->parent = old_main->parent;
-    for (struct proc *pp = proc; pp < &proc[NPROC]; pp++) {
-      if (pp->parent == old_main) pp->parent = p;
-    }
-    old_main->parent = p;
-    release(&wait_lock);
-    main_t = p;
-  }
-
   for (struct proc *pp = proc; pp < &proc[NPROC]; pp++) {
     if (pp != p && (pp == main_t || pp->parent == main_t)) {
       acquire(&pp->lock);
@@ -180,6 +160,16 @@ exec(char *path, char **argv)
       }
     }
   }
+
+  if (p->is_thread) uvmunmap(oldpagetable, p->trapframe_va, 1, 0);
+
+  if (p->is_thread) {
+    acquire(&main_t->lock);
+    main_t->pagetable = 0;
+    release(&main_t->lock);
+  }
+
+  p->is_thread = 0;
 
   proc_freepagetable(oldpagetable, oldsz);
 
