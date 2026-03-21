@@ -354,7 +354,7 @@ reparent(struct proc *p)
 
   for(pp = proc; pp < &proc[NPROC]; pp++){
     if(pp->parent == p){
-      if (pp->parent == p) continue;
+      if (pp->is_thread) continue;
       pp->parent = initproc;
       wakeup(initproc);
     }

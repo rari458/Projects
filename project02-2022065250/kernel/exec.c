@@ -155,6 +155,10 @@ exec(char *path, char **argv)
           release(&pp->lock);
           break;
         }
+        if (pp->state == UNUSED) {
+          release(&pp->lock);
+          break;
+        }
         release(&pp->lock);
         yield();
       }
