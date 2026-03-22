@@ -203,7 +203,7 @@ proc_pagetable(struct proc *p)
 
   // map the trapframe page just below the trampoline page, for
   // trampoline.S.
-  if(mappages(pagetable, p->trapframe_va = TRAPFRAME, PGSIZE,
+  if(mappages(pagetable, TRAPFRAME, PGSIZE,
               (uint64)(p->trapframe), PTE_R | PTE_W) < 0){
     uvmunmap(pagetable, TRAMPOLINE, 1, 0);
     uvmfree(pagetable, 0);
@@ -387,16 +387,14 @@ exit(int status)
 
   acquire(&wait_lock);
 
-  if (p->is_thread) {
-    for (struct proc *pp = proc; pp < &proc[NPROC]; pp++) {
-      if (pp->is_thread && pp->parent == p) {
-        acquire(&pp->lock);
-        pp->killed = 1;
-        if (pp->state == SLEEPING) {
-          pp->state = RUNNABLE;
-        }
-        release(&pp->lock);
+  for (struct proc *pp = proc; pp < &proc[NPROC]; pp++) {
+    if (pp->is_thread && pp->parent == p) {
+      acquire(&pp->lock);
+      pp->killed = 1;
+      if (pp->state == SLEEPING) {
+        pp->state = RUNNABLE;
       }
+      release(&pp->lock);
     }
   }
   
@@ -782,7 +780,7 @@ clone(void(*fcn)(void*,void*),void*arg1,void*arg2,void*stack){
 	{
 		uvmunmap(p->pagetable, TRAMPOLINE, 1, 0);
 		uvmfree(p->pagetable, 0);
-		return 0;
+		return -1;
 	}
 
 	np->pagetable = p->pagetable;

@@ -145,7 +145,7 @@ exec(char *path, char **argv)
     if (pp != p && pp->is_thread && pp->parent == main_t) {
       for (;;) {
         acquire(&pp->lock);
-        if (pp->state == ZOMBIE) {
+        if (pp->state == ZOMBIE || pp->state == UNUSED) {
           if (pp->pagetable == oldpagetable) {
             if (pp->trapframe_va != TRAPFRAME) {
               uvmunmap(oldpagetable, pp->trapframe_va, 1, 0);
