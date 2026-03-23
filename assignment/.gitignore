@@ -15,3 +15,11 @@ mkfs
 kernel/kernel
 user/usys.S
 .gdbinit
+TAGS
+test-xv6.out
+
+# 4 my sandbox
+.cache
+.bear
+compile_commands.json
+compile_commands.tmp
