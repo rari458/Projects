@@ -1,0 +1,47 @@
+[tool.poetry]
+name = "aegis-alpha"
+version = "0.1.0"
+description = "Alpha Factory: Predictive signal modeling and backtesting environment"
+authors = ["Quantitative Researcher <admin@aegis.local>"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^1.26.4"
+pandas = "^2.2.1"
+polars = "^0.20.15"
+
+scikit-learn = "^1.4.1.post1"
+xgboost = "^2.0.3"
+lightgbm = "^0.14.1"
+scipy = "^1.12.0"
+
+confluent-kafka = "^2.3.0"
+clickhouse-connect = "^0.7.3"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.1.1"
+jupyterlab = "^4.1.5"
+matplotlib = "^3.8.3"
+seaborn = "^0.13.2"
+ruff = "^0.3.3"
+mypy = "^1.9.0"
+
+[build-system]
+requires = ["poetry-core]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

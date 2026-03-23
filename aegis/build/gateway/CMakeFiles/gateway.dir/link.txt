@@ -1,0 +1,2 @@
+/usr/bin/ar qc libgateway.a CMakeFiles/gateway.dir/src/binance_gateway.cpp.o
+/usr/bin/ranlib libgateway.a
