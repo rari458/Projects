@@ -1,0 +1,325 @@
+
+@@@
+state at cycle 0
+  pc: 0x00400000
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        0 regs[10]:        0 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x00000000   |   0x00000000   |   0x00000000   |   0x00000000   |   0x00000000
+    inst:    0x00000000   |   0x00000000   |   0x00000000   |   0x00000000   |   0x00000000
+             NOP          |   NOP          |   NOP          |   NOP          |   NOP       
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   000--00000   |   --0--000-0   |   --0---0--0
+end state
+
+@@@
+state at cycle 1
+  pc: 0x00400004
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        0 regs[10]:        0 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x00400004   |   0x00000000   |   0x00000000   |   0x00000000   |   0x00000000
+    inst:    0x8f898000   |   0x00000000   |   0x00000000   |   0x00000000   |   0x00000000
+             LW           |   NOP          |   NOP          |   NOP          |   NOP       
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   XXX--0X0X0   |   --0--000-0   |   --0---0--0
+end state
+
+@@@
+state at cycle 2
+  pc: 0x00400008
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        0 regs[10]:        0 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x00400008   |   0x00400004   |   0x00000000   |   0x00000000   |   0x00000000
+    inst:    0x8f8a8004   |   0x8f898000   |   0x00000000   |   0x00000000   |   0x00000000
+             LW           |   LW           |   NOP          |   NOP          |   NOP       
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   000--10011   |   --X--0X0-0   |   --0---0--0
+end state
+
+@@@
+state at cycle 3
+  pc: 0x0040000c
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        0 regs[10]:        0 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x0040000c   |   0x00400008   |   0x00400004   |   0x00000000   |   0x00000000
+    inst:    0x214a0001   |   0x8f8a8004   |   0x8f898000   |   0x00000000   |   0x00000000
+             ADDI         |   LW           |   LW           |   NOP          |   NOP       
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   000--10011   |   --0--100-1   |   --X---X--0
+end state
+
+@@@
+state at cycle 4
+  pc: 0x0040000c
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        0 regs[10]:        0 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x0040000c   |   0x0040000c   |   0x00400008   |   0x00400004   |   0x00000000
+    inst:    0x214a0001   |   0x00000000   |   0x8f8a8004   |   0x8f898000   |   0x00000000
+             ADDI         |   NOP          |   LW           |   LW           |   NOP       
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   XXX--0X0X0   |   --0--100-1   |   --0---0--1
+end state
+
+@@@
+state at cycle 5
+  pc: 0x00400010
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        1 regs[10]:        0 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x00400010   |   0x0040000c   |   0x0040000c   |   0x00400008   |   0x00400004
+    inst:    0x012a402a   |   0x214a0001   |   0x00000000   |   0x8f8a8004   |   0x8f898000
+             SLT          |   ADDI         |   NOP          |   LW           |   LW        
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   100--00011   |   --X--0X0-0   |   --0---0--1
+end state
+
+@@@
+state at cycle 6
+  pc: 0x00400014
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        1 regs[10]:        2 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x00400014   |   0x00400010   |   0x0040000c   |   0x0040000c   |   0x00400008
+    inst:    0x00000000   |   0x012a402a   |   0x214a0001   |   0x00000000   |   0x8f8a8004
+             NOP          |   SLT          |   ADDI         |   NOP          |   LW        
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   101--01001   |   --0--000-1   |   --X---X--0
+end state
+
+@@@
+state at cycle 7
+  pc: 0x00400018
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        1 regs[10]:        2 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x00400018   |   0x00400014   |   0x00400010   |   0x0040000c   |   0x0040000c
+    inst:    0x2002000a   |   0x00000000   |   0x012a402a   |   0x214a0001   |   0x00000000
+             ADDI         |   NOP          |   SLT          |   ADDI         |   NOP       
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   XXX--0X0X0   |   --1--010-1   |   --0---0--1
+end state
+
+@@@
+state at cycle 8
+  pc: 0x0040001c
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        1 regs[10]:        3 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x0040001c   |   0x00400018   |   0x00400014   |   0x00400010   |   0x0040000c
+    inst:    0x0000000c   |   0x2002000a   |   0x00000000   |   0x012a402a   |   0x214a0001
+             SYSCALL      |   ADDI         |   NOP          |   SLT          |   ADDI      
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   100--00011   |   --X--0X0-0   |   --1---1--1
+end state
+
+@@@
+state at cycle 9
+  pc: 0x00400020
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        1 regs[09]:        1 regs[10]:        3 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x00400020   |   0x0040001c   |   0x00400018   |   0x00400014   |   0x00400010
+    inst:    0x00000000   |   0x0000000c   |   0x2002000a   |   0x00000000   |   0x012a402a
+             NOP          |   SYSCALL      |   ADDI         |   NOP          |   SLT       
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   XXX--0X0X0   |   --0--000-1   |   --X---X--0
+end state
+
+@@@
+state at cycle 10
+  pc: 0x00400020
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        1 regs[09]:        1 regs[10]:        3 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x00400020   |   0x00400020   |   0x0040001c   |   0x00400018   |   0x00400014
+    inst:    0x00000000   |   0x00000000   |   0x0000000c   |   0x2002000a   |   0x00000000
+             NOP          |   NOP          |   SYSCALL      |   ADDI         |   NOP       
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   XXX--0X0X0   |   --X--0X0-0   |   --0---0--1
+end state
+
+@@@
+state at cycle 11
+  pc: 0x00400020
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        a regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        1 regs[09]:        1 regs[10]:        3 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x00400020   |   0x00400020   |   0x00400020   |   0x0040001c   |   0x00400018
+    inst:    0x00000000   |   0x00000000   |   0x00000000   |   0x0000000c   |   0x2002000a
+             NOP          |   NOP          |   NOP          |   SYSCALL      |   ADDI      
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   XXX--0X0X0   |   --X--0X0-0   |   --X---X--0
+end state
+
+@@@
+state at cycle 12
+  pc: 0x00400020
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        a regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        1 regs[09]:        1 regs[10]:        3 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7ffffffc regs[30]: 7ffffffc regs[31]:        0
+  pipeline registers:
+             IF               ID               EX               MEM              WB(Retire)
+    pc:      0x00400020   |   0x00400020   |   0x00400020   |   0x00400020   |   0x0040001c
+    inst:    0x00000000   |   0x00000000   |   0x00000000   |   0x00000000   |   0x0000000c
+             NOP          |   NOP          |   NOP          |   NOP          |   SYSCALL   
+    ctl:     ALUOp(2) RegDst Jump Brch MemRd Mem2Reg MemWt ALUSrc RegWt
+             OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR   |   OPRJBMMMAR
+             ----------   |   XXX--0X0X0   |   --X--0X0-0   |   --X---X--0
+end state

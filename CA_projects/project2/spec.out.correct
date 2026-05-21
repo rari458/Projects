@@ -1,0 +1,119 @@
+
+@@@
+state at cycle 0
+  pc: 0x00400004
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        1 regs[10]:        0 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7FFFFFFC regs[30]: 7FFFFFFC regs[31]:        0
+end state
+
+@@@
+state at cycle 1
+  pc: 0x00400008
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        1 regs[10]:        2 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7FFFFFFC regs[30]: 7FFFFFFC regs[31]:        0
+end state
+
+@@@
+state at cycle 2
+  pc: 0x0040000C
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        0 regs[09]:        1 regs[10]:        3 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7FFFFFFC regs[30]: 7FFFFFFC regs[31]:        0
+end state
+
+@@@
+state at cycle 3
+  pc: 0x00400010
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        1 regs[09]:        1 regs[10]:        3 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7FFFFFFC regs[30]: 7FFFFFFC regs[31]:        0
+end state
+
+@@@
+state at cycle 4
+  pc: 0x00400014
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        0 regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        1 regs[09]:        1 regs[10]:        3 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7FFFFFFC regs[30]: 7FFFFFFC regs[31]:        0
+end state
+
+@@@
+state at cycle 5
+  pc: 0x00400018
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        A regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        1 regs[09]:        1 regs[10]:        3 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7FFFFFFC regs[30]: 7FFFFFFC regs[31]:        0
+end state
+
+@@@
+state at cycle 6
+  pc: 0x0040001C
+  .data:
+    mem[0x10000000]:        1
+    mem[0x10000004]:        2
+  registers:
+    regs[00]:        0 regs[01]:        0 regs[02]:        A regs[03]:        0
+    regs[04]:        0 regs[05]:        0 regs[06]:        0 regs[07]:        0
+    regs[08]:        1 regs[09]:        1 regs[10]:        3 regs[11]:        0
+    regs[12]:        0 regs[13]:        0 regs[14]:        0 regs[15]:        0
+    regs[16]:        0 regs[17]:        0 regs[18]:        0 regs[19]:        0
+    regs[20]:        0 regs[21]:        0 regs[22]:        0 regs[23]:        0
+    regs[24]:        0 regs[25]:        0 regs[26]:        0 regs[27]:        0
+    regs[28]: 10008000 regs[29]: 7FFFFFFC regs[30]: 7FFFFFFC regs[31]:        0
+end state
