@@ -12,3 +12,4 @@ data/
 venv/
 __pycache__/
 *.py[cod]
+make_report.py
