@@ -1,0 +1,14 @@
+# Datasets (auto-downloaded on Colab; do not commit — keeps the repo small)
+data/
+
+# Reference papers / project documents
+*.pdf
+*.docx
+*.md
+# keep Claude Code guidance tracked; other .md stay ignored
+!CLAUDE.md
+
+# Python virtualenv & caches
+venv/
+__pycache__/
+*.py[cod]
