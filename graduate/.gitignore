@@ -5,11 +5,8 @@ data/
 *.pdf
 *.docx
 *.md
-# keep Claude Code guidance tracked; other .md stay ignored
-!CLAUDE.md
 
 # Python virtualenv & caches
 venv/
 __pycache__/
 *.py[cod]
-make_report.py
