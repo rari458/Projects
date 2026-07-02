@@ -11,6 +11,8 @@ add_executable(UnitTests
 	SolverTest.cpp
 	TreeTest.cpp
 	GreeksTest.cpp
+    BacktesterCharacterizationTest.cpp
+    ../src/StrategyRegistration.cpp
 )
 
 target_link_libraries(UnitTests

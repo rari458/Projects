@@ -459,16 +459,16 @@ void RunEventDrivenModule() {
     fmt::print(" -> Parsing Corporate Filings & News Feeds...\n\n");
 
     CorporateAction evt1{ActionType::INDEX_REBALANCE, "TSLA", "", 0.0, 2.0};
-    engine.send_corporate_action(evt1);
+    engine.send_event(evt1);
 
     CorporateAction evt2{ActionType::MERGER_ANNOUNCEMENT, "TARGET_CO", "ACQUIRER_INC", 60.0, 3.0};
-    engine.send_corporate_action(evt2);
+    engine.send_event(evt2);
 
     CorporateAction evt3{ActionType::EARNINGS_SURPRISE, "NVDA", "", 3.5, 4.0};
-    engine.send_corporate_action(evt3);
+    engine.send_event(evt3);
 
     CorporateAction evt4{ActionType::SHARE_BUYBACK, "TARGET_CO", "", 0.0, 5.0};
-    engine.send_corporate_action(evt4);
+    engine.send_event(evt4);
 
     fmt::print("\n -> Event-Driven Execution Complete.\n");
     fmt::print(fg(fmt::color::cyan), " -> Current Portfolio Allocation:\n");
@@ -489,21 +489,21 @@ void RunMicrostructureSuiteModule() {
 
     fmt::print(" -> Simulating High-Frequency Microstructure Tape...\n\n");
 
-    engine.send_microstructure_msg({100.0, "EXCHANGE_A", 100.00, 100.05, false});
+    engine.send_event(MicrostructureMessage{100.0, "EXCHANGE_A", 100.00, 100.05, false});
 
     fmt::print(fg(fmt::color::yellow), " -> Injecting Quote Stuffing Attack (HFT Noise)...\n");
     for (int i = 0; i < 51; ++i) {
-        engine.send_microstructure_msg({200.0 + i, "EXCHANGE_A", 100.00, 100.05, true});
+        engine.send_event(MicrostructureMessage{200.0 + i, "EXCHANGE_A", 100.00, 100.05, true});
     }
 
-    engine.send_microstructure_msg({1500.0, "EXCHANGE_A", 100.00, 100.05, false});
+    engine.send_event(MicrostructureMessage{1500.0, "EXCHANGE_A", 100.00, 100.05, false});
 
     fmt::print(fg(fmt::color::green), " -> Clearing Toxicity Shield (Market is calm)...\n");
-    engine.send_microstructure_msg({2600.0, "EXCHANGE_A", 100.00, 100.05, false});
+    engine.send_event(MicrostructureMessage{2600.0, "EXCHANGE_A", 100.00, 100.05, false});
 
     fmt::print(fg(fmt::color::cyan), " -> Injecting Latency Discrepancy (A is lagging behind B)...\n");
-    engine.send_microstructure_msg({3000.0, "EXCHANGE_B", 100.20, 100.25, false});
-    engine.send_microstructure_msg({3001.0, "EXCHANGE_A", 100.00, 100.05, false});
+    engine.send_event(MicrostructureMessage{3000.0, "EXCHANGE_B", 100.20, 100.25, false});
+    engine.send_event(MicrostructureMessage{3001.0, "EXCHANGE_A", 100.00, 100.05, false});
 
     fmt::print("\n -> Microstructure Execution Complete.\n");
     fmt::print(" -> Final Equity: ${:.2f}\n", engine.get_total_equity());
@@ -522,9 +522,9 @@ void RunCryptoDeFiModule() {
 
     fmt::print(" -> Connecting to Mempool & DEX Smart Contracts...\n\n");
 
-    engine.send_crypto_event({CryptoEventType::FUNDING_RATE, "ETH", 0.002, 1.0, "", ""});
-    engine.send_crypto_event({CryptoEventType::MEMPOOL_TRANSACTION, "ETH", 800000.0, 2.0, "", ""});
-    engine.send_crypto_event({CryptoEventType::DEX_PRICE_UPDATE, "ETH", 3030.0, 3.0, "Uniswap", "SushiSwap"});
+    engine.send_event(CryptoEvent{CryptoEventType::FUNDING_RATE, "ETH", 0.002, 1.0, "", ""});
+    engine.send_event(CryptoEvent{CryptoEventType::MEMPOOL_TRANSACTION, "ETH", 800000.0, 2.0, "", ""});
+    engine.send_event(CryptoEvent{CryptoEventType::DEX_PRICE_UPDATE, "ETH", 3030.0, 3.0, "Uniswap", "SushiSwap"});
 
     fmt::print("\n -> Crypto/DeFi Execution Complete.\n");
     fmt::print(fg(fmt::color::cyan), " -> Final Equity: ${:.2f}\n", engine.get_total_equity());
@@ -545,9 +545,9 @@ void RunAltDataModule() {
 
     fmt::print(" -> Parsing Alternative Data Feeds (Satellites, NLP, SEC)...\n\n");
 
-    engine.send_alt_data({AltDataType::NLP_SENTIMENT, "AAPL", 0.95, 2.0});
-    engine.send_alt_data({AltDataType::SATELLITE_IMAGE, "WMT", 1.25, 3.0});
-    engine.send_alt_data({AltDataType::CONGRESSIONAL_TRADE, "LMT", 2500000.0, 4.0});
+    engine.send_event(AltDataEvent{AltDataType::NLP_SENTIMENT, "AAPL", 0.95, 2.0});
+    engine.send_event(AltDataEvent{AltDataType::SATELLITE_IMAGE, "WMT", 1.25, 3.0});
+    engine.send_event(AltDataEvent{AltDataType::CONGRESSIONAL_TRADE, "LMT", 2500000.0, 4.0});
 
     fmt::print("\n -> Alternative Data Execution Complete.\n");
     fmt::print(" -> Portfolio Holdings:\n");
@@ -570,10 +570,10 @@ void RunDownsideSqueezeModule() {
 
     fmt::print(" -> Scanning for Structural Anomalies and Risks...\n\n");
 
-    engine.send_anomaly_event({AnomalyType::SHORT_SQUEEZE, "GME", "", 120.0, 85.0, 2.0});
-    engine.send_anomaly_event({AnomalyType::TAIL_RISK, "SPY", "", 0.0, 0.0, 3.0});
-    engine.send_anomaly_event({AnomalyType::BASIS_TRADE, "ES_SPOT", "ES_FUT", 4000.0, 4050.0, 4.0});
-    engine.send_anomaly_event({AnomalyType::CROSS_BORDER, "BTC_KRW", "BTC_USD", 62000.0, 60000.0, 5.0});
+    engine.send_event(AnomalyEvent{AnomalyType::SHORT_SQUEEZE, "GME", "", 120.0, 85.0, 2.0});
+    engine.send_event(AnomalyEvent{AnomalyType::TAIL_RISK, "SPY", "", 0.0, 0.0, 3.0});
+    engine.send_event(AnomalyEvent{AnomalyType::BASIS_TRADE, "ES_SPOT", "ES_FUT", 4000.0, 4050.0, 4.0});
+    engine.send_event(AnomalyEvent{AnomalyType::CROSS_BORDER, "BTC_KRW", "BTC_USD", 62000.0, 60000.0, 5.0});
 
     fmt::print("\n -> Anomaly Execution Complete.\n");
     fmt::print(fg(fmt::color::cyan), " -> Final Equity (Accounting for Options Premium): ${:.2f}\n", engine.get_total_equity());
@@ -594,10 +594,10 @@ void RunGlobalMacroModule() {
 
     fmt::print(" -> Analyzing Global Yield Curves and FX Flows...\n\n");
 
-    engine.send_macro_event({MacroEventType::YIELD_CURVE, "US2Y", "US10Y", 4.50, 4.55, 2.0});
-    engine.send_macro_event({MacroEventType::CALENDER_SPREAD, "CL_NEAR", "CL_FAR", 75.0, 82.0, 3.0});
-    engine.send_macro_event({MacroEventType::FI_CARRY_TRADE, "JPY", "USD", 0.1, 5.0, 4.0});
-    engine.send_macro_event({MacroEventType::COMMODITY_FX, "WTI_CRUDE", "USDCAD", 6.5, 0.0, 5.0});
+    engine.send_event(MacroEvent{MacroEventType::YIELD_CURVE, "US2Y", "US10Y", 4.50, 4.55, 2.0});
+    engine.send_event(MacroEvent{MacroEventType::CALENDER_SPREAD, "CL_NEAR", "CL_FAR", 75.0, 82.0, 3.0});
+    engine.send_event(MacroEvent{MacroEventType::FI_CARRY_TRADE, "JPY", "USD", 0.1, 5.0, 4.0});
+    engine.send_event(MacroEvent{MacroEventType::COMMODITY_FX, "WTI_CRUDE", "USDCAD", 6.5, 0.0, 5.0});
 
     fmt::print("\n -> Global Macro Execution Complete.\n");
     fmt::print(" -> Final Equity: ${:.2f}\n", engine.get_total_equity());
@@ -621,10 +621,10 @@ void RunAIBhvModule() {
 
     engine.send_order("MOMO_ETF", "BUY", 2000.0, 50.0, 1.0);
 
-    engine.send_ai_bhv_event({AIBhvType::DEEP_ALPHA, "NVDA", "", 0.92, 2.0});
-    engine.send_ai_bhv_event({AIBhvType::GNN_PROPAGATION, "TSM", "NVDA", 0.0, 3.0});
-    engine.send_ai_bhv_event({AIBhvType::CROWDEDNESS, "MOMO_ETF", "", 88.5, 4.0});
-    engine.send_ai_bhv_event({AIBhvType::FOMO_PANIC, "SPY", "", 5.0, 5.0});
+    engine.send_event(AIBhvEvent{AIBhvType::DEEP_ALPHA, "NVDA", "", 0.92, 2.0});
+    engine.send_event(AIBhvEvent{AIBhvType::GNN_PROPAGATION, "TSM", "NVDA", 0.0, 3.0});
+    engine.send_event(AIBhvEvent{AIBhvType::CROWDEDNESS, "MOMO_ETF", "", 88.5, 4.0});
+    engine.send_event(AIBhvEvent{AIBhvType::FOMO_PANIC, "SPY", "", 5.0, 5.0});
 
     fmt::print("\n -> AI & Behavioral Execution Complete.\n");
     fmt::print(fg(fmt::color::cyan), " -> Final Equity: ${:.2f}\n", engine.get_total_equity());
@@ -646,11 +646,11 @@ void RunGrandFinaleModule() {
 
     fmt::print(" -> Activating Final Alpha Parameters...\n\n");
 
-    engine.send_final_event({FinalTacticsType::QUANTUM_OPT, "GLOBAL_BASKET", 0.0, 0.0, 1.0});
-    engine.send_final_event({FinalTacticsType::DIVIDEND_CAPTURE, "HIGH_YIELD_CO", 0.05, 0.0, 2.0});
-    engine.send_final_event({FinalTacticsType::LITIGATION_ARB, "PHARMA_INC", 0.85, 0.0, 3.0});
-    engine.send_final_event({FinalTacticsType::CHAOS_REGIME, "SPX_INDEX", 0.65, 0.0, 4.0});
-    engine.send_final_event({FinalTacticsType::CHAOS_REGIME, "SPX+INDEX", 0.35, 0.0, 5.0});
+    engine.send_event(FinalEvent{FinalTacticsType::QUANTUM_OPT, "GLOBAL_BASKET", 0.0, 0.0, 1.0});
+    engine.send_event(FinalEvent{FinalTacticsType::DIVIDEND_CAPTURE, "HIGH_YIELD_CO", 0.05, 0.0, 2.0});
+    engine.send_event(FinalEvent{FinalTacticsType::LITIGATION_ARB, "PHARMA_INC", 0.85, 0.0, 3.0});
+    engine.send_event(FinalEvent{FinalTacticsType::CHAOS_REGIME, "SPX_INDEX", 0.65, 0.0, 4.0});
+    engine.send_event(FinalEvent{FinalTacticsType::CHAOS_REGIME, "SPX+INDEX", 0.35, 0.0, 5.0});
 
     fmt::print("\n -> All 75 Quant Strategies Successfully Executed.\n");
     fmt::print(fg(fmt::color::cyan), " -> Final Equity: ${:.2f}\n", engine.get_total_equity());
@@ -673,10 +673,10 @@ void RunL3ExecutionSuiteModule() {
     book.add_order(2, 100.05, 1000.0, false, 1.0);
     engine.on_order_book_update(book, 1.0);
 
-    engine.send_l3_message({2.0, "SPY", "LIT", "INST", 100.05, 25000.0, true});
-    engine.send_l3_message({3.0, "SPY", "LIT", "TOXIC", 99.85, 500.0, false});
+    engine.send_event(L3OrderMessage{2.0, "SPY", "LIT", "INST", 100.05, 25000.0, true});
+    engine.send_event(L3OrderMessage{3.0, "SPY", "LIT", "TOXIC", 99.85, 500.0, false});
     engine.on_order_book_update(book, 4.0);
-    engine.send_l3_message({5.0, "TSLA", "DARK_POOL", "INST", 200.0, 75000.0, true});
+    engine.send_event(L3OrderMessage{5.0, "TSLA", "DARK_POOL", "INST", 200.0, 75000.0, true});
     engine.on_market_data("SPY", 6.0, 100.0, 100.0, 80.0, 80.0);
 
     fmt::print("\n -> L3 Microstructure & Execution Complete.\n");
@@ -705,12 +705,12 @@ void RunStructuralArbModule() {
 
     fmt::print(" -> Scanning Market Micro-Inefficiencies & Options Surfaces...\n");
 
-    engine.send_structural_event({StructArbType::VIX_BASIS, "VIX_SPOT", "VIX_FUT", 15.0, 16.5, 0.0, 1.0});
-    engine.send_structural_event({StructArbType::DISPERSION, "SPX_VOL", "BASKET_VOL", 12.0, 18.0, 0.0, 2.0});
-    engine.send_structural_event({StructArbType::SHARE_CLASS, "GOOG", "GOOGL", 153.5, 150.0, 2.0, 3.0});
-    engine.send_structural_event({StructArbType::DUAL_LISTED, "UN_ADR", "UN_LSE", 50.0, 38.0, 1.25, 4.0});
-    engine.send_structural_event({StructArbType::ODD_LOT, "AAPL", "AAPL_NBBO", 99.0, 100.0, 45.0, 5.0});
-    engine.send_structural_event({StructArbType::DELTA_GAMMA, "SPY", "", 400.0, 0.0, 15.0, 6.0});
+    engine.send_event(StructuralEvent{StructArbType::VIX_BASIS, "VIX_SPOT", "VIX_FUT", 15.0, 16.5, 0.0, 1.0});
+    engine.send_event(StructuralEvent{StructArbType::DISPERSION, "SPX_VOL", "BASKET_VOL", 12.0, 18.0, 0.0, 2.0});
+    engine.send_event(StructuralEvent{StructArbType::SHARE_CLASS, "GOOG", "GOOGL", 153.5, 150.0, 2.0, 3.0});
+    engine.send_event(StructuralEvent{StructArbType::DUAL_LISTED, "UN_ADR", "UN_LSE", 50.0, 38.0, 1.25, 4.0});
+    engine.send_event(StructuralEvent{StructArbType::ODD_LOT, "AAPL", "AAPL_NBBO", 99.0, 100.0, 45.0, 5.0});
+    engine.send_event(StructuralEvent{StructArbType::DELTA_GAMMA, "SPY", "", 400.0, 0.0, 15.0, 6.0});
 
     fmt::print("\n -> Structural Arbitrage Complete.\n");
     fmt::print(fg(fmt::color::cyan), " -> Final Equity: ${:.2f}\n", engine.get_total_equity());
@@ -735,13 +735,13 @@ void RunDeepCycleModule() {
 
     fmt::print(" -> Parsing On-Chain Liquidation Maps & Supply Chain Cycles...\n\n");
 
-    engine.send_deep_cycle_event({DeepCycleType::CROSS_ASSET_MOMO, "NEM", "GOLD", 0.05, 0.03, 2.0});
-    engine.send_deep_cycle_event({DeepCycleType::LOW_VOL_ANOMALY, "JNJ", "", 0.08, 0.15, 3.0});
-    engine.send_deep_cycle_event({DeepCycleType::OVERREACTION, "NFLX", "", -0.12, 0.0, 4.0});
-    engine.send_deep_cycle_event({DeepCycleType::WINDOW_DRESSING, "NVDA", "", 1.0, 0.0, 5.0});
-    engine.send_deep_cycle_event({DeepCycleType::INVENTORY_CYCLE, "MU", "", 1.0, 0.0, 6.0});
-    engine.send_deep_cycle_event({DeepCycleType::LIQUIDATION_HUNT, "BTC", "", 100000000.0, 0.0, 7.0});
-    engine.send_deep_cycle_event({DeepCycleType::CROSS_CHAIN_BRIDGE, "wETH", "Solana", 0.025, 0.0, 8.0});
+    engine.send_event(DeepCycleEvent{DeepCycleType::CROSS_ASSET_MOMO, "NEM", "GOLD", 0.05, 0.03, 2.0});
+    engine.send_event(DeepCycleEvent{DeepCycleType::LOW_VOL_ANOMALY, "JNJ", "", 0.08, 0.15, 3.0});
+    engine.send_event(DeepCycleEvent{DeepCycleType::OVERREACTION, "NFLX", "", -0.12, 0.0, 4.0});
+    engine.send_event(DeepCycleEvent{DeepCycleType::WINDOW_DRESSING, "NVDA", "", 1.0, 0.0, 5.0});
+    engine.send_event(DeepCycleEvent{DeepCycleType::INVENTORY_CYCLE, "MU", "", 1.0, 0.0, 6.0});
+    engine.send_event(DeepCycleEvent{DeepCycleType::LIQUIDATION_HUNT, "BTC", "", 100000000.0, 0.0, 7.0});
+    engine.send_event(DeepCycleEvent{DeepCycleType::CROSS_CHAIN_BRIDGE, "wETH", "Solana", 0.025, 0.0, 8.0});
 
     fmt::print("\n -> Deep Crypto & Cycle Anomaly Execution Complete.\n");
     fmt::print(fg(fmt::color::cyan), " -> Final Equity: ${:.2f}\n", engine.get_total_equity());
@@ -761,12 +761,12 @@ void RunMetaBrainModule() {
 
     fmt::print(" -> Activating Top-Level Portfolio & Risk Optimization Engine...\n\n");
 
-    engine.send_meta_event({MetaBrainType::RISK_PARITY, "", 0.18, 0.06, 1.0});
-    engine.send_meta_event({MetaBrainType::HMM_REGIME, "SPY", 1.0, 0.0, 2.0});
-    engine.send_meta_event({MetaBrainType::CLUSTERING, "High_Vol_Bear_Cluster", 0.0, 0.0, 3.0});
-    engine.send_meta_event({MetaBrainType::ADAPTIVE_ARRIVAL, "SPY", 452.0, 0.2, 4.0});
-    engine.send_meta_event({MetaBrainType::MULTI_STRAT_MVO, "STAT_ARB_PCA", 0.15, 0.0, 5.0});
-    engine.send_meta_event({MetaBrainType::TAIL_RISK, "", 0.055, 0.0, 6.0});
+    engine.send_event(MetaEvent{MetaBrainType::RISK_PARITY, "", 0.18, 0.06, 1.0});
+    engine.send_event(MetaEvent{MetaBrainType::HMM_REGIME, "SPY", 1.0, 0.0, 2.0});
+    engine.send_event(MetaEvent{MetaBrainType::CLUSTERING, "High_Vol_Bear_Cluster", 0.0, 0.0, 3.0});
+    engine.send_event(MetaEvent{MetaBrainType::ADAPTIVE_ARRIVAL, "SPY", 452.0, 0.2, 4.0});
+    engine.send_event(MetaEvent{MetaBrainType::MULTI_STRAT_MVO, "STAT_ARB_PCA", 0.15, 0.0, 5.0});
+    engine.send_event(MetaEvent{MetaBrainType::TAIL_RISK, "", 0.055, 0.0, 6.0});
 
     fmt::print("\n======================================================\n");
     fmt::print(fg(fmt::color::cyan) | fmt::emphasis::bold, " [SYSTEM] ALL 75 QUANT STRATEGIES SUCCESSFULLY COMPILED AND EXECUTED.\n");

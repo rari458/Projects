@@ -1,0 +1,14 @@
+# Start lenient: surface issues as warnings, do not fail the build yet.
+# Tighten (and add WarningsAsErrors) once the existing backlog is cleared.
+Checks: >
+    bugprone-*,
+    performance-*,
+    modernize-*,
+    cppcoreguidelines-*,
+    -modernize-use-trailing-return-type,
+    -cppcoreguidelines-avoid-magic-numbers,
+    -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+    -cppcoreguidelines-non-private-member-variables-in-classes
+
+HeaderFilterRegex: '(include|src)/.*\.h$'
+WarningsAsErrors: ''

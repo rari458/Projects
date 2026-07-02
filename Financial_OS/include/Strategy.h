@@ -6,12 +6,14 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <variant>
 #include <iostream>
 #include <numeric>
 #include <cmath>
 #include "Analytics.h"
 #include "KalmanFilter.h"
 #include "BlackScholesFormulas.h"
+#include <map>
 #include <fmt/core.h>
 
 class Backtester;
@@ -139,6 +141,20 @@ struct MetaEvent {
     double timestamp;
 };
 
+using Event = std::variant<
+    CorporateAction,
+    MicrostructureMessage,
+    CryptoEvent,
+    AltDataEvent,
+    AnomalyEvent,
+    MacroEvent,
+    AIBhvEvent,
+    FinalEvent,
+    L3OrderMessage,
+    StructuralEvent,
+    DeepCycleEvent,
+    MetaEvent>;
+
 class Strategy {
 public:
     virtual ~Strategy() = default;
@@ -146,40 +162,7 @@ public:
     virtual void on_order_book_update(class Backtester& engine, const OrderBook& book, double timestamp) {
         (void)engine; (void)book; (void)timestamp;
     }
-    virtual void on_corporate_action(Backtester& engine, const CorporateAction& action) {
-        (void)engine; (void)action;
-    }
-    virtual void on_microstructure_msg(Backtester& engine, const MicrostructureMessage& msg) {
-        (void)engine; (void)msg;
-    }
-    virtual void on_crypto_event(Backtester& engine, const CryptoEvent& event) {
-        (void)engine; (void)event;
-    }
-    virtual void on_alt_data(Backtester& engine, const AltDataEvent& event) {
-        (void)engine; (void)event;
-    }
-    virtual void on_anomaly_event(Backtester& engine, const AnomalyEvent& event) {
-        (void)engine; (void)event;
-    }
-    virtual void on_macro_event(Backtester& engine, const MacroEvent& event) {
-        (void)engine; (void)event;
-    }
-    virtual void on_ai_bhv_event(Backtester& engine, const AIBhvEvent& event) {
-        (void)engine; (void)event;
-    }
-    virtual void on_final_event(Backtester& engine, const FinalEvent& event) {
-        (void)engine; (void)event;
-    }
-    virtual void on_l3_message(Backtester& engine, const L3OrderMessage& msg) {
-        (void)engine; (void)msg;
-    }
-    virtual void on_structural_event(Backtester& engine, const StructuralEvent& event) {
-        (void)engine; (void)event;
-    }
-    virtual void on_deep_cycle_event(Backtester& engine, const DeepCycleEvent& event) {
-        (void)engine; (void)event;
-    }
-    virtual void on_meta_event(Backtester& engine, const MetaEvent& event) {
+    virtual void on_event(Backtester& engine, const Event& event) {
         (void)engine; (void)event;
     }
 };
@@ -456,7 +439,7 @@ private:
 class EventDrivenSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
-    void on_corporate_action(Backtester& engine, const CorporateAction& action) override;
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     std::map<std::string, double> latest_prices_;
@@ -465,7 +448,7 @@ private:
 class AdvancedMicrostructureSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
-    void on_microstructure_msg(Backtester& engine, const MicrostructureMessage& msg) override;
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     double last_price_A_ = 0.0;
@@ -479,7 +462,7 @@ private:
 class CryptoDeFiSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
-    void on_crypto_event(Backtester& engine, const CryptoEvent& event) override;
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     std::map<std::string, double> latest_spot_prices_;
@@ -488,7 +471,7 @@ private:
 class AlternativeDataSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
-    void on_alt_data(Backtester& engine, const AltDataEvent& event) override;
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     std::map<std::string, double> latest_prices_;
@@ -497,7 +480,7 @@ private:
 class AdvancedDownsideSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
-    void on_anomaly_event(Backtester& engine, const AnomalyEvent& event) override;
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     std::map<std::string, double> latest_prices_;
@@ -506,7 +489,7 @@ private:
 class GlobalMacroSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
-    void on_macro_event(Backtester& engine, const MacroEvent& event) override;
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     std::map<std::string, double> latest_prices_;
@@ -515,7 +498,7 @@ private:
 class AIBehavioralSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
-    void on_ai_bhv_event(Backtester& engine, const AIBhvEvent& event) override;
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     std::map<std::string, double> latest_prices_;
@@ -524,7 +507,7 @@ private:
 class GrandFinaleSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
-    void on_final_event(Backtester& engine, const FinalEvent& event) override;
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     std::map<std::string, double> latest_prices_;
@@ -534,7 +517,7 @@ class L3ExecutionSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
     void on_order_book_update(Backtester& engine, const OrderBook& book, double timestamp) override;
-    void on_l3_message(Backtester& engine, const L3OrderMessage& msg) override;
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     double last_trade_price_ = 0.0;
@@ -548,7 +531,7 @@ private:
 class StructuralArbSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
-    void on_structural_event(Backtester& engine, const StructuralEvent& event);
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     std::map<std::string, double> latest_prices_;
@@ -557,7 +540,7 @@ private:
 class DeepCryptoCycleSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
-    void on_deep_cycle_event(Backtester& engine, const DeepCycleEvent& event);
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     std::map<std::string, double> latest_prices_;
@@ -566,7 +549,7 @@ private:
 class MetaBrainSuite : public Strategy {
 public:
     void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
-    void on_meta_event(Backtester& engine, const MetaEvent& event);
+    void on_event(Backtester& engine, const Event& event) override;
 
 private:
     std::map<std::string, double> latest_prices_;

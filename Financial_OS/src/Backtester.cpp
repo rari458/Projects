@@ -4,6 +4,7 @@
 #include "../include/Analytics.h"
 #include "../include/PCAArbitrage.h"
 #include "../include/BlackScholesFormulas.h"
+#include "../include/StrategyFactory.h"
 #include <fmt/core.h>
 #include <fmt/color.h>
 #include <cmath>
@@ -705,7 +706,10 @@ void EventDrivenSuite::on_market_data(Backtester& engine, const std::string& sym
     latest_prices_[symbol] = close;
 }
 
-void EventDrivenSuite::on_corporate_action(Backtester& engine, const CorporateAction& action) {
+void EventDrivenSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<CorporateAction>(&src);
+    if (!p) return;
+    const CorporateAction& action = *p;
     double current_price = latest_prices_.count(action.target_symbol) ? latest_prices_[action.target_symbol] : 100.0;
 
     switch (action.type) {
@@ -736,17 +740,24 @@ void EventDrivenSuite::on_corporate_action(Backtester& engine, const CorporateAc
     }
 }
 
-void Backtester::send_corporate_action(const CorporateAction& action) {
-    if (strategy_) {
-        strategy_->on_corporate_action(*this, action);
-    }
+void Backtester::send_event(const Event& event) {
+    const bool gated = std::holds_alternative<L3OrderMessage>(event)
+                    || std::holds_alternative<StructuralEvent>(event)
+                    || std::holds_alternative<DeepCycleEvent>(event)
+                    || std::holds_alternative<MetaEvent>(event);
+    if (gated && risk_shutdown_) return;
+    if (strategy_) strategy_->on_event(*this, event);
 }
 
 void AdvancedMicrostructureSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) {
     (void)engine; (void)symbol; (void)timestamp; (void)open; (void)high; (void)low; (void)close;
 }
 
-void AdvancedMicrostructureSuite::on_microstructure_msg(Backtester& engine, const MicrostructureMessage& msg) {
+void AdvancedMicrostructureSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<MicrostructureMessage>(&src);
+    if (!p) return;
+    const MicrostructureMessage& msg = *p;
+
     if (msg.timestamp_mu - window_start_ > 1000.0) {
         if (msg_count_ > 50) {
             fmt::print("[Microstructure] Quote Stuffing Detected! ({} msgs/ms). Enabling Toxicity Shield.\n", msg_count_);
@@ -772,16 +783,15 @@ void AdvancedMicrostructureSuite::on_microstructure_msg(Backtester& engine, cons
     }
 }
 
-void Backtester::send_microstructure_msg(const MicrostructureMessage& msg) {
-    if (strategy_) strategy_->on_microstructure_msg(*this, msg);
-}
-
 void CryptoDeFiSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) {
     (void)engine; (void)timestamp; (void)open; (void)high; (void)low;
     latest_spot_prices_[symbol] = close;
 }
 
-void CryptoDeFiSuite::on_crypto_event(Backtester& engine, const CryptoEvent& event) {
+void CryptoDeFiSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<CryptoEvent>(&src);
+    if (!p) return;
+    const CryptoEvent& event = *p;
     double current_price = latest_spot_prices_.count(event.asset) ? latest_spot_prices_[event.asset] : 1000.0;
 
     switch (event.type) {
@@ -827,16 +837,16 @@ void CryptoDeFiSuite::on_crypto_event(Backtester& engine, const CryptoEvent& eve
     }
 }
 
-void Backtester::send_crypto_event(const CryptoEvent& event) {
-    if (strategy_) strategy_->on_crypto_event(*this, event);
-}
-
-void AlternativeDataSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) {
+void AlternativeDataSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, 
+        double open, double high, double low, double close) {
     (void)engine; (void)timestamp; (void)open; (void)high; (void)low;
     latest_prices_[symbol] = close;
 }
 
-void AlternativeDataSuite::on_alt_data(Backtester& engine, const AltDataEvent& event) {
+void AlternativeDataSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<AltDataEvent>(&src);
+    if (!p) return;
+    const AltDataEvent& event = *p;
     double current_price = latest_prices_.count(event.ticker) ? latest_prices_[event.ticker] : 100.0;
 
     switch (event.type) {
@@ -863,16 +873,15 @@ void AlternativeDataSuite::on_alt_data(Backtester& engine, const AltDataEvent& e
     }
 }
 
-void Backtester::send_alt_data(const AltDataEvent& event) {
-    if (strategy_) strategy_->on_alt_data(*this, event);
-}
-
 void AdvancedDownsideSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) {
     (void)engine; (void)timestamp; (void)open; (void)high; (void)low;
     latest_prices_[symbol] = close;
 }
 
-void AdvancedDownsideSuite::on_anomaly_event(Backtester& engine, const AnomalyEvent& event) {
+void AdvancedDownsideSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<AnomalyEvent>(&src);
+    if (!p) return;
+    const AnomalyEvent& event = *p;
     double current_price = latest_prices_.count(event.target) ? latest_prices_[event.target] : 100.0;
 
     switch (event.type) {
@@ -912,16 +921,15 @@ void AdvancedDownsideSuite::on_anomaly_event(Backtester& engine, const AnomalyEv
     }
 }
 
-void Backtester::send_anomaly_event(const AnomalyEvent& event) {
-    if (strategy_) strategy_->on_anomaly_event(*this, event);
-}
-
 void GlobalMacroSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) {
     (void)engine; (void)timestamp; (void)open; (void)high; (void)low;
     latest_prices_[symbol] = close;
 }
 
-void GlobalMacroSuite::on_macro_event(Backtester& engine, const MacroEvent& event) {
+void GlobalMacroSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<MacroEvent>(&src);
+    if (!p) return;
+    const MacroEvent& event = *p;
     double price_a = latest_prices_.count(event.asset_a) ? latest_prices_[event.asset_a] : 100.0;
     double price_b = latest_prices_.count(event.asset_b) ? latest_prices_[event.asset_b] : 100.0;
 
@@ -958,16 +966,15 @@ void GlobalMacroSuite::on_macro_event(Backtester& engine, const MacroEvent& even
     }
 }
 
-void Backtester::send_macro_event(const MacroEvent& event) {
-    if (strategy_) strategy_->on_macro_event(*this, event);
-}
-
 void AIBehavioralSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) {
     (void)engine; (void)timestamp; (void)open; (void)high; (void)low;
     latest_prices_[symbol] = close;
 }
 
-void AIBehavioralSuite::on_ai_bhv_event(Backtester& engine, const AIBhvEvent& event) {
+void AIBehavioralSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<AIBhvEvent>(&src);
+    if (!p) return;
+    const AIBhvEvent& event = *p;
     double current_price = latest_prices_.count(event.target_asset) ? latest_prices_[event.target_asset] : 100.0;
 
     switch (event.type) {
@@ -1010,16 +1017,15 @@ void AIBehavioralSuite::on_ai_bhv_event(Backtester& engine, const AIBhvEvent& ev
     }
 }
 
-void Backtester::send_ai_bhv_event(const AIBhvEvent& event) {
-    if (strategy_) strategy_->on_ai_bhv_event(*this, event);
-}
-
 void GrandFinaleSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) {
     (void)engine; (void)timestamp; (void)open; (void)high; (void)low;
     latest_prices_[symbol] = close;
 }
 
-void GrandFinaleSuite::on_final_event(Backtester& engine, const FinalEvent& event) {
+void GrandFinaleSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<FinalEvent>(&src);
+    if (!p) return;
+    const FinalEvent& event = *p;
     double current_price = latest_prices_.count(event.asset) ? latest_prices_[event.asset] : 100.0;
 
     switch (event.type) {
@@ -1059,10 +1065,6 @@ void GrandFinaleSuite::on_final_event(Backtester& engine, const FinalEvent& even
     }
 }
 
-void Backtester::send_final_event(const FinalEvent& event) {
-    if (strategy_) strategy_->on_final_event(*this, event);
-}
-
 void L3ExecutionSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) {
     (void)engine; (void)symbol; (void)open; (void)high; (void)low;
 
@@ -1093,7 +1095,11 @@ void L3ExecutionSuite::on_order_book_update(Backtester& engine, const OrderBook&
     }
 }
 
-void L3ExecutionSuite::on_l3_message(Backtester& engine, const L3OrderMessage& msg) {
+void L3ExecutionSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<L3OrderMessage>(&src);
+    if (!p) return;
+    const L3OrderMessage& msg = *p;
+
     if (last_trade_price_ > 0 && msg.price < last_trade_price_ * 0.999) {
         fmt::print("[L3 Desk] Strategy #71 (Anti-Selection): Price moved against us immediately after fill. Toxic flow detected!\n");
         fmt::print("          -> Activating Toxicity Shield. Halting Execution.\n");
@@ -1111,17 +1117,15 @@ void L3ExecutionSuite::on_l3_message(Backtester& engine, const L3OrderMessage& m
     if (msg.exchange == "LIT_SLOW") fill_rates_["LIT_SLOW"] = 0.45;
 }
 
-void Backtester::send_l3_message(const L3OrderMessage& msg) {
-    if (risk_shutdown_) return;
-    if (strategy_) strategy_->on_l3_message(*this, msg);
-}
-
 void StructuralArbSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) {
     (void)engine; (void)timestamp; (void)open; (void)high; (void)low;
     latest_prices_[symbol] = close;
 }
 
-void StructuralArbSuite::on_structural_event(Backtester& engine, const StructuralEvent& event) {
+void StructuralArbSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<StructuralEvent>(&src);
+    if (!p) return;
+    const StructuralEvent& event = *p;
     switch (event.type) {
         case StructArbType::VIX_BASIS:
             if (event.price_b > event.price_a * 1.05) {
@@ -1192,24 +1196,15 @@ void StructuralArbSuite::on_structural_event(Backtester& engine, const Structura
     }
 }
 
-void Backtester::send_structural_event(const StructuralEvent& event) {
-    if (risk_shutdown_) return;
-
-    if (strategy_) {
-        if (auto* arb_suite = dynamic_cast<StructuralArbSuite*>(strategy_.get())) {
-            arb_suite->on_structural_event(*this, event);
-        } else {
-            strategy_->on_structural_event(*this, event);
-        }
-    }
-}
-
 void DeepCryptoCycleSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) {
     (void)engine; (void)timestamp; (void)timestamp; (void)open; (void)high; (void)low;
     latest_prices_[symbol] = close;
 }
 
-void DeepCryptoCycleSuite::on_deep_cycle_event(Backtester& engine, const DeepCycleEvent& event) {
+void DeepCryptoCycleSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<DeepCycleEvent>(&src);
+    if (!p) return;
+    const DeepCycleEvent& event = *p;
     double current_price = latest_prices_.count(event.asset_main)? latest_prices_[event.asset_main] : 100.0;
 
     switch (event.type) {
@@ -1263,24 +1258,15 @@ void DeepCryptoCycleSuite::on_deep_cycle_event(Backtester& engine, const DeepCyc
     }
 }
 
-void Backtester::send_deep_cycle_event(const DeepCycleEvent& event) {
-    if (risk_shutdown_) return;
-
-    if (strategy_) {
-        if (auto* suite = dynamic_cast<DeepCryptoCycleSuite*>(strategy_.get())) {
-            suite->on_deep_cycle_event(*this, event);
-        } else {
-            strategy_->on_deep_cycle_event(*this, event);
-        }
-    }
-}
-
 void MetaBrainSuite::on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) {
     (void)engine; (void)timestamp; (void)open; (void)high; (void)low;
     latest_prices_[symbol] = close;
 }
 
-void MetaBrainSuite::on_meta_event(Backtester& engine, const MetaEvent& event) {
+void MetaBrainSuite::on_event(Backtester& engine, const Event& src) {
+    const auto* p = std::get_if<MetaEvent>(&src);
+    if (!p) return;
+    const MetaEvent& event = *p;
     double current_price = latest_prices_.count(event.target) ? latest_prices_[event.target] : 100.0;
 
     switch (event.type) {
@@ -1326,53 +1312,13 @@ void MetaBrainSuite::on_meta_event(Backtester& engine, const MetaEvent& event) {
     }
 }
 
-void Backtester::send_meta_event(const MetaEvent& event) {
-    if (risk_shutdown_) return;
-
-    if (strategy_) {
-        if (auto* suite = dynamic_cast<MetaBrainSuite*>(strategy_.get())) {
-            suite->on_meta_event(*this, event);
-        } else {
-            strategy_->on_meta_event(*this, event);
-        }
-    }
-}
-
 Backtester::Backtester(double initial_capital, std::string strategy_type, double leverage)
-    : capital_(initial_capital), leverage_(leverage) {
+    : portfolio_(initial_capital), leverage_(leverage) {
     
-    if (strategy_type == "EMA") strategy_ = std::make_unique<EMAStrategy>();
-    else if (strategy_type == "RSI") strategy_ = std::make_unique<RSIStrategy>();
-    else if (strategy_type == "MACD") strategy_ = std::make_unique<MACDStrategy>();
-    else if (strategy_type == "BB") strategy_ = std::make_unique<BollingerStrategy>();
-    else if (strategy_type == "VOL") strategy_ = std::make_unique<VolatilityStrategy>();
-    else if (strategy_type == "OU") strategy_ = std::make_unique<OUStrategy>();
-    else if (strategy_type == "PAIRS") strategy_ = std::make_unique<KalmanPairsStrategy>("KO", "PEP");
-    else if (strategy_type == "PCA") strategy_ = std::make_unique<PCAStatArbStrategy>(60, 2.0);
-    else if (strategy_type == "GAMMA") strategy_ = std::make_unique<GammaScalpingStrategy>(1000.0, 100.0, 0.20, 5.0);
-    else if (strategy_type == "MM") strategy_ = std::make_unique<MarketMakerStrategy>(0.1, 0.2, 1.5);
-    else if (strategy_type == "VWAP") strategy_ = std::make_unique<VWAPExecutionStrategy>(10000.0, 500.0, 200.0);
-    else if (strategy_type == "TWAP") strategy_ = std::make_unique<TWAPExecutionStrategy>(10000.0, 200.0);
-    else if (strategy_type == "POV") strategy_ = std::make_unique<POVExecutionStrategy>(10000.0, 0.05);
-    else if (strategy_type == "ICEBERG") strategy_ = std::make_unique<IcebergExecutionStrategy>(10000.0, 500.0);
-    else if (strategy_type == "SNIPER") strategy_ = std::make_unique<SniperExecutionStrategy>(10000.0, 99.50);
-    else if (strategy_type == "VRP") strategy_ = std::make_unique<VRPHarvestingStrategy>(100.0, 30.0 / 252.0, 0.05);
-    else if (strategy_type == "AVELLANEDA") strategy_ = std::make_unique<AvellanedaStoikovStrategy>(0.1, 0.2, 1.5, 1.0);
-    else if (strategy_type == "EVENT_DRIVEN") strategy_ = std::make_unique<EventDrivenSuite>();
-    else if (strategy_type == "MICROSTRUCTURE") strategy_ = std::make_unique<AdvancedMicrostructureSuite>();
-    else if (strategy_type == "CRYPTO_DEFI") strategy_ = std::make_unique<CryptoDeFiSuite>();
-    else if (strategy_type == "ALT_DATA") strategy_ = std::make_unique<AlternativeDataSuite>();
-    else if (strategy_type == "DOWNSIDE_SQUEEZE") strategy_ = std::make_unique<AdvancedDownsideSuite>();
-    else if (strategy_type == "GLOBAL_MACRO") strategy_ = std::make_unique<GlobalMacroSuite>();
-    else if (strategy_type == "AI_BHV") strategy_ = std::make_unique<AIBehavioralSuite>();
-    else if (strategy_type == "GRAND_FINALE") strategy_ = std::make_unique<GrandFinaleSuite>();
-    else if (strategy_type == "L3_EXECUTION") strategy_ = std::make_unique<L3ExecutionSuite>();
-    else if (strategy_type == "STRUCTURAL_ARB") strategy_ = std::make_unique<StructuralArbSuite>();
-    else if (strategy_type == "DEEP_CYCLE") strategy_ = std::make_unique<DeepCryptoCycleSuite>();
-    else if (strategy_type == "META_BRAIN") strategy_ = std::make_unique<MetaBrainSuite>();
-    else {
-        fmt::print("[Warning] Unknown strategy '{}', defaulting to EMA.\n", strategy_type);
-        strategy_ = std::make_unique<EMAStrategy>();
+    strategy_ = StrategyFactory::Instance().CreateStrategy(strategy_type);
+    if (!strategy_) {
+        fmt::print("[Warning] Uknown strategy '{}', defaulting to EMA.\n", strategy_type);
+        strategy_ = StrategyFactory::Instance().CreateStrategy("EMA");
     }
 }
 
@@ -1383,25 +1329,20 @@ void Backtester::set_regime_filter(bool use_filter, int lookback) {
 }
 
 void Backtester::hibernate_positions(double timestamp, const std::string& symbol, double price) {
-    if (holdings_.count(symbol)) {
-        double qty = holdings_[symbol];
-        if (std::abs(qty) > 1e-6) {
-            if (qty > 0) {
-                send_order(symbol, "SELL", qty, price, timestamp);
-            } else {
-                send_order(symbol, "BUY", -qty, price, timestamp);
-            }
+    double qty = get_holdings(symbol);
+    if (std::abs(qty) > 1e-6) {
+        if (qty > 0) {
+            send_order(symbol, "SELL", qty, price, timestamp);
+        } else {
+            send_order(symbol, "BUY", -qty, price, timestamp);
         }
     }
 }
 
 void Backtester::on_market_data(const std::string& symbol ,double timestamp, double open, double high, double low, double close) {
-    last_price_[symbol] = close;
+    portfolio_.mark(symbol, close);
 
-    opens_[symbol].push_back(open);
-    highs_[symbol].push_back(high);
-    lows_[symbol].push_back(low);
-    closes_[symbol].push_back(close);
+    data_.add_bar(symbol, open, high, low, close);
 
     bool is_bear_market = false;
     if (use_regime_filter_) {
@@ -1430,7 +1371,7 @@ void Backtester::on_market_data(const std::string& symbol ,double timestamp, dou
         }
     }
 
-    equity_history_.push_back(get_total_equity());
+    equity_curve_.record(get_total_equity());
 }
 
 void Backtester::on_order_book_update(const OrderBook& book, double timestamp) {
@@ -1440,67 +1381,25 @@ void Backtester::on_order_book_update(const OrderBook& book, double timestamp) {
 }
 
 void Backtester::send_order(const std::string& symbol, const std::string& side, double quantity, double price, double timestamp) {
-    if (quantity <= 0) return;
-
-    double commission = quantity * price * 0.0001;
-    double prev_holding = holdings_[symbol];
-
-    if (side == "BUY") {
-        capital_ -= (quantity * price + commission);
-        holdings_[symbol] += quantity;
-
-        if (prev_holding >= 0) {
-            double total_val = (prev_holding * avg_entry_price_[symbol]) + (quantity * price);
-            double total_qty = prev_holding + quantity;
-            if (total_qty > 0) {
-                avg_entry_price_[symbol] = total_val / total_qty;
-            }
-            highest_price_[symbol] = price;
-        }
-
-        trades_.push_back({(int)trades_.size(), symbol, "BUY", quantity, price, commission, timestamp});
-    } else if (side == "SELL") {
-       capital_ += (quantity * price - commission);
-       holdings_[symbol] -= quantity;
-
-       if (prev_holding <= 0) {
-            double prev_abs_qty = std::abs(prev_holding);
-            double total_val = (prev_abs_qty * avg_entry_price_[symbol]) + (quantity * price);
-            double total_qty = prev_abs_qty + quantity;
-
-            if (total_qty > 0) {
-                avg_entry_price_[symbol] = total_val / total_qty;
-            }
-        }
-
-        trades_.push_back({(int)trades_.size(), symbol, "SELL", quantity, price, commission, timestamp});
-    }
+    portfolio_.execute(symbol, side, quantity, price, timestamp);
 }
 
 double Backtester::get_total_equity() const {
-    double total = capital_ + custom_pnl_;
-
-    for (const auto& [sym, qty] : holdings_) {
-        if (last_price_.count(sym)) {
-            total += qty * last_price_.at(sym);
-        }
-    }
-    return total;
+    return portfolio_.total_equity();
 }
 
 double Backtester::get_holdings(const std::string& symbol) const {
-    if (holdings_.count(symbol)) return holdings_.at(symbol);
-    return 0.0;
+    return portfolio_.holding(symbol);
 }
 
 double Backtester::get_max_drawdown() const {
-    return Analytics::CalculateMaxDrawdown(equity_history_);
+    return equity_curve_.max_drawdown();
 }
 
-const std::vector<double>& Backtester::get_opens(const std::string& symbol) const { return opens_.at(symbol); }
-const std::vector<double>& Backtester::get_highs(const std::string& symbol) const { return highs_.at(symbol); }
-const std::vector<double>& Backtester::get_lows(const std::string& symbol) const { return lows_.at(symbol); }
-const std::vector<double>& Backtester::get_closes(const std::string& symbol) const { return closes_.at(symbol); }
+const std::vector<double>& Backtester::get_opens(const std::string& symbol) const { return data_.opens(symbol); }
+const std::vector<double>& Backtester::get_highs(const std::string& symbol) const { return data_.highs(symbol); }
+const std::vector<double>& Backtester::get_lows(const std::string& symbol) const { return data_.lows(symbol); }
+const std::vector<double>& Backtester::get_closes(const std::string& symbol) const { return data_.closes(symbol); }
 
 void Backtester::set_macd_parameters(int fast, int slow, int signal) {
     if (auto* macd = dynamic_cast<MACDStrategy*>(strategy_.get())) {
@@ -1515,7 +1414,7 @@ void Backtester::set_volatility_k(double k) {
 }
 
 std::vector<double> Backtester::get_equity_history() const {
-    return equity_history_;
+    return equity_curve_.history();
 }
 
 void Backtester::set_risk_params(double max_drawdown_limit, double var_limit) {
@@ -1533,15 +1432,15 @@ void Backtester::check_risk_limits(double timestamp) {
     double total_risk_amount = 0.0;
     double equity = get_total_equity();
 
-    for (const auto& [sym, qty] : holdings_) {
-        if (std::abs(qty) > 1e-6 && closes_.count(sym)) {
-            const auto& prices = closes_.at(sym);
+    for (const auto& [sym, qty] : portfolio_.holdings()) {
+        if (std::abs(qty) > 1e-6 && data_.has_closes(sym)) {
+            const auto& prices = data_.closes(sym);
             if (prices.size() > 30) {
                 std::vector<double> recent_prices(prices.end() - 30, prices.end());
                 std::vector<double> returns = Analytics::CalculateLogReturns(recent_prices);
                 double vol = Analytics::CalculateVolatility(returns);
 
-                double position_value = std::abs(qty * last_price_.at(sym));
+                double position_value = std::abs(qty * portfolio_.last_price(sym));
                 double position_var = Analytics::CalculateParametricVaR(position_value, vol, 0.95);
 
                 total_risk_amount += position_var;
@@ -1564,9 +1463,9 @@ void Backtester::liquidator(double timestamp, const std::string& reason) {
     fmt::print("\n[!!! RISK ALERT !!!] {}\n", reason);
     fmt::print("Execution: LIQUIDATING ALL POSITIONS...\n");
 
-    for (auto& [sym, qty] : holdings_) {
+    for (const auto& [sym, qty] :portfolio_.holdings()) {
         if (std::abs(qty) > 1e-6) {
-            double price = last_price_[sym];
+            double price = portfolio_.last_price(sym);
             if (qty > 0) {
                 send_order(sym, "SELL", qty, price, timestamp);
             } else {

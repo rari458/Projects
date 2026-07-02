@@ -55,7 +55,7 @@ def main():
                 msg = FinancialEngine.MicrostructureMessage(
                     current_time, "BINANCE_L2", best_bid, best_ask, False
                 )
-                engine.send_microstructure_msg(msg)
+                engine.send_event(msg)
 
                 tick_count += 1
                 if tick_count % 20 == 0:

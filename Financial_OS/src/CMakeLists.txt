@@ -25,6 +25,7 @@ set(SOURCES
     RegimeDetector.cpp
     PCAArbitrage.cpp
     OrderBook.cpp
+    StrategyFactory.cpp
 )
 
 add_library(FinancialEngine STATIC ${SOURCES})
@@ -41,9 +42,21 @@ else()
     target_link_options(FinancialEngine PRIVATE -flto=auto)
 endif()
 
-add_executable(FinancialOS main.cpp PayoffRegistration.cpp)
+add_executable(FinancialOS main.cpp PayoffRegistration.cpp StrategyRegistration.cpp)
 target_link_libraries(FinancialOS PRIVATE FinancialEngine fmt::fmt)
 
-pybind11_add_module(FinancialEnginePy Bindings.cpp PayoffRegistration.cpp)
+pybind11_add_module(FinancialEnginePy Bindings.cpp PayoffRegistration.cpp StrategyRegistration.cpp)
 target_link_libraries(FinancialEnginePy PRIVATE FinancialEngine)
 set_target_properties(FinancialEnginePy PROPERTIES OUTPUT_NAME "FinancialEngine")
+
+add_library(financial_engine_c SHARED
+    EngineCApi.cpp
+    StrategyRegistration.cpp
+    PayoffRegistration.cpp
+)
+target_link_libraries(financial_engine_c PRIVATE FinancialEngine fmt::fmt)
+if(MSVC)
+    target_compile_options(financial_engine_c PRIVATE /W4 /WX)
+else()
+    target_compile_options(financial_engine_c PRIVATE -Wall -Wextra -Werror)
+endif()

@@ -38,6 +38,8 @@ FetchContent_Declare(
     URL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(EIGEN_BUILD DOC OFF)
 FetchContent_MakeAvailable(eigen)
 
 set(PYBIND11_FINDPYTHON ON)

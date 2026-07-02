@@ -342,17 +342,7 @@ PYBIND11_MODULE(FinancialEngine, m) {
         .def("send_order", &Backtester::send_order, py::arg("symbol"), py::arg("side"), py::arg("quantity"), py::arg("price"), py::arg("timestamp"))
 
         // Advanced 75-Strategy Event Routers (The Bridge)
-        .def("send_corporate_action", &Backtester::send_corporate_action)
-        .def("send_microstructure_msg", &Backtester::send_microstructure_msg)
-        .def("send_crypto_event", &Backtester::send_crypto_event)
-        .def("send_alt_data", &Backtester::send_anomaly_event)
-        .def("send_macro_event", &Backtester::send_macro_event)
-        .def("send_ai_bhv_event", &Backtester::send_ai_bhv_event)
-        .def("send_final_event", &Backtester::send_final_event)
-        .def("send_l3_message", &Backtester::send_l3_message)
-        .def("send_structural_event", &Backtester::send_structural_event)
-        .def("send_deep_cycle_event", &Backtester::send_deep_cycle_event)
-        .def("send_meta_event", &Backtester::send_meta_event)
+        .def("send_event", &Backtester::send_event)
 
         // Engine State Getters
         .def("get_holdings", &Backtester::get_holdings, py::arg("symbol"))

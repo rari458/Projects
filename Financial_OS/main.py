@@ -39,7 +39,7 @@ def main():
         0.06,        # Bonds Vol
         2.0          # Timestamp
     )
-    engine.send_meta_event(meta_event)
+    engine.send_event(meta_event)
 
     # 4. Fetch Results back to Python
     equity = engine.get_total_equity()

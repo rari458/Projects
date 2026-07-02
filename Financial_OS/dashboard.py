@@ -71,28 +71,28 @@ if run_button:
                     event = FinancialEngine.StructuralEvent(
                         FinancialEngine.StructArbType.DELTA_GAMMA, ticker, "", close_p, 0.0, 50.0, index.timestamp()
                     )
-                    engine.send_structural_event(event)
+                    engine.send_event(event)
 
                 elif strategy_name == "DEEP_CYCLE":
                     # Simulate Short-Term Overreaction Mean-Reversion
                     event = FinancialEngine.DeepCycleEvent(
                         FinancialEngine.DeepCycleType.OVERREACTION, ticker, "", -0.15, 0.0, index.timestamp()
                     )
-                    engine.send_deep_cycle_event(event)
+                    engine.send_event(event)
 
                 elif strategy_name == "META_BRAIN":
                     # Simulate Risk Parity Rebalancing
                     event = FinancialEngine.MetaEvent(
                         FinancialEngine.MetaBrainType.RISK_PARITY, ticker, 0.18, 0.06, index.timestamp()
                     )
-                    engine.send_meta_event(event)
+                    engine.send_event(event)
 
                 elif strategy_name == "L3_EXECUTION":
                     # Simulate Institutional Order Flow Front-Running
                     msg = FinancialEngine.L3OrderMessage(
                         index.timestamp(), ticker, "LIT", "INST", close_p, 10000.0, True
                     )
-                    engine.send_l3_message(msg)
+                    engine.send_event(msg)
 
         # Extract Results
         equity_history = engine.get_equity_history()
