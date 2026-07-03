@@ -42,9 +42,20 @@ set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(EIGEN_BUILD DOC OFF)
 FetchContent_MakeAvailable(eigen)
 
+FetchContent_Declare(
+    benchmark
+    URL https://github.com/google/benchmark/archive/refs/tags/v1.8.3.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(benchmark)
+
 set(PYBIND11_FINDPYTHON ON)
 
 FetchContent_MakeAvailable(pybind11)
 
 add_subdirectory(src)
 add_subdirectory(tests)
+add_subdirectory(benchmarks)

@@ -1,0 +1,11 @@
+add_executable(EngineBenchmarks
+    BacktesterBenchmark.cpp
+    ../src/PayoffRegistration.cpp
+    ../src/StrategyRegistration.cpp
+)
+target_link_libraries(EngineBenchmarks
+    PRIVATE
+    ${PROJECT_NAME}
+    benchmark::benchmark
+    fmt::fmt
+)
