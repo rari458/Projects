@@ -29,6 +29,6 @@ market_data_feeder/target/
 compile_commands.json
 
 # Python extras
-.venv/
+dist/
 .pytest_cache/
 *.egg-info/

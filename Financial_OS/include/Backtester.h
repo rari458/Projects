@@ -30,6 +30,7 @@ public:
     void set_pairs_parameters(int window, double threshold);
     void set_regime_filter(bool use_filter, int lookback = 252);
     void update_custom_pnl(double pnl) { portfolio_.set_custom_pnl(pnl); }
+    void set_quiet(bool quiet) { quiet_ = quiet; }
 
     double get_total_equity() const;
     double get_cash_balance() const { return portfolio_.cash(); }
@@ -54,6 +55,7 @@ private:
     double max_drawdown_limit_ = 0.05;
     double var_limit_ = 0.02;
     bool risk_shutdown_ = false;
+    bool quiet_ = false;
 
     bool use_regime_filter_ = false;
     int regime_lookback_ = 252;

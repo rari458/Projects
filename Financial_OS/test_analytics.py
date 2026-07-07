@@ -2,8 +2,6 @@ import sys
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-
-sys.path.append(os.path.abspath("build/src"))
 import FinancialEngine as fe
 
 def run_analytics_test():

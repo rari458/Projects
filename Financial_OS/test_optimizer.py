@@ -3,8 +3,6 @@ import os
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-
-sys.path.append(os.path.abspath("build/src"))
 import FinancialEngine as fe
 
 def generate_synthetic_data(n_days=252):

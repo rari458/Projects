@@ -22,7 +22,6 @@ def run_simulation(scenario_name, symbol, assets_data, use_filter):
     try:
         import sys
         import os
-        sys.path.append(os.path.abspath("build/src"))
         import FinancialEngine as fe
 
         engine = fe.Backtester(10000.0, "EMA", 1.0)

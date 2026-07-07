@@ -362,5 +362,6 @@ PYBIND11_MODULE(FinancialEngine, m) {
         .def("set_pairs_parameters", &Backtester::set_pairs_parameters, py::arg("window"), py::arg("threshold"))
         .def("set_macd_parameters", &Backtester::set_macd_parameters)
         .def("set_volatility_k", &Backtester::set_volatility_k)
-        .def("set_regime_filter", &Backtester::set_regime_filter, py::arg("use_filter"), py::arg("lookback") = 252);
+        .def("set_regime_filter", &Backtester::set_regime_filter, py::arg("use_filter"), py::arg("lookback") = 252)
+        .def("set_quiet", &Backtester::set_quiet, py::arg("quiet"));
 }

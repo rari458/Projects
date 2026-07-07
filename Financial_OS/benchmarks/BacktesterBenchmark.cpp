@@ -38,6 +38,7 @@ void RunStrategy(benchmark::State& state, const char* strategy) {
 
     for (auto _ : state) {
         Backtester engine(100000.0, strategy, 1.0);
+        engine.set_quiet(true);
         for (int t = 0; t < n; ++t) {
             const double c = closes[t];
             engine.on_market_data("TEST", static_cast<double>(t), c, c, c, c);

@@ -2,9 +2,6 @@ import sys
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-
-# C++ 모듈 경로 설정
-sys.path.append(os.path.abspath("build/src"))
 import FinancialEngine as fe
 
 def run_backtest():
@@ -42,7 +39,7 @@ def run_backtest():
     portfolio_values = []
     
     for i, price in enumerate(prices):
-        engine.on_market_data(float(i), price)
+        engine.on_market_data("TEST", float(i), price, price, price, price)
         portfolio_values.append(engine.get_total_equity())
 
     # 결과 분석

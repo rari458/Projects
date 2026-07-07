@@ -2,8 +2,6 @@ import sys
 import os
 import random
 
-sys.path.append(os.path.abspath("build/src"))
-
 try:
     import FinancialEngine as fe
 except ImportError as e:

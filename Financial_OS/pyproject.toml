@@ -1,0 +1,25 @@
+[build-system]
+requires = ["scikit-build-core>=0.10"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "FinancialEngine"
+version = "0.1.0"
+description = "Polyglot quant trading / derivative-pricing engine (C++ core via pybind11)"
+requires-python = ">=3.9"
+
+[tool.scikit-build]
+#Build ONLY the pybind module (skips FinancialOS exe, tests, benchmarks, FFI .so).
+build.targets = ["FinancialEnginePy"]
+# Install ONLY our tagged component -> wheel gets the module, not fmt/eigen artifacts.
+install.components = ["python"]
+cmake.build-type = "Release"
+cmake.version = ">=3.24"
+build-dir = "build/{wheel_tag}"
+
+[tool.scikit-build.cmake.define]
+FINANCIAL_OS_BUILD_TESTS = "OFF"
+
+[tool.scikit-build.editable]
+rebuild=true
+verbose=true

@@ -31,7 +31,6 @@ print(f"\n  [Python Numpy] Beta: {slope:.4f}, Alpha: {intercept:.4f}")
 
 import sys
 import os
-sys.path.append(os.path.abspath("build/src"))
 
 try:
     import FinancialEngine as fe

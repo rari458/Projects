@@ -4,9 +4,6 @@ from typing import List, Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-# Ensure Python can find the C++ module
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../build/src")))
-
 try:
     import FinancialEngine as fe
     print("[System] Financial Engine Core Loaded Successfully (Multi-Asset Ready).")

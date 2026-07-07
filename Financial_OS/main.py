@@ -3,9 +3,6 @@
 import sys
 import os
 
-# Append the directory containing the compiled .so file
-sys.path.append(os.path.abspath('./build/src'))
-
 try:
     import FinancialEngine
 except ImportError as e:

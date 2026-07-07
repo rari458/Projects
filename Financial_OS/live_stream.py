@@ -6,8 +6,6 @@ import sys
 import os
 import time
 
-# Append C++ Core Directory
-sys.path.append(os.path.abspath('./build/src'))
 try:
     import FinancialEngine
 except ImportError:

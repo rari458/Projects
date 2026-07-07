@@ -3,8 +3,6 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-sys.path.append(os.path.abspath("build/src"))
-
 try:
     import FinancialEngine as fe
     print("[Success] FinancialEngine module loaded successfully.")

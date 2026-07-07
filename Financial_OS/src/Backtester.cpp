@@ -1460,8 +1460,10 @@ void Backtester::check_risk_limits(double timestamp) {
 void Backtester::liquidator(double timestamp, const std::string& reason) {
     if (risk_shutdown_) return;
 
-    fmt::print("\n[!!! RISK ALERT !!!] {}\n", reason);
-    fmt::print("Execution: LIQUIDATING ALL POSITIONS...\n");
+    if (!quiet_) {
+        fmt::print("\n[!!! RISK ALERT !!!] {}\n", reason);
+        fmt::print("Execution: LIQUIDATING ALL POSITIONS...\n");
+    }
 
     for (const auto& [sym, qty] :portfolio_.holdings()) {
         if (std::abs(qty) > 1e-6) {
@@ -1475,7 +1477,9 @@ void Backtester::liquidator(double timestamp, const std::string& reason) {
     }
 
     risk_shutdown_ = true;
-    fmt::print("System Halted. No further trades will be executed.\n");
+    if (!quiet_) {
+        fmt::print("System Halted. No further trades will be executed.\n");
+    }
 }
 
 void Backtester::set_pairs_parameters(int window, double threshold) {

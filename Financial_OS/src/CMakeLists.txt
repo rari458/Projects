@@ -49,6 +49,8 @@ pybind11_add_module(FinancialEnginePy Bindings.cpp PayoffRegistration.cpp Strate
 target_link_libraries(FinancialEnginePy PRIVATE FinancialEngine)
 set_target_properties(FinancialEnginePy PROPERTIES OUTPUT_NAME "FinancialEngine")
 
+install(TARGETS FinancialEnginePy LIBRARY DESTINATION . COMPONENT python)
+
 add_library(financial_engine_c SHARED
     EngineCApi.cpp
     StrategyRegistration.cpp

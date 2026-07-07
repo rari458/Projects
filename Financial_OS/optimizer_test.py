@@ -3,8 +3,6 @@ import os
 import yfinance as yf
 import pandas as pd
 
-sys.path.append(os.path.abspath("build/src"))
-
 try:
     import FinancialEngine as fe
 except ImportError as e:

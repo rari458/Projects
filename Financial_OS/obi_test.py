@@ -1,8 +1,6 @@
 import sys
 import os
 
-sys.path.append(os.path.abspath("build/src"))
-
 try:
     import FinancialEngine as fe
 except ImportError as e:

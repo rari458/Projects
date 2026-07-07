@@ -8,8 +8,6 @@ import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# Append C++ Core Directory
-sys.path.append(os.path.abspath('./build/src'))
 try:
     import FinancialEngine
 except ImportError:
