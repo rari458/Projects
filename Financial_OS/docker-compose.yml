@@ -1,0 +1,26 @@
+# docker-compose.yml
+services:
+  redis:
+    image: redis:7-alpine
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/Dockerfile.gateway
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: services/Dockerfile.worker
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - ./market.duckdb:/app/market.duckdb:ro

@@ -1,0 +1,32 @@
+# services/Dockerfile.worker
+
+FROM python:3.14 AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential cmake ninja-build git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+COPY pyproject.toml CMakeLists.txt ./
+COPY src/ ./src/
+COPY include/ ./include/
+
+RUN pip wheel . --no-deps --wheel-dir /wheels
+
+FROM python:3.14-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /wheels/*.whl /tmp/
+RUN pip install --no-cache-dir /tmp/*.whl \
+    && pip install --no-cache-dir "celery[redis]" duckdb pandas yfinance
+
+COPY data_store.py ./
+COPY services/ ./services/
+
+CMD ["celery", "-A", "services.celery_app:celery_app", "worker", "--loglevel=info", "--pool=solo"]

@@ -1,0 +1,10 @@
+# Keep the build context small: exclude build artifacts, VCS, caches, and data.
+build/
+*.duckdb
+.git/
+.gitignore
+__pycache__/
+*.pyc
+.venv/
+venv/
+market_data_feeder/target/

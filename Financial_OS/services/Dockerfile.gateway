@@ -1,0 +1,9 @@
+# services/Dockerfile.gateway
+FROM python:3.14-slim
+
+WORKDIR /app
+RUN pip install --no-cache-dir "celery[redis]" fastapi uvicorn
+
+COPY services/ ./services/
+
+CMD ["uvicorn", "services.gateway:app", "--host", "0.0.0.0", "--port", "8001"]
