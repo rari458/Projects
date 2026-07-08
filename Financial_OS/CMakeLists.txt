@@ -27,6 +27,14 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(fmt)
 
 FetchContent_Declare(
+    bs_thread_pool
+    URL
+    https://github.com/bshoshany/thread-pool/archive/refs/tags/v5.1.0.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_MakeAvailable(bs_thread_pool)
+
+FetchContent_Declare(
     pybind11
     URL https://github.com/pybind/pybind11/archive/refs/tags/v2.11.1.zip
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE

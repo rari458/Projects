@@ -244,9 +244,12 @@ PYBIND11_MODULE(FinancialEngine, m) {
     py::class_<Optimizer>(m, "Optimizer")
         .def(py::init<>())
         .def("add_asset", &Optimizer::add_asset)
-        .def("optimize_sharpe_ratio", &Optimizer::optimize_sharpe_ratio)
+        .def("optimize_sharpe_ratio", &Optimizer::optimize_sharpe_ratio, py::arg("num_simulations"), py::arg("risk_free_rate"), py::arg("num_threads") = 0)
         .def("optimize_inverse_volatility", &Optimizer::optimize_inverse_volatility, py::arg("risk_free_rate") = 0.0)
-        .def("optimize_minimum_variance", &Optimizer::optimize_minimum_variance, py::arg("risk_free_rate") = 0.0);
+        .def("optimize_minimum_variance", &Optimizer::optimize_minimum_variance, py::arg("risk_free_rate") = 0.0)
+        .def("optimize_max_sharpe_analytic", &Optimizer::optimize_max_sharpe_analytic, py::arg("risk_free_rate") = 0.0)
+        .def("optimize_max_sharpe_shrunk", &Optimizer::optimize_max_sharpe_shrunk, py::arg("risk_free_rate") = 0.0)
+        .def("optimize_max_sharpe_robust", &Optimizer::optimize_max_sharpe_robust, py::arg("risk_free_rate") = 0.0);
 
     py::class_<Gene>(m, "Gene")
         .def_readonly("fast", &Gene::fast)

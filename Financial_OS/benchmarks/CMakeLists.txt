@@ -1,5 +1,6 @@
 add_executable(EngineBenchmarks
     BacktesterBenchmark.cpp
+    OptimizerBenchmark.cpp
     ../src/PayoffRegistration.cpp
     ../src/StrategyRegistration.cpp
 )

@@ -2,6 +2,7 @@
 
 import FinancialEngine as fe
 import data_store
+import duckdb
 from services.celery_app import celery_app
 
 def _run_backtest(con, symbols, start, end, strategy, initial_capital, leverage):
@@ -38,7 +39,14 @@ def _run_backtest(con, symbols, start, end, strategy, initial_capital, leverage)
         "trades": trades,
     }
 
-@celery_app.task(name="run_backtest_job")
+@celery_app.task(
+    name="run_backtest_job",
+    autoretry_for=(duckdb.IOException,),
+    retry_backoff=True,
+    retry_backoff_max=10,
+    retry_jitter=True,
+    max_retries=3,
+)
 def run_backtest_job(symbols, start, end, strategy="MACD",
                      initial_capital=100000.0, leverage=1.0):
     con = data_store.connect_readonly()
@@ -69,7 +77,14 @@ def aggregate_walkforward(window_results):
         "windows": per_window,
     }
 
-@celery_app.task(name="run_wf_window")
+@celery_app.task(
+    name="run_wf_window",
+    autoretry_for=(duckdb.IOException,),
+    retry_backoff=True,
+    retry_backoff_max=10,
+    retry_jitter=True,
+    max_retries=3,
+)
 def run_wf_window(symbols, train_start, train_end, test_start, test_end,
                   candidates, initial_capital=100000.0, leverage=1.0):
     con = data_store.connect_readonly()

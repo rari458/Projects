@@ -2,6 +2,11 @@
 services:
   redis:
     image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   gateway:
     build:
@@ -12,7 +17,8 @@ services:
     ports:
       - "8001:8001"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   worker:
     build:
@@ -21,6 +27,8 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     volumes:
       - ./market.duckdb:/app/market.duckdb:ro
+    stop_grace_period: 30s

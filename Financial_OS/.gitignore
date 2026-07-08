@@ -32,3 +32,11 @@ compile_commands.json
 dist/
 .pytest_cache/
 *.egg-info/
+
+# Data Artifact
+market.duckdb
+*.duckdb
+
+# Personal / not for public repo
+CLAUDE.md
+Self-Study/

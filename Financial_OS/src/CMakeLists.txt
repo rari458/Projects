@@ -35,6 +35,8 @@ set_target_properties(FinancialEngine PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(FinancialEngine PUBLIC fmt::fmt Eigen3::Eigen)
 target_include_directories(FinancialEngine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
+target_include_directories(FinancialEngine SYSTEM PRIVATE ${bs_thread_pool_SOURCE_DIR}/include)
+
 if(MSVC)
     target_compile_options(FinancialEngine PRIVATE /W4 /WX)
 else()
