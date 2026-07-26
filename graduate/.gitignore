@@ -1,12 +1,6 @@
-# Datasets (auto-downloaded on Colab; do not commit — keeps the repo small)
 data/
-
-# Reference papers / project documents
-*.pdf
-*.docx
-*.md
-
-# Python virtualenv & caches
+docs/
+papers/
 venv/
 __pycache__/
 *.py[cod]
