@@ -1,6 +1,7 @@
 data/
 docs/
 papers/
+benchmark.png
 venv/
 __pycache__/
 *.py[cod]
