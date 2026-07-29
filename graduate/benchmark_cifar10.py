@@ -175,7 +175,7 @@ def main():
             elapsed = time.time() - t0
             hist.append((ep, tr, acc, elapsed))
             print(f"  epoch {ep}: train_loss={tr:.4f} test_acc={acc * 100:.2f}% time={elapsed:.1f}s")
-            log.write(f"{kind},{eq},{tr:.4f},{acc * 100:.2f},{elapsed:.1f}\n")
+            log.write(f"{kind},{ep},{tr:.4f},{acc * 100:.2f},{elapsed:.1f}\n")
             log.flush()
         results[kind] = hist
 
