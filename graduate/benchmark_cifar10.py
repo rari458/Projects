@@ -37,6 +37,7 @@ TEST_SUBSET  = 1000 if QUICK else None
 BATCH = 128
 SEED = 0
 KINDS = ["adamw", "sam", "muon", "muonsam_nomom", "muonsam"]
+LOGFILE = "runlog.csv"
 
 def make_resnet18():
     """torchvision ResNet-18 adapted for 32x32 CIFAR (3x3 stem, no maxpool)."""
@@ -157,6 +158,9 @@ def main():
     total_steps = len(train_loader) * EPOCHS
     criterion = nn.CrossEntropyLoss()
 
+    log = open(LOGFILE, "w", newline="")
+    log.write("optimizer,epoch,train_loss,test_acc,time_s\n")
+
     results = {}
     for kind in KINDS:
         torch.manual_seed(SEED)          # identical weight init
@@ -171,7 +175,12 @@ def main():
             elapsed = time.time() - t0
             hist.append((ep, tr, acc, elapsed))
             print(f"  epoch {ep}: train_loss={tr:.4f} test_acc={acc * 100:.2f}% time={elapsed:.1f}s")
+            log.write(f"{kind},{eq},{tr:.4f},{acc * 100:.2f},{elapsed:.1f}\n")
+            log.flush()
         results[kind] = hist
+
+    log.close()
+    print(f"\nsaved {LOGFILE}")
 
     print("\n==== final summary ====")
     print(f"{'optimizer':<10}{'test_acc':>10}{'time(s)':>10}")
