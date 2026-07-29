@@ -36,7 +36,7 @@ TRAIN_SUBSET = 2000 if QUICK else None  # None = full 50k
 TEST_SUBSET  = 1000 if QUICK else None
 BATCH = 128
 SEED = 0
-KINDS = ["adamw", "sam", "muon", "muonsam"]
+KINDS = ["adamw", "sam", "muon", "muonsam_nomom", "muonsam"]
 
 def make_resnet18():
     """torchvision ResNet-18 adapted for 32x32 CIFAR (3x3 stem, no maxpool)."""
@@ -67,12 +67,14 @@ def build_optimizer(kind, model, total_steps):
             dict(params=aux, use_muon=False, lr=1e-3, weight_decay=5e-4)
         ]
         return SingleDeviceMuonWithAuxAdam(groups)
-    if kind == "muonsam":
+    if kind.startswith("muonsam"):
+        mode = "none" if kind.endswith("_nomom") else "pre_ns5"
         groups = [
             dict(params=muon, use_muon=True, lr=0.02, rho=0.05, weight_decay=5e-4),
             dict(params=aux, use_muon=False, lr=1e-3, rho=0.01, weight_decay=5e-4)
         ]
-        return MuonSAM(groups, total_steps=total_steps, rho_max=0.05, rho_warmup_frac=0.3, sam_period=5)
+        return MuonSAM(groups, total_steps=total_steps, rho_max=0.05, 
+                       rho_warmup_frac=0.3, sam_period=5, momentum_mode=mode)
     raise ValueError(kind)
 
 def train_epoch(kind, model, opt, loader, criterion):
@@ -91,7 +93,7 @@ def train_epoch(kind, model, opt, loader, criterion):
             opt.first_step(zero_grad=True)
             criterion(model(x), y).backward()   # 2nd pass @ w+e
             opt.second_step(zero_grad=True)
-        elif kind == "muonsam":
+        elif kind.startswith("muonsam"):
             def closure():
                 opt.zero_grad()
                 l = criterion(model(x), y)

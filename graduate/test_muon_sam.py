@@ -64,3 +64,68 @@ for step in range(1, 7):
     print(f"step {step}: loss={loss.item():.4f} | SAM(2-pass)={sam_step} | fc.weight updated={moved}")
 
 print("\nOK: if it runs to the end, import / NS5 / 2-pass / schedule branch / restore all work.")
+
+# --- regression: with rho off, momentum_mode='pre_ns5' must equal plain Muon ---
+from muon import SingleDeviceMuonWithAuxAdam
+
+def split_params(m):
+    mu, ax = [], []
+    for name, p in m.named_parameters():
+        (mu if p.ndim >=2 and "embed" not in name and "head" not in name else ax).append(p)
+    return mu, ax
+
+def closure_for(m, o, img, tok, y):
+    def closure():
+        o.zero_grad()
+        loss = criterion(m(img, tok), y)
+        loss.backward()
+        return loss
+    return closure
+
+torch.manual_seed(0)
+m_a, m_b = TinyNet(), TinyNet()
+m_b.load_state_dict(m_a.state_dict())       # identical weights, identical batches
+
+mu_a, ax_a = split_params(m_a)
+mu_b, ax_b = split_params(m_b)
+
+# rho_warmup_frac=1.0 pins _rho_scale() to 0 for every step, so do_sam is never True and
+# no LookSAM correction is ever stored -- the pure-Muon configuration.
+# rho_max=0.0 alone is NOT enough: _rho_scale() is already > 0 at t=1, so the 2-pass branch
+# would still fire, store a numerically-zero u_v, and the ratio rescaling would then inject
+# a full-magnitude noise direction on later steps.
+opt_a = MuonSAM([dict(params=mu_a, use_muon=True, lr=0.02),
+                dict(params=ax_a, use_muon=False, lr=3e-4)],
+                total_steps=10, rho_max=0.0, rho_warmup_frac=1.0,
+                momentum_mode="pre_ns5")
+opt_b = SingleDeviceMuonWithAuxAdam(
+    [dict(params=mu_b, use_muon=True, lr=0.02, weight_decay=0.0),
+    dict(params=ax_b, use_muon=False, lr=3e-4, weight_decay=0.0)]
+)
+
+torch.manual_seed(1)
+for _ in range(5):
+    img = torch.randn(8, 1, 8, 8)
+    tok = torch.randint(0, 10, (8,))
+    y   = torch.randint(0, 4, (8,))
+    opt_a.step(closure_for(m_a, opt_a, img, tok, y))
+    opt_b.zero_grad()
+    criterion(m_b(img, tok), y).backward()
+    opt_b.step()
+
+worst = max((pa - pb).abs().max().item()
+            for pa, pb in zip(m_a.parameters(), m_b.parameters()))
+for (n, pa) , pb in zip(m_a.named_parameters(), m_b.parameters()):
+    tok = torch.randint(0, 10, (8,))
+    y   = torch.randint(0, 4, (8,))
+    opt_a.step(closure_for(m_a, opt_a, img, tok, y))
+    opt_b.zero_grad()
+    criterion(m_b(img, tok), y).backward()
+    opt_b.step()
+
+worst = max((pa - pb).abs().max().item()
+            for pa, pb in zip(m_a.parameters(), m_b.parameters()))
+for (n, pa), pb in zip(m_a.named_parameters(), m_b.parameters()):
+    assert torch.allclose(pa, pb, atol=1e-5), f"{n} diverged: {(pa - pb).abs().max():.2e}"
+print(f"OK: momentum_mode='pre_ns5' with rho off == SingleDeviceMuonWithAuxAdam "
+      f"(max |diff| = {worst:.2e})")

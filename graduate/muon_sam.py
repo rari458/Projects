@@ -13,14 +13,23 @@ class MuonSAM(torch.optim.Optimizer):
     Aux group (embed/head/scalar -> AdamW): standard L2 SAM perturbation + original (Euclidean)
     LookSAM correction g_v, applied per-parameter.
 
-    DESIGN NOTE (flagged in the Step-1/Step-4 math): this prototype DROPS Muon's internal
-    momentum on the Muon group -- the orthogonalized direction is used directly as the update,
-    to keep the LookSAM logic readable. Reintroducing momentum (momentum-before-NS5 as in
-    muon.py, or momentum-on-direction) is a documented fork to evaluate on GPU. Expect the
-    Muon-group behaviour here to differ from the earlier momentum-having MuonSAM.
+    `momentum_mode` selects where Muon's momentum enters (a config axis, not a fixed strategy):
+      "pre_ns5"  -- momentum on the raw gradient, orthogonalized afterwards. This is the
+                    ordering muon.py uses, so with rho=0 the Muon group reproduces plain
+                    Muon exactly. Default.
+      "post_ns5" -- momentum on the already-orthogonalized direction. A running average of
+                    orthogonal matrices is not orthogonal, so `reorthogonalize` matters more
+                    here. Not equivalent to upstream Muon; kept for ablation.
+      "none"     -- no momentum on the Muon group. Reproduces the 2026-06-21 prototype used
+                    for the mid-term report numbers; keep it for baseline comparisons.
+
+    The momentum buffer advances exactly once per step in every branch: the SAM ascent pass
+    (`_sam_first_step`) is exploratory and deliberately does not touch it.
     """
     def __init__(self, param_groups, total_steps, rho_max=0.05, rho_warmup_frac=0.0,
-                 sam_period=5, ns_steps=5, looksam_alpha=0.7, reorthogonalize=True):
+                 sam_period=5, ns_steps=5, looksam_alpha=0.7, reorthogonalize=True,
+                 momentum_mode="pre_ns5"):
+        assert momentum_mode in ("none", "pre_ns5", "post_ns5"), momentum_mode
         for group in param_groups:
             assert "use_muon" in group
             group.setdefault("rho", rho_max)
@@ -28,6 +37,8 @@ class MuonSAM(torch.optim.Optimizer):
             if group["use_muon"]:
                 group.setdefault("lr", 0.02)
                 group.setdefault("weight_decay", 0.0)
+                group.setdefault("momentum", 0.95)
+                group.setdefault("nesterov", True)
             else:
                 group.setdefault("lr", 3e-4)
                 group.setdefault("betas", (0.9, 0.95))
@@ -41,6 +52,7 @@ class MuonSAM(torch.optim.Optimizer):
         self.ns_steps = ns_steps
         self.alpha = looksam_alpha
         self.reorthogonalize = reorthogonalize
+        self.momentum_mode = momentum_mode
         self._t = 0
 
     # ---------- helpers ----------
@@ -59,6 +71,33 @@ class MuonSAM(torch.optim.Optimizer):
         o = zeropower_via_newtonschulz5(g, steps=self.ns_steps)
         o *= max(1, o.size(-2) / o.size(-1)) ** 0.5
         return o
+
+    def _muon_grad(self, p, group, grad):
+        """momentum_mode='pre_ns5': smooth the raw gradient before orthogonalizing.
+        Mirrors muon_update() in muon.py line for line, which is what makes the
+        rho=0 case reduce to plain Muon."""
+        if self.momentum_mode != "pre_ns5":
+            return grad
+        st, beta = self.state[p], group["momentum"]
+        if "momentum_buffer" not in st:
+            st["momentum_buffer"] = torch.zeros_like(p)
+        buf = st["momentum_buffer"]
+        buf.lerp_(grad, 1 - beta)
+        # Out-of-place lerp on purpose: muon.py writes the result into grad, which here
+        # would corrupt the clean gradient that the LookSAM projection still reads.
+        return grad.lerp(buf, beta) if group["nesterov"] else buf
+
+    def _muon_dir(self, p, group, direction):
+        """momentum_mode='post_ns5': smooth the orthogonalized direction instead."""
+        if self.momentum_mode != "post_ns5":
+            return direction
+        st, beta = self.state[p], group["momentum"]
+        if "dir_buffer" not in st:
+            # Shaped like the 2D orthogonalized matrix, NOT like p -- they differ for conv.
+            st["dir_buffer"] = torch.zeros_like(direction)
+        buf = st["dir_buffer"]
+        buf.lerp_(direction, 1 - beta)
+        return self._ortho(buf) if self.reorthogonalize else buf
 
     def _aux_grad_norm(self, group):
         return torch.norm(torch.stack([
@@ -85,7 +124,9 @@ class MuonSAM(torch.optim.Optimizer):
     # ---------- SAM step (every k): 2-pass, refresh correction ----------
     @torch.no_grad()
     def _sam_first_step(self, rho_scale):
-        """Perturb w -> w+e using the clean gradient g; stash quantities for the projection."""
+        """Perturb w -> w+e using the clean gradient g; stash quantities for the projection.
+        The perturbation follows the *current* gradient, not the momentum average, and this
+        exploratory pass leaves the momentum buffer untouched."""
         for group in self.param_groups:
             rho = group["rho"] * rho_scale
             if group["use_muon"]:
@@ -120,7 +161,13 @@ class MuonSAM(torch.optim.Optimizer):
                     u = self.state[p]["u_vanilla"]
                     coef = (u * u_s).sum() / (u.pow(2).sum() + 1e-12)   # <u,u_s>/||u||_F^2
                     self.state[p]["u_v"] = u_s - coef * u               # orthogonal component
-                    self._apply_muon(p, group, u_s)
+                    if self.momentum_mode == "pre_ns5":
+                        # O(m) differs from O(g_s), so this costs one extra NS5 -- but only
+                        # on the 1-in-k SAM steps.
+                        d = self._ortho(self._muon_grad(p, group, p.grad))
+                    else:
+                        d = self._muon_dir(p, group, u_s)
+                    self._apply_muon(p, group, d)
             else:
                 for p in group["params"]:
                     if p.grad is None: continue
@@ -137,7 +184,7 @@ class MuonSAM(torch.optim.Optimizer):
             if group["use_muon"]:
                 for p in group["params"]:
                     if p.grad is None: continue
-                    u_t = self._ortho(p.grad)
+                    u_t = self._ortho(self._muon_grad(p, group, p.grad))
                     st  = self.state[p]
                     if "u_v" in st:                                     # reuse stored correction
                         u_v = st["u_v"]
@@ -145,6 +192,7 @@ class MuonSAM(torch.optim.Optimizer):
                         d = u_t + self.alpha * ratio * u_v
                         if self.reorthogonalize: d = self._ortho(d)     # D2: keep it orthogonal
                     else: d = u_t                                       # warmup: plain Muon
+                    d = self._muon_dir(p, group, d)
                     self._apply_muon(p, group, d)
             else:
                 for p in group["params"]:
