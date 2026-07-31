@@ -35,7 +35,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # local CPU debugging, but on a cloud CPU session it yields a runlog.csv that looks valid
 # while being incomparable to every GPU run. REQUIRE_GPU=1 turns the fallback into a hard
 # failure so a misconfigured Kaggle/Colab session fails instead of producing junk.
-if os.environ.get("REQUIRE_GPU") == 1 and DEVICE != "cuda":
+if os.environ.get("REQUIRE_GPU") == "1" and DEVICE != "cuda":
     raise RuntimeError(f"REQUIRE_GPU=1 but torch reports no CUDA (torch {torch.__version__})")
 QUICK = (DEVICE == "cpu")              # CPU -> fast sanity run; GPU -> full run
 EPOCHS = 3 if QUICK else 50
@@ -44,7 +44,12 @@ TEST_SUBSET  = 1000 if QUICK else None
 BATCH = 128
 SEED = 0
 KINDS = ["adamw", "sam", "muon", "muonsam_nomom", "muonsam"]
-LOGFILE = "runlog.csv"
+# Artifacts land in OUTDIR, not the cwd. On Kaggle the repo is usually cloned somewhere
+# outside /kaggle/working and the notebook cd's into it, so a relative path silently
+# writes the results where nothing collects them. Pass OUTDIR=/kaggle/working there.
+OUTDIR = os.environ.get("OUTDIR", ".")
+os.makedirs(OUTDIR, exist_ok=True)
+LOGFILE = os.path.join(OUTDIR, "runlog.csv")
 
 def make_resnet18():
     """torchvision ResNet-18 adapted for 32x32 CIFAR (3x3 stem, no maxpool)."""
@@ -154,8 +159,9 @@ def maybe_plot(results):
         ax.legend()
         ax.grid(True, alpha=0.3)
     fig.tight_layout()
-    fig.savefig("benchmark.png", dpi=120)
-    print("saved benchmark.png")
+    png = os.path.join(OUTDIR, "benchmark.png")
+    fig.savefig(png, dpi=120)
+    print(f"saved {png}")
 
 def main():
     print(f"device={DEVICE} | QUICK={QUICK} | epochs={EPOCHS} "
