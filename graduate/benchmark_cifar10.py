@@ -22,6 +22,7 @@ import torch
 import torch.nn as nn
 import torchvision
 import torchvision.transforms as T
+import os
 from torch.utils.data import DataLoader, Subset
 
 from sam import SAM
@@ -35,7 +36,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # while being incomparable to every GPU run. REQUIRE_GPU=1 turns the fallback into a hard
 # failure so a misconfigured Kaggle/Colab session fails instead of producing junk.
 if os.environ.get("REQUIRE_GPU") == 1 and DEVICE != "cuda":
-    raise RuntimeError(f"REQUIRE_GPU but torch reports no CUDA (torch {torch.__version__})")
+    raise RuntimeError(f"REQUIRE_GPU=1 but torch reports no CUDA (torch {torch.__version__})")
 QUICK = (DEVICE == "cpu")              # CPU -> fast sanity run; GPU -> full run
 EPOCHS = 3 if QUICK else 50
 TRAIN_SUBSET = 2000 if QUICK else None  # None = full 50k
