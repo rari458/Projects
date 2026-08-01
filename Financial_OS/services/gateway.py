@@ -11,6 +11,11 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 celery_client = Celery("financial_os", broker=REDIS_URL, backend=REDIS_URL)
 
 app = FastAPI(title="Financial OS Gateway", version="3.0.0")
+from prometheus_fastapi_instrumentator import Instrumentator
+Instrumentator().instrument(app).expose(app)
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 class JobRequest(BaseModel):
     symbols: list[str]

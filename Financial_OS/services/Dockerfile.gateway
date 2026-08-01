@@ -2,7 +2,7 @@
 FROM python:3.14-slim
 
 WORKDIR /app
-RUN pip install --no-cache-dir "celery[redis]" fastapi uvicorn
+RUN pip install --no-cache-dir "celery[redis]" fastapi uvicorn prometheus-fastapi-instrumentator
 
 COPY services/ ./services/
 

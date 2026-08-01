@@ -31,4 +31,37 @@ services:
         condition: service_healthy
     volumes:
       - ./market.duckdb:/app/market.duckdb:ro
+    expose:
+      - "9100"
     stop_grace_period: 30s
+
+  redis_exporter:
+    image: oliver006/redis_exporter:latest
+    environment:
+      REDIS_ADDR: "redis:6379"
+    expose:
+      - "9121"
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./observability:/etc/prometheus-config:ro
+    command:
+      - "--config.file=/etc/prometheus-config/prometheus.yml"
+    ports:
+      - "9090:9090"
+    depends_on:
+      - gateway
+      - worker
+      - redis_exporter
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./obervability/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus

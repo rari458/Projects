@@ -9,7 +9,7 @@ celery_app = Celery(
     "financial_os",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["services.tasks"],
+    include=["services.tasks", "services.metrics"],
 )
 
 celery_app.conf.update(

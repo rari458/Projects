@@ -24,7 +24,7 @@ WORKDIR /app
 
 COPY --from=builder /wheels/*.whl /tmp/
 RUN pip install --no-cache-dir /tmp/*.whl \
-    && pip install --no-cache-dir "celery[redis]" duckdb pandas yfinance
+    && pip install --no-cache-dir "celery[redis]" duckdb pandas yfinance prometheus-client
 
 COPY data_store.py ./
 COPY services/ ./services/

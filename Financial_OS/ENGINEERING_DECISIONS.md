@@ -131,3 +131,29 @@ This document records *why*, not just *what*. Each entry captures a question tha
 **Going one step further:** fitting `T(n_tasks) = F + n_tasks·t` from the two data points (42 tasks / 14 tasks, since 42÷3 divides evenly) solved exactly: **F ≈ 145ms** fixed overhead (chord setup, callback task, first poll round-trip) that does *not* shrink with more workers, **t ≈ 24.7ms/task** — almost entirely Celery/Redis dispatch and serialization, not C++ compute (which Phase 3/4 benchmarks already show is sub-millisecond for a job this size). The theoretical max from the round-count ratio alone (42÷14) was 3x; the measured 2.41x is exactly the shortfall Amdahl's law predicts from that fixed `F`.
 
 **Why it matters:** The first, "no speedup" measurement was wrong — not because the system doesn't scale, but because the measuring instrument's resolution (1-second polling) was coarser than the thing being measured. The real, useful finding underneath — that this system is currently *orchestration-bound*, not *compute-bound* — would have been invisible without going back and fixing the ruler first.
+
+---
+
+## 10. Writing the first tests surfaced a silent gap in the returns matrix (post-roadmap hardening)
+
+**Context:** Adding the first automated tests for `data_store.py`'s `get_returns_matrix` (the function feeding the Optimizer research arc in stories #5–6) — a pure function with zero prior coverage, tested against an in-memory DuckDB rather than the real yfinance-backed one.
+
+**Assumption:** `pivot(...).dropna()` before `pct_change()` just filters out assets with no history yet (e.g. an IPO), the ordinary reason a cross-sectional row would be incomplete.
+
+**What was measured:** A synthetic edge case — two symbols, one (`MSFT`) missing a single bar in the *middle* of an otherwise-complete 3-day series — showed only 1 return survives from 3 days of data, and that surviving return silently spans day 1 → day 3, not day 2 → day 3. `pivot().dropna()` drops the *entire* cross-sectional row the moment any one symbol is missing that date, before `pct_change()` ever runs — so `pct_change()` can silently skip non-consecutive trading days with no signal that it happened.
+
+**Why it matters:** Invisible on real data for liquid large-caps (which rarely have gaps), but would silently distort computed returns for names with occasional missing bars — trading halts, illiquid tickers, corporate actions — exactly the assets a real universe-mining pipeline would eventually pull in. Caught by writing a synthetic edge-case test, not by reading the code: the same throughline as story #2's `O(n²)` bug — a function that looks correct until you feed it the one input shape nobody tried yet.
+
+---
+
+## 11. Kubernetes surfaced a constraint two phases earlier had already baked in
+
+**Context:** Translating the Phase 6 Docker Compose stack (redis + gateway + worker) into Kubernetes Deployments/Services/HPA on a local single-node minikube cluster, to demonstrate orchestration beyond docker-compose's single-host model.
+
+**What came up:** The worker Deployment needs read access to `market.duckdb`, a simple bind-mount under Compose. Translating that mount to Kubernetes (`hostPath`) exposed a constraint that Phase 5's storage choice — DuckDB, an embedded single-file database, not a client-server one — already implied but had never been tested against: a `hostPath` volume only works correctly if every pod using it is scheduled on the *same node*. On a genuinely multi-node cluster this breaks silently (pods on other nodes simply wouldn't see the file) unless replaced with a ReadWriteMany volume (NFS, cloud filestore) or DuckDB itself were swapped for a client-server database.
+
+**Decision:** kept `hostPath` for this single-node minikube deployment (it matches Compose's own bind-mount semantics most directly) and documented the multi-node limitation explicitly rather than engineering around a scale this project doesn't operate at yet.
+
+**A second, smaller finding:** the worker `HorizontalPodAutoscaler` scales on CPU utilization — the only metric Kubernetes ships out of the box — but these workers are I/O-bound (waiting on the Redis broker and DuckDB reads, not compute; Slice 2-C already measured that per-task Celery/Redis overhead dominates sub-millisecond C++ compute at this data scale). CPU is a weak scaling signal for this workload; the correct one would be queue depth via KEDA + a Redis-based scaler, left as a known follow-up rather than implemented here.
+
+**Why it matters:** A storage decision from Phase 5 (DuckDB for embedded simplicity) and a measurement from Phase 6 (this system is orchestration-bound, not compute-bound) both resurfaced as concrete constraints the moment the deployment target changed. Architecture decisions compound forward in ways invisible until the surrounding infrastructure actually changes — the same lesson as story #7's `--pool=solo` rationale, one infrastructure layer further out.

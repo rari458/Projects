@@ -23,3 +23,6 @@ FINANCIAL_OS_BUILD_TESTS = "OFF"
 [tool.scikit-build.editable]
 rebuild=true
 verbose=true
+
+[tool.pytest.ini_options]
+testpaths = ["services/tests", "pytests"]
