@@ -43,7 +43,9 @@ TRAIN_SUBSET = 2000 if QUICK else None  # None = full 50k
 TEST_SUBSET  = 1000 if QUICK else None
 BATCH = 128
 SEED = 0
-KINDS = ["adamw", "sam", "muon", "muonsam_nomom", "muonsam"]
+KINDS = ["adamw", "sam", "muon", "muon_nomom", "muonsam_nomom", "muonsam"]
+# Variants backed by MuonSAM: these take a closure instead of a plain step().
+CLOSURE_KINDS = ("muonsam", "muonsam_nomom", "muon_nomom")
 # Artifacts land in OUTDIR, not the cwd. On Kaggle the repo is usually cloned somewhere
 # outside /kaggle/working and the notebook cd's into it, so a relative path silently
 # writes the results where nothing collects them. Pass OUTDIR=/kaggle/working there.
@@ -80,14 +82,24 @@ def build_optimizer(kind, model, total_steps):
             dict(params=aux, use_muon=False, lr=1e-3, weight_decay=5e-4)
         ]
         return SingleDeviceMuonWithAuxAdam(groups)
+    if kind == "muon_nomom":
+        # Fourth cell of the momentum x SAM ablation ; the other three are muon /
+        # muonsam_nomom / muonsam. rho_warmup_frac=1.0 pins _rho_scale() to 0 for the whole
+        # run, so the SAM branch never fired and no LookSAM correction is ever stored --
+        # with momentum_mode="none" that reduces to Muon with its momentum buffer disabled.
+        groups = [
+            dict(params=muon, use_muon=True, lr=0.02, weight_decay=5e-4),
+            dict(params=aux, use_muon=False, lr=1e-3, weight_decay=5e-4)
+        ]
+        return MuonSAM(groups, total_steps=total_steps, rho_max=0.0, rho_warmup_frac=1.0,  momentum_mode="none")
+
     if kind.startswith("muonsam"):
         mode = "none" if kind.endswith("_nomom") else "pre_ns5"
         groups = [
             dict(params=muon, use_muon=True, lr=0.02, rho=0.05, weight_decay=5e-4),
             dict(params=aux, use_muon=False, lr=1e-3, rho=0.01, weight_decay=5e-4)
         ]
-        return MuonSAM(groups, total_steps=total_steps, rho_max=0.05, 
-                       rho_warmup_frac=0.3, sam_period=5, momentum_mode=mode)
+        return MuonSAM(groups, total_steps=total_steps, rho_max=0.05, rho_warmup_frac=0.3, sam_period=5, momentum_mode=mode)
     raise ValueError(kind)
 
 def train_epoch(kind, model, opt, loader, criterion):
@@ -106,7 +118,7 @@ def train_epoch(kind, model, opt, loader, criterion):
             opt.first_step(zero_grad=True)
             criterion(model(x), y).backward()   # 2nd pass @ w+e
             opt.second_step(zero_grad=True)
-        elif kind.startswith("muonsam"):
+        elif kind in CLOSURE_KINDS:
             def closure():
                 opt.zero_grad()
                 l = criterion(model(x), y)
