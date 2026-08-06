@@ -39,8 +39,24 @@ def check_cfg(kind, opt):
         assert opt._rho_scale() == 0.0, f"rho is live ({opt._rho_scale()}) -- SAM is not off"
     elif kind == "muonsam_nomom":
         assert opt.momentum_mode == "none" and opt.rho_max > 0
+        assert opt.correction_mode == "looksam", opt.correction_mode
     elif kind == "muonsam":
         assert opt.momentum_mode == "pre_ns5" and opt.rho_max > 0
+        assert opt.correction_mode == "looksam", opt.correction_mode
+        assert opt.rho_warmup_frac > 0, "the default arm must keep its warm-start"
+        assert not any(g["adaptive"] for g in opt.param_groups)
+    elif kind == "muonsam_gsam":
+        # Must differ from muonsam in exactly one axis, or the comparison measures nothing.
+        assert opt.correction_mode == "gsam", opt.correction_mode
+        assert opt.momentum_mode == "pre_ns5" and opt.rho_warmup_frac > 0
+        assert not any(g["adaptive"] for g in opt.param_groups)
+    elif kind == "muonsam_nowarm":
+        # The point of this arm is that rho is live from step; if the warm-start survives
+        # it is just a slower copy of muonsam.
+        assert opt.rho_warmup_frac == 0.0, opt.rho_warmup_frac
+        opt._t = 1
+        assert opt._rho_scale() > 0.0, "rho is still zero at step 1 -- no ablation here"
+        assert opt.correction_mode == "looksam" and opt.momentum_mode == "pre_ns5"
 
 
 def main():
@@ -48,10 +64,15 @@ def main():
     batches = [(torch.randn(8, 3, 4, 4), torch.randint(0, 10, (8,))) for _ in range(6)]
     B.DEVICE = "cpu"
 
+    # Check everything build_optimizer knows, not just today's KINDS. The variants outside
+    # KINDS are the dangerous ones: they are selected by overriding B.KINDS in a notebook,
+    # so nothing has ever built them before the cloud run does.
+    all_kinds = list(dict.fromkeys(list(B.KINDS) + list(B.CLOSURE_KINDS)))
     print(f"KINDS         = {B.KINDS}")
     print(f"CLOSURE_KINDS = {B.CLOSURE_KINDS}\n")
+    print(f"checking      = {all_kinds}\n")
     failed = 0
-    for kind in B.KINDS:
+    for kind in all_kinds:
         torch.manual_seed(0)
         model = Tiny()
         try:
