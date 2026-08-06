@@ -43,9 +43,17 @@ TRAIN_SUBSET = 2000 if QUICK else None  # None = full 50k
 TEST_SUBSET  = 1000 if QUICK else None
 BATCH = 128
 SEED = 0
+# The six the reported CIFAR-10 results were produced with. build_optimizer also knows
+# muonsam_gsam / muonsam_asam / muonsam_nowarm; they are left out of the default run
+# because six kinds already cost ~7h on a T4. Select them by overriding B.KINDS.
 KINDS = ["adamw", "sam", "muon", "muon_nomom", "muonsam_nomom", "muonsam"]
-# Variants backed by MuonSAM: these take a closure instead of a plain step().
-CLOSURE_KINDS = ("muonsam", "muonsam_nomom", "muon_nomom")
+# Every MuonSAM-backed variant, including the ones not in KINDS above: these take a
+# closure instead of a plain step(). A kind listed here but not in KINDS simply does not
+# run; a kind in KINDS but missing here falls through train_epoch's dispatch to an
+# undefined `loss`, so add new variants to BOTH.
+CLOSURE_KINDS = ("muonsam", "muonsam_nomom", "muon_nomom", "muonsam_gsam", "muonsam_asam", "muonsam_nowarm")
+# Final weights per optimizer, for sharpness.py. ~45MB each; SAVE_CKPT=0 turns it off.
+SAVE_CKPT = os.environ.get("SAVE_CKPT", "1") != "0"
 # Artifacts land in OUTDIR, not the cwd. On Kaggle the repo is usually cloned somewhere
 # outside /kaggle/working and the notebook cd's into it, so a relative path silently
 # writes the results where nothing collects them. Pass OUTDIR=/kaggle/working there.
@@ -94,12 +102,25 @@ def build_optimizer(kind, model, total_steps):
         return MuonSAM(groups, total_steps=total_steps, rho_max=0.0, rho_warmup_frac=1.0,  momentum_mode="none")
 
     if kind.startswith("muonsam"):
+        # Config axes, not separate code paths. Each variant below overrides one keyword
+        # of the default and nothing else, which is what the proposal means by "the
+        # combination axes are config dimensions, not hardcoded strategies".
         mode = "none" if kind.endswith("_nomom") else "pre_ns5"
+        adaptive = kind.endswith("_asam")     # ASAM scale-invariant perturbation, both groups
+        opts = dict(rho_max=0.05, rho_warmup_frac=0.3, sam_period=5, momentum_mode=mode)
+        if kind.endswith("_gsam"):
+            opts["correction_mode"] = "gsam"  # 2203.08065 instead of LookSAM's projection
+        if kind.endswith("_nowarm"):
+            # The ablation 2509.21818 asks for: that paper shows SAM can converge to
+            # "hallucinated minimizers" and that a warm-start before enabling SAM is the
+            # safeguard. rho_warmup_frac=0.3 was chosen for speed; this measures whether
+            # it is also doing the job the paper predicts.
+            opts["rho_warmup_frac"] = 0.0
         groups = [
-            dict(params=muon, use_muon=True, lr=0.02, rho=0.05, weight_decay=5e-4),
-            dict(params=aux, use_muon=False, lr=1e-3, rho=0.01, weight_decay=5e-4)
+            dict(params=muon, use_muon=True, lr=0.02, rho=0.05, weight_decay=5e-4, adaptive=adaptive),
+            dict(params=aux, use_muon=False, lr=1e-3, rho=0.01, weight_decay=5e-4, adaptive=adaptive)
         ]
-        return MuonSAM(groups, total_steps=total_steps, rho_max=0.05, rho_warmup_frac=0.3, sam_period=5, momentum_mode=mode)
+        return MuonSAM(groups, total_steps=total_steps, **opts)
     raise ValueError(kind)
 
 def train_epoch(kind, model, opt, loader, criterion):
@@ -203,6 +224,13 @@ def main():
             log.write(f"{kind},{ep},{tr:.4f},{acc * 100:.2f},{elapsed:.1f}\n")
             log.flush()
         results[kind] = hist
+        if SAVE_CKPT:
+            # sharpness.py reads these. Saved per kind rather than per epoch: the claim
+            # under test is about the minimum each optimizer converges to.
+            ckpt = os.path.join(OUTDIR, f"ckpt_{kind}_seed{SEED}.pt")
+            torch.save(dict(kind=kind, seed=SEED, epoch=EPOCHS, test_acc=acc * 100,
+                            state_dict=model.state_dict()), ckpt)
+            print(f"  saved {ckpt}")
 
     log.close()
     print(f"\nsaved {LOGFILE}")

@@ -22,14 +22,24 @@ class MuonSAM(torch.optim.Optimizer):
                     here. Not equivalent to upstream Muon; kept for ablation.
       "none"     -- no momentum on the Muon group. Reproduces the 2026-06-21 prototype used
                     for the mid-term report numbers; keep it for baseline comparisons.
+    
+    `correction_mode` selects which published decomposition the stored correction follows:
+      "looksam"  -- the part of O(g_s) orthogonal to O(g), added. Default; this is what
+                    every result recorded in CIFAR-10 was produced with.
+      "gsam"     -- the part of O(g) orthogonal to O(g_s), subtracted (2203.08065). Both
+                    act inside span{O(g), O(g_s)}; see _store_correction().
 
+    Per-group `adaptive` turns on ASAM-style scale-invariant perturbation. For the aux
+    group that is ASAM as published (elementwise |w|); for the Muon group it scales the
+    spectral perturbation by ||W||_F, the Frobenius-geometry analogue -- see _sam_first_step().
     The momentum buffer advances exactly once per step in every branch: the SAM ascent pass
     (`_sam_first_step`) is exploratory and deliberately does not touch it.
     """
     def __init__(self, param_groups, total_steps, rho_max=0.05, rho_warmup_frac=0.0,
                  sam_period=5, ns_steps=5, looksam_alpha=0.7, reorthogonalize=True,
-                 momentum_mode="pre_ns5"):
+                 momentum_mode="pre_ns5", correction_mode="looksam"):
         assert momentum_mode in ("none", "pre_ns5", "post_ns5"), momentum_mode
+        assert correction_mode in ("looksam", "gsam"), correction_mode
         for group in param_groups:
             assert "use_muon" in group
             group.setdefault("rho", rho_max)
@@ -53,6 +63,7 @@ class MuonSAM(torch.optim.Optimizer):
         self.alpha = looksam_alpha
         self.reorthogonalize = reorthogonalize
         self.momentum_mode = momentum_mode
+        self.correction_mode = correction_mode
         self._t = 0
 
     # ---------- helpers ----------
@@ -99,6 +110,32 @@ class MuonSAM(torch.optim.Optimizer):
         buf.lerp_(direction, 1 - beta)
         return self._ortho(buf) if self.reorthogonalize else buf
 
+    def _correct(self, base, corr):
+        """Blend a stored correction into a base direction, in whichever geometry `base`
+        lives in. The two modes differ only in sign, because they store opposite
+        projections -- see _store_correction()."""
+        ratio = base.norm() / (corr.norm() + 1e-12)
+        sign = -1.0 if self.correction_mode == "gsam" else 1.0
+        return base + sign * self.alpha * ratio * corr
+
+    def _store_correction(self, clean, perturbed):
+        """The slowly-varying vector that intermediate steps reuse.
+
+        LookSAM (2203.02714) keeps the part of the PERTURBED gradient orthogonal to the
+        clean one, and adds it: it points along the flat direction SAM discovered.
+        GSAM (2203.08065) keeps the part of the CLEAN gradient orthogonal to the perturbed
+        one, and descends the surrogate gap by subtracting it. Both live in the same
+        2D plane span{clean, perturbed}; only the projection target and the sign differ.
+
+        Note this is a periodic variant of GSAM -- the published version re-derives the
+        decomposition every step. The `sam_period` amortization is ours.
+        """
+        if self.correction_mode == "gsam":
+            coef = (perturbed * clean).sum() / (perturbed.pow(2).sum() + 1e-12)
+            return clean - coef * perturbed
+        coef = (clean * perturbed).sum() / (clean.pow(2).sum() + 1e-12)
+        return perturbed - coef * clean
+
     def _aux_grad_norm(self, group):
         return torch.norm(torch.stack([
             ((p.abs() if group["adaptive"] else 1.0) * p.grad).norm(2)
@@ -134,7 +171,17 @@ class MuonSAM(torch.optim.Optimizer):
                     if p.grad is None: continue
                     u = self._ortho(p.grad)
                     self.state[p]["u_vanilla"] = u
-                    e = (rho * u).reshape(p.shape)
+                    # ASAM (kwon21b) in Muon's geometry: without this the perturbation
+                    # has a fixed size regardless of how large the layer's weights are,
+                    # so sharpness is not scale-invariant and correlates worse with the
+                    # generalization gap. Scaling by ||W||_F makes W -> cW give e -> ce,
+                    # which is exactly ASAM's property, expressed in Frobenius rather
+                    # than elementwise geometry. u_vanilla stays unscaled -- the
+                    # projection coefficient is scale-invariant, so the correction is
+                    # unaffected either way, and leaving it raw keeps the two modes
+                    # comparable.
+                    scale = p.norm() / (u.norm() + 1e-12) if group["adaptive"] else 1.0
+                    e = (rho * scale * u).reshape(p.shape)
                     self.state[p]["e"] = e
                     p.add_(e)
             else:
@@ -158,24 +205,31 @@ class MuonSAM(torch.optim.Optimizer):
                 for p in group["params"]:
                     if p.grad is None: continue
                     u_s = self._ortho(p.grad)           # O(g_s)
-                    u = self.state[p]["u_vanilla"]
-                    coef = (u * u_s).sum() / (u.pow(2).sum() + 1e-12)   # <u,u_s>/||u||_F^2
-                    self.state[p]["u_v"] = u_s - coef * u               # orthogonal component
+                    u = self.state[p]["u_vanilla"]      # O(g)
+                    u_v = self._store_correction(u, u_s)
+                    self.state[p]["u_v"] = u_v
                     if self.momentum_mode == "pre_ns5":
                         # O(m) differs from O(g_s), so this costs one extra NS5 -- but only
                         # on the 1-in-k SAM steps.
                         d = self._ortho(self._muon_grad(p, group, p.grad))
                     else:
                         d = self._muon_dir(p, group, u_s)
+                    if self.correction_mode == "gsam":
+                        # GSAM's defining update applies the correction on the 2-pass step
+                        # itself; LookSAM's does not, because for LookSAM this step IS the
+                        # full SAM step it is amortizing.
+                        d = self._correct(d, u_v)
+                        if self.reorthogonalize: d = self._ortho(d)
                     self._apply_muon(p, group, d)
             else:
                 for p in group["params"]:
                     if p.grad is None: continue
                     g_s = p.grad
                     g = self.state[p]["g_vanilla"]
-                    coef = (g * g_s).sum() / (g.pow(2).sum() + 1e-12)
-                    self.state[p]["g_v"] = g_s - coef * g
-                    self._apply_adam(p, group, g_s)
+                    g_v = self._store_correction(g, g_s)
+                    self.state[p]["g_v"] = g_v
+                    upd = self._correct(g_s, g_v) if self.correction_mode == "gsam" else g_s
+                    self._apply_adam(p, group, upd)
 
     # ---------- intermediate step: 1-pass, reuse correction ----------
     @torch.no_grad()
@@ -187,9 +241,7 @@ class MuonSAM(torch.optim.Optimizer):
                     u_t = self._ortho(self._muon_grad(p, group, p.grad))
                     st  = self.state[p]
                     if "u_v" in st:                                     # reuse stored correction
-                        u_v = st["u_v"]
-                        ratio = u_t.norm() / (u_v.norm() + 1e-12)
-                        d = u_t + self.alpha * ratio * u_v
+                        d = self._correct(u_t, st["u_v"])
                         if self.reorthogonalize: d = self._ortho(d)     # D2: keep it orthogonal
                     else: d = u_t                                       # warmup: plain Muon
                     d = self._muon_dir(p, group, d)
@@ -200,9 +252,7 @@ class MuonSAM(torch.optim.Optimizer):
                     g_t = p.grad
                     st = self.state[p]
                     if "g_v" in st:
-                        g_v = st["g_v"]
-                        ratio = g_t.norm() / (g_v.norm() + 1e-12)
-                        g = g_t + self.alpha * ratio * g_v
+                        g = self._correct(g_t, st["g_v"])
                     else: g = g_t
                     self._apply_adam(p, group, g)
 
