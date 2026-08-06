@@ -25,7 +25,7 @@ class MuonSAM(torch.optim.Optimizer):
     
     `correction_mode` selects which published decomposition the stored correction follows:
       "looksam"  -- the part of O(g_s) orthogonal to O(g), added. Default; this is what
-                    every result recorded in CIFAR-10 was produced with.
+                    every reported CIFAR-10 result was produced with.
       "gsam"     -- the part of O(g) orthogonal to O(g_s), subtracted (2203.08065). Both
                     act inside span{O(g), O(g_s)}; see _store_correction().
 

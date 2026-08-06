@@ -44,12 +44,12 @@ def make_resnet18():
     return m
 
 def get_eval_loader(batch=128):
-    mean, std = (0.4914, 0.4822, 0.4465), (0.2470. 0.2435, 0.2616)
+    mean, std = (0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)
     tf = T.Compose([T.ToTensor(), T.Normalize(mean, std)])
     test = torchvision.datasets.CIFAR10("./data", train=False, download=True, transform=tf)
     return DataLoader(Subset(test, range(EVAL_BATCHES * batch)), batch, shuffle=False)
 
-def mean_loss(model,loader, criterion):
+def mean_loss(model, loader, criterion):
     model.eval()
     total, n = 0.0, 0
     with torch.no_grad():
@@ -71,8 +71,8 @@ def _is_normalizable(p):
 def adaptive_sharpness(model, loader, criterion, rho=RHO, steps=ASCENT_STEPS):
     """max over ||T_w^-1 e||  <= rho of L(w+e) - L(w), with T_w = diag(|w|).
 
-    Estimated by projected gradient ascent, which gives a lower bound on the max -- so it
-    is a fair comparison between optimizers only because every arm gets the same number
+    Estimated by projected gradient ascent, which gives a lower bound on the max -- so it 
+    is a fair comparison between optimizers only because every arm gets the same number 
     of ascent steps. Reported in loss units.
     """
     params = [p for p in model.parameters() if _is_normalizable(p)]
@@ -87,7 +87,7 @@ def adaptive_sharpness(model, loader, criterion, rho=RHO, steps=ASCENT_STEPS):
             x, y = x.to(DEVICE), y.to(DEVICE)
             (criterion(model(x), y) / len(loader)).backward()
         with torch.no_grad():
-            # One ASAM ascent step: e < -e + lr * T^2 g / ||T g||, then project back into
+            # One ASAM ascent step: e <- e + lr * T^2 g / ||T g||, then project back into
             # the T-ball. T^2 g is ASAM's ascent direction; the T-norm is what makes the
             # constraint scale-invariant.
             tg = [w.abs() * p.grad for w, p in zip(original, params)]
@@ -127,7 +127,7 @@ def filter_normalized_direction(model, generator=None):
     return direction
 
 def loss_profile(model, loader, criterion, direction, alphas=ALPHAS):
-    original = [p.detach().clone for p in model.parameters()]
+    original = [p.detach().clone() for p in model.parameters()]
     out = []
     for a in alphas:
         with torch.no_grad():
