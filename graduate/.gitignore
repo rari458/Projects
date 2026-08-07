@@ -4,7 +4,9 @@ papers/
 # anchored: ignore only the repo-root artifacts a local run (OUTDIR=".") drops.
 # results/ is tracked on purpose.
 /benchmark.png
+/sharpness.png
 /runlog.csv
 venv/
 __pycache__/
 *.py[cod]
+

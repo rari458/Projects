@@ -231,6 +231,12 @@ def main():
             torch.save(dict(kind=kind, seed=SEED, epoch=EPOCHS, test_acc=acc * 100,
                             state_dict=model.state_dict()), ckpt)
             print(f"  saved {ckpt}")
+        if DEVICE == "cuda":
+            # The optimizer-state ratios are exact and device-independent; this is the part
+            # that is not -- activations dominate, so the end-to-end cost of MuonSAM's
+            # extra state can only be read oof a real GPU run.
+            print(f"  peak GPU mem: {torch.cuda.max_memory_allocated() / 1024**2:.0f} MB")
+            torch.cuda.reset_peak_memory_stats()
 
     log.close()
     print(f"\nsaved {LOGFILE}")

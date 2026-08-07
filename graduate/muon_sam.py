@@ -181,9 +181,14 @@ class MuonSAM(torch.optim.Optimizer):
                     # unaffected either way, and leaving it raw keeps the two modes
                     # comparable.
                     scale = p.norm() / (u.norm() + 1e-12) if group["adaptive"] else 1.0
-                    e = (rho * scale * u).reshape(p.shape)
-                    self.state[p]["e"] = e
-                    p.add_(e)
+                    # e is a scalar multiple of u_vanilla, which is already in state:
+                    # storing both costs one extra copy of the whole model (4.00x -> 3.00x
+                    # of parameter bytes on ResNet-18) and buys nothing. Keep the scalar
+                    # and rebuild e at restore time -- identical arithmetic in identical
+                    # order, so the trajectory is unchanged bit for bit.
+                    coef = rho * scale
+                    self.state[p]["e_coef"] = coef
+                    p.add_((coef * u).reshape(p.shape))
             else:
                 gn = self._aux_grad_norm(group)
                 for p in group["params"]:
@@ -198,8 +203,17 @@ class MuonSAM(torch.optim.Optimizer):
         """Restore w; update with the SAM gradient; store the (slowly-varying) correction."""
         for group in self.param_groups:               # restore w first
             for p in group["params"]:
-                if "e" in self.state[p]:
-                    p.sub_(self.state[p]["e"])
+                st = self.state[p]
+                # pop, not read: a key left over from an earlier step would otherwise
+                # subtract a perturbation this step never applied, for any parameter that
+                # had a gradient then and none now.
+                coef = st.pop("e_coef", None)
+                if coef is not None:
+                    p.sub_((coef * st["u_vanilla"]).reshape(p.shape))
+                    continue
+                e = st.pop("e", None)
+                if e is not None:
+                    p.sub_(e)
         for group in self.param_groups:               # then update + store correction
             if group["use_muon"]:
                 for p in group["params"]:
