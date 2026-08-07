@@ -1,12 +1,33 @@
-"""Gate for the e_coef change: the edited muon_sam.py must move the weights exactly as the
-committed one did. Anything else means every reported CIFAR-10 number needs re-running."""
+"""Gate for any change to muon_sam.py: the working tree must move the weights exactly as 
+the reference revision does, or every reported CIFAR-10 number needs re-running.
+
+    python check_bitidentical.py [ref]      # ref defaults to HEAD
+
+Neither test_muon_sam.py nor preflight.py can see a broken SAM step. The former's only
+exactness assertion is the rho=0 reduction, which never enters that code; the latter only
+checks that the loss is finite and the weights moved. A misapplied edit that deleted the
+aux perturbation and stopped restoring w passed both.
+"""
+import os
+import subprocess
 import sys
+import tempfile
 import torch
 import torch.nn as nn
 
-REF_DIR = "/tmp/claude-1000/-home-anstk-Projects-graduate/1c039934-972c-42b1-8d10-af50dd94833b/scratchpad"
-sys.path.insert(0, ".")        # muon.py, muon_sam.py -- the edited ones
-sys.path.insert(0, REF_DIR)    # muon_sam_ref.py -- the committed one
+REF = sys.argv[1] if len(sys.argv) > 1 else "HEAD"
+# `<rev>:./path` resolves relative to the cwd, so this works from anywhere in the repo and
+# in any clone. The reference goes under a distinct module name so that `muon_sam` still
+# resolves to the working tree's copy.
+_ref_src = subprocess.check_output(["git", "show", f"{REF}:./muon_sam.py"])
+_ref_dir = tempfile.mkdtemp(prefix="muon_sam_ref_")
+with open(os.path.join(_ref_dir, "muon_sam_ref.py"), "wb") as f:
+    f.write(_ref_src)
+if _ref_src == open("muon_sam.py", "rb").read():
+    print(f"note: muon_sam.py is identical to {REF}, so this run proves nothing. "
+          f"Compare against the pre-change revision instead, e.g. {REF}~1.\n")
+sys.path.insert(0, ".")          # muon.py, muon_sam.py -- the working tree
+sys.path.insert(0, _ref_dir)     # muon_sam_ref.py -- the reference revision
 
 from muon_sam import MuonSAM
 from muon_sam_ref import MuonSAM as MuonSAMRef
