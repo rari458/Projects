@@ -22,6 +22,7 @@ Usage:
     python sharpness.py ckpt_muonsam_seed0.pt ckpt_muon_seed0.pt ...
 """
 import os
+import re
 import sys
 
 import torch
@@ -35,6 +36,11 @@ EVAL_BATCHES = int(os.environ.get("EVAL_BATCHES", 8))   # subset size; sharpness
 RHO = float(os.environ.get("SHARP_RHO", 0.5))           # ASAM's radius, in relative units
 ASCENT_STEPS = int(os.environ.get("ASCENT_STEPS", 5))
 ALPHAS = [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0]
+
+# Same convention as benchmark_cifar10.py: artifacts land in OUTDIR, not the cwd, because
+# on Kaggle only /kaggle/working is collected.
+OUTDIR = os.environ.get("OUTDIR", ".")
+os.makedirs(OUTDIR, exist_ok=True)
 
 def make_resnet18():
     """Must match benchmark_cifar10.py exactly or the checkpoint will not load."""
@@ -154,7 +160,21 @@ def analyze(path, loader, criterion):
     return dict(kind=ckpt.get("kind", os.path.basename(path)),
                 acc=ckpt.get("test_acc"), base=base, sharp=sharp, profile=profile)
 
-def maybe_plot(results):
+def plot_path(paths):
+    """Name the plot after the seed its checkpoints came from.
+
+    A fixed "sharpness.png" in the cwd caused a silent data loss once: the name collided
+    with a file tracked in the repo, so a clone dropped a stale copy at exactly the path
+    this function writes to, and a download issued after a crash returned the old plot
+    instead of failing. A per-seed name cannot be shadowed that way, and it also stops two
+    seeds analysed in one session from overwriting each other.
+    """
+    seeds = {m.group(1) for m in
+             (re.search(r"_seed(\d+)\.pt$", os.path.basename(p)) for p in paths) if m}
+    tag = f"_seed{seeds.pop()}" if len(seeds) == 1 else ""
+    return os.path.join(OUTDIR, f"sharpness{tag}.png")
+
+def maybe_plot(results, path):
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -169,14 +189,14 @@ def maybe_plot(results):
     ax.legend()
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
-    fig.savefig("sharpness.png", dpi=120)
-    print("saved sharpness.png")
+    fig.savefig(path, dpi=120)
+    print(f"saved {path}")
 
 def main(paths):
     criterion = nn.CrossEntropyLoss()
     loader = get_eval_loader()
     print(f"device={DEVICE} | eval on {EVAL_BATCHES} batches | rho={RHO} "
-          f"| {ASCENT_STEPS} ascent steps")
+          f"| {ASCENT_STEPS} ascent steps | outdir={OUTDIR}")
     results = [analyze(p, loader, criterion) for p in paths]
     results.sort(key=lambda r: r["sharp"])
     print(f"\n{'optimizer':<16}{'test_acc':>10}{'loss':>9}{'sharpness':>12}{'rise@a=1':>11}")
@@ -186,7 +206,7 @@ def main(paths):
         print(f"{r['kind']:<16}{acc:>10}{r['base']:>9.4f}{r['sharp']:>12.4f}{rise:>11.4f}")
     print("\nLower sharpness = flatter minimum. Compare against test_acc: the claim this "
           "file exists to test is that they move together.")
-    maybe_plot(results)
+    maybe_plot(results, plot_path(paths))
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

@@ -9,4 +9,4 @@ papers/
 venv/
 __pycache__/
 *.py[cod]
-
+ckpt_*.pt
