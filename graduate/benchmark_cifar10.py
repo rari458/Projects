@@ -43,6 +43,17 @@ TRAIN_SUBSET = 2000 if QUICK else None  # None = full 50k
 TEST_SUBSET  = 1000 if QUICK else None
 BATCH = 128
 SEED = 0
+# Per-optimizer learning rates, module-level so a notebook can sweep them the same way it
+# overrides KINDS / SEED / LOGFILE. build_optimizer used to hardcode these, which made the
+# LR the one config axis this harness could not vary -- and untuned baselines are the
+# largest standing objection to the reported MuonSAM-vs-Muon gap.
+LR_ADAMW = 1e-3        # adamw, all parameters
+LR_SAM = 0.05          # sam's inner SGD
+LR_MUON = 0.02         # Muon group (conv weights); every muon* / muonsam* variant
+LR_AUX = 1e-3          # aux Adam group (fc + BN + biases); held fixed during an LR sweep
+WEIGHT_DECAY = 5e-4
+RHO_MAX = 0.05         # MuonSAM's peak rho, Muon group; also the per-group rho default
+RHO_AUX = 0.01         # aux group's Euclidean rho
 # The six the reported CIFAR-10 results were produced with. build_optimizer also knows
 # muonsam_gsam / muonsam_asam / muonsam_nowarm; they are left out of the default run
 # because six kinds already cost ~7h on a T4. Select them by overriding B.KINDS.
@@ -77,17 +88,31 @@ def split_params(model):
         else: aux.append(p)
     return muon, aux
 
+def primary_lr(kind):
+    """The LR that identifies an arm in the runlog.
+
+    A sweep runs the same `kind` several times, so without this column three rows of the
+    CSV are indistinguishable and the sweep cannot be read back. The aux LR is deliberately
+    not recorded: it is held fixed, and recording a constant invites the reader to think it
+    was varied.
+    """
+    if kind == "adamw":
+        return LR_ADAMW
+    if kind == "sam":
+        return LR_SAM
+    return LR_MUON
+
 def build_optimizer(kind, model, total_steps):
     muon, aux = split_params(model)
     if kind == "adamw":
-        return torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=5e-4)
+        return torch.optim.AdamW(model.parameters(), lr=LR_ADAMW, weight_decay=WEIGHT_DECAY)
     if kind == "sam":
         return SAM(model.parameters(), torch.optim.SGD,
-                   rho=0.05, lr=0.05, momentum=0.9, weight_decay=5e-4)
+                   rho=0.05, lr=LR_SAM, momentum=0.9, weight_decay=WEIGHT_DECAY)
     if kind == "muon":
         groups = [
-            dict(params=muon, use_muon=True, lr=0.02, weight_decay=5e-4),
-            dict(params=aux, use_muon=False, lr=1e-3, weight_decay=5e-4)
+            dict(params=muon, use_muon=True, lr=LR_MUON, weight_decay=WEIGHT_DECAY),
+            dict(params=aux, use_muon=False, lr=LR_AUX, weight_decay=WEIGHT_DECAY)
         ]
         return SingleDeviceMuonWithAuxAdam(groups)
     if kind == "muon_nomom":
@@ -96,8 +121,8 @@ def build_optimizer(kind, model, total_steps):
         # run, so the SAM branch never fired and no LookSAM correction is ever stored --
         # with momentum_mode="none" that reduces to Muon with its momentum buffer disabled.
         groups = [
-            dict(params=muon, use_muon=True, lr=0.02, weight_decay=5e-4),
-            dict(params=aux, use_muon=False, lr=1e-3, weight_decay=5e-4)
+            dict(params=muon, use_muon=True, lr=LR_MUON, weight_decay=WEIGHT_DECAY),
+            dict(params=aux, use_muon=False, lr=LR_AUX, weight_decay=WEIGHT_DECAY)
         ]
         return MuonSAM(groups, total_steps=total_steps, rho_max=0.0, rho_warmup_frac=1.0,  momentum_mode="none")
 
@@ -107,7 +132,7 @@ def build_optimizer(kind, model, total_steps):
         # combination axes are config dimensions, not hardcoded strategies".
         mode = "none" if kind.endswith("_nomom") else "pre_ns5"
         adaptive = kind.endswith("_asam")     # ASAM scale-invariant perturbation, both groups
-        opts = dict(rho_max=0.05, rho_warmup_frac=0.3, sam_period=5, momentum_mode=mode)
+        opts = dict(rho_max=RHO_MAX, rho_warmup_frac=0.3, sam_period=5, momentum_mode=mode)
         if kind.endswith("_gsam"):
             opts["correction_mode"] = "gsam"  # 2203.08065 instead of LookSAM's projection
         if kind.endswith("_nowarm"):
@@ -117,8 +142,8 @@ def build_optimizer(kind, model, total_steps):
             # it is also doing the job the paper predicts.
             opts["rho_warmup_frac"] = 0.0
         groups = [
-            dict(params=muon, use_muon=True, lr=0.02, rho=0.05, weight_decay=5e-4, adaptive=adaptive),
-            dict(params=aux, use_muon=False, lr=1e-3, rho=0.01, weight_decay=5e-4, adaptive=adaptive)
+            dict(params=muon, use_muon=True, lr=LR_MUON, rho=RHO_MAX, weight_decay=WEIGHT_DECAY, adaptive=adaptive),
+            dict(params=aux, use_muon=False, lr=LR_AUX, rho=RHO_AUX, weight_decay=WEIGHT_DECAY, adaptive=adaptive)
         ]
         return MuonSAM(groups, total_steps=total_steps, **opts)
     raise ValueError(kind)
@@ -205,7 +230,7 @@ def main():
     criterion = nn.CrossEntropyLoss()
 
     log = open(LOGFILE, "w", newline="")
-    log.write("optimizer,epoch,train_loss,test_acc,time_s\n")
+    log.write("optimizer,epoch,train_loss,test_acc,time_s,lr\n")
 
     results = {}
     for kind in KINDS:
@@ -213,7 +238,8 @@ def main():
         train_g.manual_seed(SEED)        # identical batch order
         model = make_resnet18().to(DEVICE)
         opt = build_optimizer(kind, model, total_steps)
-        print(f"\n=== {kind} ===")
+        lr = primary_lr(kind)
+        print(f"\n=== {kind} (lr={lr}) ===")
         hist, t0 = [], time.time()
         for ep in range(1, EPOCHS + 1):
             tr = train_epoch(kind, model, opt, train_loader, criterion)
@@ -221,7 +247,7 @@ def main():
             elapsed = time.time() - t0
             hist.append((ep, tr, acc, elapsed))
             print(f"  epoch {ep}: train_loss={tr:.4f} test_acc={acc * 100:.2f}% time={elapsed:.1f}s")
-            log.write(f"{kind},{ep},{tr:.4f},{acc * 100:.2f},{elapsed:.1f}\n")
+            log.write(f"{kind},{ep},{tr:.4f},{acc * 100:.2f},{elapsed:.1f},{lr}\n")
             log.flush()
         results[kind] = hist
         if SAVE_CKPT:

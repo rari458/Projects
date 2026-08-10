@@ -58,6 +58,32 @@ def check_cfg(kind, opt):
         assert opt._rho_scale() > 0.0, "rho is still zero at step 1 -- no ablation here"
         assert opt.correction_mode == "looksam" and opt.momentum_mode == "pre_ns5"
 
+def check_lr_wiring():
+    """The LR/rho globals must actually reach the optimizer.
+
+    Same silent-failure shape as check_cfg: an override that does not take turns a
+    three-point sweep into the same run three times, each of which trains fine and writes
+    a plausible curve. Probe values are deliberately unlike any real setting, so a stale
+    hardcoded constant cannot coincide with one.
+    """
+    saved = (B.LR_ADAMW, B.LR_SAM, B.LR_MUON, B.LR_AUX, B.RHO_MAX)
+    B.LR_ADAMW, B.LR_SAM, B.LR_MUON, B.LR_AUX, B.RHO_MAX = 7e-4, 0.077, 0.037, 3e-4, 0.037
+    try:
+        model = Tiny()
+        assert B.build_optimizer("adamw", model, 6).param_groups[0]["lr"] == 7e-4
+        assert B.build_optimizer("sam", model, 6).param_groups[0]["lr"] == 0.077
+        for kind in ("muon", "muon_nomom", "muonsam", "muonsam_gsam",
+                     "muonsam_asam", "muonsam_nowarm", "muonsam_nomom"):
+            lrs = [g["lr"] for g in B.build_optimizer(kind, model, 6).param_groups]
+            assert lrs == [0.037, 3e-4], (kind, lrs)
+        assert B.build_optimizer("muonsam", model, 6).rho_max == 0.037
+        # muon_nomom pins rho_max=0.0 on purpose and must not follow the global.
+        assert B.build_optimizer("muon_nomom", model, 6).rho_max == 0.0
+        assert B.primary_lr("muonsam") == 0.037 and B.primary_lr("adamw") == 7e-4
+    finally:
+        B.LR_ADAMW, B.LR_SAM, B.LR_MUON, B.LR_AUX, B.RHO_MAX = saved
+    print("  LR/rho wiring OK")
+
 
 def main():
     criterion = nn.CrossEntropyLoss()
@@ -71,6 +97,7 @@ def main():
     print(f"KINDS         = {B.KINDS}")
     print(f"CLOSURE_KINDS = {B.CLOSURE_KINDS}\n")
     print(f"checking      = {all_kinds}\n")
+    check_lr_wiring()
     failed = 0
     for kind in all_kinds:
         torch.manual_seed(0)
