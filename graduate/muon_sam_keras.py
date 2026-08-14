@@ -15,7 +15,7 @@ owns them and calls these three phases explicitly:
 
 WHICH phase runs is decided in Python, by should_sam(), and that is not a style choice.
 Keras traces train_step into a tf.function (backend/tensorflow/trainer.py), so a
-`t % sam_period == 0` test written inside the traces region is evaluated once and frozen
+`t % sam_period == 0` test written inside the traced region is evaluated once and frozen
 -- LookSAM's periodicity would silently disappear while training still looked healthy.
 Keeping the branch in Python and letting the caller compile the two paths separately is
 what keeps it both correct and fast.
@@ -56,16 +56,27 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
                      schedule follows this optimizer's own counter, not the LR scheduler.
         momentum_mode: "pre_ns5" | "post_ns5" | "none", the config axis from muon_sam.py.
                        With rho=0, "pre_ns5" reduces to plain Muon exactly.
+        correction_mode: "looksam" | "gsam". Which published decomposition the stored
+                        correction follows. Both act inside span{O(g), O(g_s)} and differ
+                        only in projection target and sign -- see _store_correction().
+        adaptive_muon / adaptive_aux: ASAM (kwon21b). PyTorch's per-group `adaptive`
+                        splits in two here for the same reason rho did. The aux flag is
+                        ASAM as published (elementwise |w|); the Muon flag scales the
+                        spectral perturbation by ||W||_F. benchmark_cifar10.py's
+                        muonsam_asam sets both at once.
     """
 
     def __init__(self, muon_variables, total_steps,
                  learning_rate=0.02, aux_learning_rate=1e-3,
                  rho_muon=0.05, rho_aux=0.01, rho_warmup_frac=0.0,
                  sam_period=5, ns_steps=5, looksam_alpha=0.7, reorthogonalize=True,
-                 momentum_mode="pre_ns5", momentum=0.95, nesterov=True, adaptive=False,
+                 momentum_mode="pre_ns5", correction_mode="looksam", 
+                 momentum=0.95, nesterov=True, 
+                 adaptive_muon=False, adaptive_aux = False,
                  weight_decay=0.0, adam_betas=(0.9, 0.95), adam_eps=1e-10,
                  name="keras_muon_sam", **kwargs):
         assert momentum_mode in ("none", "pre_ns5", "post_ns5"), momentum_mode
+        assert correction_mode in ("looksam", "gsam"), correction_mode
         # Decoupled weight decay is applied by hand below, exactly as muon_sam.py does it,
         # so the base class must not also apply its own.
         super().__init__(learning_rate=learning_rate, weight_decay=None, name=name, **kwargs)
@@ -80,9 +91,11 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
         self.alpha = looksam_alpha
         self.reorthogonalize = reorthogonalize
         self.momentum_mode = momentum_mode
+        self.correction_mode = correction_mode
         self.momentum = momentum
         self.nesterov = nesterov
-        self.adaptive = adaptive
+        self.adaptive_muon = adaptive_muon
+        self.adaptive_aux = adaptive_aux
         self.muon_weight_decay = weight_decay
         self.adam_betas = adam_betas
         self.adam_eps = adam_eps
@@ -98,7 +111,7 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
         self._step = self.add_variable(shape=(), initializer="zeros", dtype="float32",
                                        name="muonsam_step")
         # One slot list per role; unused entries stay None instead of allocating a
-        # zero tensor the size of every variable several time over.
+        # zero tensor the size of every variable several times over.
         self._eps = []                       # the SAM perturbation, undone in phase 2
         self._mom, self._dir, self._uv, self._u0 = [], [], [], []
         self._m, self._v, self._gv, self._g0 = [], [], [], []
@@ -148,7 +161,7 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
 
     def _rho_scale_py(self):
         """The same value from the Python counter, for branch selection only."""
-        frac =self._t / max(1, self.total_steps)
+        frac = self._t / max(1, self.total_steps)
         if frac < self.rho_warmup_frac:
             return 0.0
         span = 1.0 - self.rho_warmup_frac
@@ -165,7 +178,7 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
 
     @property
     def uv_ready(self):
-        """Whether a LookSAM correction has ever been stored. Pass this to a traces
+        """Whether a LookSAM correction has ever been stored. Pass this to a traced
         1-pass step as a Python argument so it traces once per value, rather than
         reading it inside the graph where it would be frozen at the first trace."""
         return self._uv_ready
@@ -194,6 +207,32 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
         buf = self._dir[i]
         self.assign(buf, buf + (1 - self.momentum) * (d - buf))
         return self._ortho(buf) if self.reorthogonalize else buf
+    
+    def _correct(self, base, corr):
+        """Blend a stored correction into a base direction, in whichever geometry `base`
+        lives in. The two modes differ only in sign, because they store opposite
+        projections -- see _store_correction()."""
+        ratio = ops.norm(base) / (ops.norm(corr) + 1e-12)
+        sign = -1.0 if self.correction_mode == "gsam" else 1.0
+        return base + sign * self.alpha * ratio * corr
+    
+    def _store_correction(self, clean, perturbed):
+        """The slowly-varying vector that intermediate steps reuse.
+
+        LookSAM (2203.02714) keeps the part of the PERTURBED gradient orthogonal to the
+        clean one, and adds it: it points along the flat direction SAM discovered.
+        GSAM (2203.08065) keeps the part of the CLEAN gradient orthogonal to the perturbed
+        one, and descends the surrogate gap by subtracting it. Both live in the same
+        2D plane span{clean, perturbed}; only the projection target and the sign differ.
+
+        Note this is a periodic variant of GSAM -- the published version re-derives the
+        decomposition every step. The sam_period amortization is ours.
+        """
+        if self.correction_mode == "gsam":
+            coef = ops.sum(perturbed * clean) / (ops.sum(ops.square(perturbed)) + 1e-12)
+            return clean - coef * perturbed
+        coef = ops.sum(clean * perturbed) / (ops.sum(ops.square(clean)) + 1e-12)
+        return perturbed - coef * clean
 
     def _apply_muon(self, v, i, d2):
         lr = ops.cast(self.learning_rate, v.dtype)
@@ -216,7 +255,7 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
 
     def _aux_grad_norm(self, grads, variables):
         parts = [
-            ops.norm((ops.abs(v) if self.adaptive else 1.0) * g)
+            ops.norm((ops.abs(v) if self.adaptive_aux else 1.0) * g)
             for g, v, m in zip(grads, variables, self._is_muon) if not m
         ]
         return ops.norm(ops.stack(parts))
@@ -226,7 +265,7 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
         """Perturb w -> w+e along the clean gradient and stash what phase 2 needs.
 
         The perturbation follows the *current* gradient, not the momentum average, and
-        this exploratory pass deliverately leaves every momrntum buffer untouched.
+        this exploratory pass deliberately leaves every momentum buffer untouched.
         """
         self._ensure_built(variables)
         self.assign_add(self._step, 1.0)
@@ -237,10 +276,25 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
             if self._is_muon[i]:
                 u = self._ortho(to_muon_matrix(g))
                 self.assign(self._u0[i], u)
-                e = from_muon_matrix(ops.cast(rho_scale, v.dtype) * self.rho_muon * u, v.shape)
+                # ASAM (kwon21b) in Muon's geometry: without this the perturbation has a
+                # fixed size regardless of how large the layer's weights are. Scaling by
+                # ||W||_F makes W -> cW give e -> ce, which is exactly ASAM's property,
+                # expressed in Frobenius rather than elementwise geometry. u_vanilla stays
+                # unscaled -- the projection coefficient is scale-invariant, so leaving it
+                # raw keeps the two modes comparable. Both norms are Frobenius and layout-
+                # invariant, so v's Keras shape and u's Muon-matrix shape are comparable.
+                scale = 1.0
+                if self.adaptive_muon:
+                    # keras.ops.norm() cannot take v: the TF backend implements only vector
+                    # and matrix norms, and v is a 4D conv kernel. PyTorch's p.norm()
+                    # flattens first, so sum-of-square is both the faithful port and the
+                    # only form that works at any rank. u is already the 2D Muon matrix.
+                    scale = ops.sqrt(ops.sum(ops.square(v))) / (ops.norm(u) + 1e-12)
+                coef = ops.cast(rho_scale, v.dtype) * self.rho_muon * scale
+                e = from_muon_matrix(coef * u, v.shape)
             else:
                 self.assign(self._g0[i], g)
-                scale = ops.square(v) if self.adaptive else 1.0
+                scale = ops.square(v) if self.adaptive_aux else 1.0
                 e = scale * g * (ops.cast(rho_scale, v.dtype) * self.rho_aux / (ops.cast(gn, v.dtype) + 1e-12))
             self.assign(self._eps[i], e)
             self.assign_add(v, e)
@@ -253,29 +307,36 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
         for i, (g, v) in enumerate(zip(grads, variables)):
             g = ops.cast(g, v.dtype)
             if self._is_muon[i]:
-                u_s = self._ortho(to_muon_matrix(g))
-                u = self._u0[i]
-                coef = ops.sum(u * u_s) / (ops.sum(ops.square(u)) + 1e-12)
-                self.assign(self._uv[i], u_s - coef * u)      # orthogonal component
+                u_s = self._ortho(to_muon_matrix(g))            # O(g_s)
+                u_v = self._store_correction(self._u0[i], u_s)  # O(g) is still in _u0
+                self.assign(self._uv[i], u_v)
                 if self.momentum_mode == "pre_ns5":
                     # O(m) differs from O(g_s), so this costs one extra NS5 -- but only
                     # on the 1-in-k SAM steps.
                     d = self._ortho(to_muon_matrix(self._muon_grad(i, g)))
                 else:
                     d = self._muon_dir(i, u_s)
+                if self.correction_mode == "gsam":
+                    # GSAM's defining update applies the correction on the 2-pass step
+                    # itself; LookSAM's does not, because for LookSAM this step IS the
+                    # full SAM step it is amortizing. Use the local u_v rather than
+                    # re-reading self._uv[i], so this does not depend on assign ordering.
+                    d = self._correct(d, u_v)
+                    if self.reorthogonalize:
+                        d = self._ortho(d)
                 self._apply_muon(v, i, d)
             else:
-                g0 = self._g0[i]
-                coef = ops.sum(g0 * g) / (ops.sum(ops.square(g0)) + 1e-12)
-                self.assign(self._gv[i], g - coef * g0)
-                self._apply_adam(v, i, g)
+                g_v = self._store_correction(self._g0[i], g)
+                self.assign(self._gv[i], g_v)
+                upd = self._correct(g, g_v) if self.correction_mode == "gsam" else g
+                self._apply_adam(v, i, upd)
         self._uv_ready = True
 
     # ---------- 1-pass step ----------
     def looksam_update(self, grads, variables, use_correction=None):
         """Reuse the stored correction instead of paying for a second pass.
 
-        use correction is a Python bool on purpose: passed as an argument to a traced
+        use_correction is a Python bool on purpose: passed as an argument to a traced
         step function it costs one extra trace, whereas reading self._uv_ready inside
         the graph would freeze it at whatever it was during the first trace.
         """
@@ -288,19 +349,15 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
             if self._is_muon[i]:
                 u_t = self._ortho(to_muon_matrix(self._muon_grad(i, g)))
                 if use_correction:
-                    u_v = self._uv[i]
-                    ratio = ops.norm(u_t) / (ops.norm(u_v) + 1e-12)
-                    d = u_t + self.alpha * ratio * u_v
+                    d = self._correct(u_t, self._uv[i])
                     if self.reorthogonalize:
-                        d = self._ortho(d)
+                        d = self._ortho(d)      # D2: keep it orthogonal
                 else:
-                    d = u_t
+                    d = u_t                     # warmup: plain Muon
                 self._apply_muon(v, i, self._muon_dir(i, d))
             else:
                 if use_correction:
-                    g_v = self._gv[i]
-                    ratio = ops.norm(g) / (ops.norm(g_v) + 1e-12)
-                    g = g + self.alpha * ratio * g_v
+                    g = self._correct(g, self._gv[i])
                 self._apply_adam(v, i, g)
 
     def get_config(self):
@@ -311,7 +368,9 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
             rho_warmup_frac=self.rho_warmup_frac, sam_period=self.sam_period,
             ns_steps=self.ns_steps, looksam_alpha=self.alpha,
             reorthogonalize=self.reorthogonalize, momentum_mode=self.momentum_mode,
-            momentum=self.momentum, nesterov=self.nesterov, adaptive=self.adaptive,
+            correction_mode=self.correction_mode,
+            momentum=self.momentum, nesterov=self.nesterov,
+            adaptive_muon=self.adaptive_muon, adaptive_aux=self.adaptive_aux,
             weight_decay=self.muon_weight_decay, adam_betas=self.adam_betas, adam_eps=self.adam_eps
         ))
         return config

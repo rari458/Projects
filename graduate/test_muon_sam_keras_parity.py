@@ -2,11 +2,11 @@
 
 same shape as test_muon_keras_parity.py -- one model built twice, PyTorch's weights
 copied into Keras, identical batches, every weight compared -- but run long enough that
-several 2-pass SAM steps fire and the stored LoosSAM correction is actually reused.
+several 2-pass SAM steps fire and the stored LookSAM correction is actually reused.
 
 Checks, in order:
   1. all three momentum_mode values against the PyTorch reference;
-  2. the guradrail from test_muon_sam.py: with rho held at 0, momentum_mode="pre_ns5"
+  2. the guardrail from test_muon_sam.py: with rho held at 0, momentum_mode="pre_ns5"
      must reduce to plain KerasMuon. That is the property the whole 2x2 ablation rests
      on -- if it breaks, "MuonSAM beats Muon" stops being a controlled comparison.
 
@@ -33,7 +33,7 @@ from muon_keras import KerasMuon, split_variables
 from muon_sam_keras import KerasMuonSAM
 
 ATOL = 1e-4
-STEPS=12
+STEPS = 12
 SAM_PERIOD = 3
 LR_MUON, LR_AUX, WD = 0.02, 1e-3, 5e-4
 RHO_MUON, RHO_AUX = 0.05, 0.01
@@ -99,7 +99,7 @@ def compare(tm, km, label):
         if d > ATOL:
             fails.append((name, d))
     status = "OK  " if not fails else "FAIL"
-    print(f"  {status} {label:34} worst {worst:.2e}" + (f"  {fails}" if fails else ""))
+    print(f"  {status} {label:46} worst {worst:.2e}" + (f"  {fails}" if fails else ""))
     return not fails
 
 def batches(n):
@@ -110,14 +110,14 @@ def batches(n):
             rng.integers(0, 10, 16).astype(np.int64)
         )
 
-def run_torch(mode, rho_warmup_frac):
+def run_torch(mode, rho_warmup_frac, correction_mode="looksam", adaptive=False):
     tm = fresh_torch_net()
     muon = [p for n, p in tm.named_parameters() if p.ndim >= 2 and "fc" not in n]
     aux = [p for n, p in tm.named_parameters() if not (p.ndim >= 2 and "fc" not in n)]
-    opt = MuonSAM([dict(params=muon, use_muon=True, lr=LR_MUON, rho=RHO_MUON, weight_decay=WD),
-                   dict(params=aux, use_muon=False, lr=LR_AUX, rho=RHO_AUX, weight_decay=WD)],
+    opt = MuonSAM([dict(params=muon, use_muon=True, lr=LR_MUON, rho=RHO_MUON, weight_decay=WD, adaptive=adaptive),
+                   dict(params=aux, use_muon=False, lr=LR_AUX, rho=RHO_AUX, weight_decay=WD, adaptive=adaptive)],
                    total_steps=STEPS, rho_max=RHO_MUON, rho_warmup_frac=rho_warmup_frac,
-                   sam_period=SAM_PERIOD, momentum_mode=mode)
+                   sam_period=SAM_PERIOD, momentum_mode=mode, correction_mode=correction_mode)
     crit = nn.CrossEntropyLoss()
     sam_steps = 0
     for xb, yb in batches(STEPS):
@@ -153,17 +153,23 @@ def run_keras(km, opt):
         else:
             opt.looksam_update(grads, tv)
 
-def check_mode(mode, rho_warmup_frac=0.0):
-    tm, sam_steps = run_torch(mode, rho_warmup_frac)
+def check_mode(mode ,rho_warmup_frac=0.0, correction_mode="looksam", adaptive=False):
+    tm, sam_steps = run_torch(mode, rho_warmup_frac, correction_mode, adaptive)
     km = build_keras_net()
     copy_torch_to_keras(fresh_torch_net(), km)   # tm's starting weights, not its final one
     k_muon, _ = split_variables(km)
-    opt = KerasMuonSAM(k_muon, total_steps=STEPS, learning_rate=LR_MUON,
-                       aux_learning_rate=LR_AUX, rho_muon=RHO_MUON, rho_aux=RHO_AUX,
-                       rho_warmup_frac=rho_warmup_frac, sam_period=SAM_PERIOD,
-                       momentum_mode=mode, weight_decay=WD)
+    opt = KerasMuonSAM(
+        k_muon, total_steps=STEPS, learning_rate=LR_MUON,
+        aux_learning_rate=LR_AUX, rho_muon=RHO_MUON, rho_aux=RHO_AUX,
+        rho_warmup_frac=rho_warmup_frac, sam_period=SAM_PERIOD,
+        momentum_mode=mode, correction_mode=correction_mode,
+        adaptive_muon=adaptive, adaptive_aux=adaptive, weight_decay=WD
+    )
     run_keras(km, opt)
-    return compare(tm, km, f"momentum_mode={mode!r} ({sam_steps} SAM steps)")
+    axes = ", ".join(
+        [f"momentum={mode}", f"correction={correction_mode}"] + (["adaptive"] if adaptive else [])
+    )
+    return compare(tm, km, f"{axes} ({sam_steps} SAM)")
 
 def check_rho_off_reduces_to_muon():
     """MuonSAM with rho pinned to 0 must be plain Muon -- muon_sam.py's core invariant."""
@@ -197,7 +203,18 @@ def check_rho_off_reduces_to_muon():
 
 def main():
     print(f"KerasMuonSAM vs MuonSAM  |  {STEPS} steps, sam_period={SAM_PERIOD}, atol {ATOL:.0e}")
-    ok = all([check_mode("pre_ns5"), check_mode("post_ns5"), check_mode("none"), check_rho_off_reduces_to_muon()])
+    ok = all([
+        check_mode("pre_ns5"),
+        check_mode("post_ns5"),
+        check_mode("none"),
+        # The two axes muon_sam.py gained on 2026-08-07. Neither is reachable from the
+        # three runs above: gsam changes both what _store_correction keeps and whether the
+        # 2-pass step applies it, and adaptive changes the perturbation itself. adaptive
+        # goes on both groups at once, as benchmark_cifar10.py's muonsam_asam sets it.
+        check_mode("pre_ns5", correction_mode="gsam"),
+        check_mode("pre_ns5", adaptive=True),
+        check_rho_off_reduces_to_muon(),
+    ])
     print("\nPARITY OK" if ok else "\nFAILED")
     return 0 if ok else 1
 
