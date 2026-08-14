@@ -146,7 +146,7 @@ class KerasMuon(keras.optimizers.Optimizer):
     def get_config(self):
         config = super().get_config()
         config.update(dict(aux_learning_rate=self.aux_learning_rate,
-                           momentum=self.momentum, nesterov=self.neesterov,
+                           momentum=self.momentum, nesterov=self.nesterov,
                            weight_decay=self.muon_weight_decay, ns_steps=self.ns_steps,
                            adam_betas=self.adam_betas, adam_eps=self.adam_eps))
         return config
