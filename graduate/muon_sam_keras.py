@@ -110,15 +110,20 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
         self._is_muon = [id(v) in self._muon_ids for v in var_list]
         self._step = self.add_variable(shape=(), initializer="zeros", dtype="float32",
                                        name="muonsam_step")
+        # The SAM perturbation, undone in phase 2. The Muon group keeps only the scalar
+        # coefficient: there e is a scalar multiple of u_vanilla, which _u0 already holds,
+        # so storing both costs one extra copy of the whole model and buys nothing.
+        # The aux group keeps e itself -- a few hundred kB on ResNet-18.
         # One slot list per role; unused entries stay None instead of allocating a
         # zero tensor the size of every variable several times over.
-        self._eps = []                       # the SAM perturbation, undone in phase 2
+        self._eps, self._ecoef = [], []
         self._mom, self._dir, self._uv, self._u0 = [], [], [], []
         self._m, self._v, self._gv, self._g0 = [], [], [], []
         for i, v in enumerate(var_list):
-            self._eps.append(self.add_variable_from_reference(v, "sam_eps"))
             if self._is_muon[i]:
                 mshape = muon_matrix_shape(v.shape)
+                self._eps.append(None)
+                self._ecoef.append(self.add_variable(shape=(), dtype=v.dtype, name=f"sam_e_coef_{i}"))
                 self._mom.append(self.add_variable_from_reference(v, "momentum_buffer")
                                  if self.momentum_mode == "pre_ns5" else None)
                 self._dir.append(self.add_variable(shape=mshape, dtype=v.dtype, name=f"dir_buffer_{i}")
@@ -130,6 +135,8 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
                 self._gv.append(None)
                 self._g0.append(None)
             else:
+                self._eps.append(self.add_variable_from_reference(v, "sam_eps"))
+                self._ecoef.append(None)
                 self._mom.append(None)
                 self._dir.append(None)
                 self._uv.append(None)
@@ -291,19 +298,26 @@ class KerasMuonSAM(keras.optimizers.Optimizer):
                     # only form that works at any rank. u is already the 2D Muon matrix.
                     scale = ops.sqrt(ops.sum(ops.square(v))) / (ops.norm(u) + 1e-12)
                 coef = ops.cast(rho_scale, v.dtype) * self.rho_muon * scale
+                self.assign(self._ecoef[i], coef)
                 e = from_muon_matrix(coef * u, v.shape)
             else:
                 self.assign(self._g0[i], g)
                 scale = ops.square(v) if self.adaptive_aux else 1.0
                 e = scale * g * (ops.cast(rho_scale, v.dtype) * self.rho_aux / (ops.cast(gn, v.dtype) + 1e-12))
-            self.assign(self._eps[i], e)
+                self.assign(self._eps[i], e)
             self.assign_add(v, e)
 
     # ---------- phase 2 of a 2-pass step ----------
     def sam_second_step(self, grads, variables):
         """Restore w, update with the perturbed gradient, refresh the LookSAM correction."""
         for i, v in enumerate(variables):
-            self.assign_sub(v, self._eps[i])
+            if self._is_muon[i]:
+                # Rebuild e from the scalar and _u0 -- identical arithmetic in identical
+                # order to phase 1, so the trajectory is unchanged bit for bit. _u0 still
+                # hold O(g): nothing between the two phases writes it.
+                self.assign_sub(v, from_muon_matrix(self._ecoef[i] * self._u0[i], v.shape))
+            else:
+                self.assign_sub(v, self._eps[i])
         for i, (g, v) in enumerate(zip(grads, variables)):
             g = ops.cast(g, v.dtype)
             if self._is_muon[i]:

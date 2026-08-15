@@ -126,7 +126,7 @@ class KerasMuon(keras.optimizers.Optimizer):
         self.assign_sub(variable, lr * from_muon_matrix(o, variable.shape))
 
     def _adam_step(self, g, variable, i):
-        """adam_update() from muon.py -- note the bias correction divedes, it does not
+        """adam_update() from muon.py -- note the bias correction divides, it does not
         use the fused sqrt form, so it must be written the same way to stay in parity."""
         b1, b2 = self.adam_betas
         m, v = self._exp_avgs[i], self._exp_avg_sqs[i]
