@@ -26,7 +26,6 @@ class Tiny(nn.Module):
     def forward(self, x):
         return self.fc(torch.relu(self.bn(self.conv(x))).flatten(1))
 
-
 def check_cfg(kind, opt):
     """What each kind must actually be, beyond "it ran without raising"."""
     if kind == "muon_nomom":
@@ -57,6 +56,20 @@ def check_cfg(kind, opt):
         opt._t = 1
         assert opt._rho_scale() > 0.0, "rho is still zero at step 1 -- no ablation here"
         assert opt.correction_mode == "looksam" and opt.momentum_mode == "pre_ns5"
+ 
+def check_dataset():
+    """DATASET is read at import time, so a notebook that sets it after importing
+    benchmark_cifar10 silently gets cifar10 and trains a perfectly healthy run of the
+    wrong experiment. Assert the three facts that must move together actually did.
+    """
+    spec = B.DATASETS[B.DATASET]
+    head = B.make_resnet18().fc.out_features
+    assert head == spec["classes"], f"head is {head}, {B.DATASET} needs {spec['classes']}"
+    assert spec["cls"].__name__.lower() == B.DATASET, f"DATASETS[{B.DATASET!r}] points at {spec['cls'].__name__}"
+    print(
+        f"dataset       = {B.DATASET}: {spec['cls'].__name__}, {spec['classes']} classes, "
+        f"mean={spec['mean']}\n"
+    )
 
 def check_lr_wiring():
     """The LR/rho globals must actually reach the optimizer.
@@ -97,6 +110,7 @@ def main():
     print(f"KINDS         = {B.KINDS}")
     print(f"CLOSURE_KINDS = {B.CLOSURE_KINDS}\n")
     print(f"checking      = {all_kinds}\n")
+    check_dataset()
     check_lr_wiring()
     failed = 0
     for kind in all_kinds:

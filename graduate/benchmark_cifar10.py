@@ -1,4 +1,4 @@
-"""CIFAR-10 benchmark: AdamW vs SAM vs Muon vs MuonSAM on a CIFAR-adapted ResNet-18.
+"""CIFAR-10/100 benchmark: AdamW vs SAM vs Muon vs MuonSAM on a CIFAR-adapted ResNet-18.
 
   Measures two things the proposal cares about:
     - convergence speed: train loss per epoch AND wall-clock time
@@ -14,7 +14,7 @@
        update twice on SAM steps (the disable_running_stats refinement is omitted
        for simplicity; it affects SAM and MuonSAM equally, so the comparison stays
        internally consistent).
-    3. CPU auto-selects a small QUICK config. Real CIFAR-10 numbers need a GPU run
+    3. CPU auto-selects a small QUICK config. Real CIFAR-10/100 numbers need a GPU run
        (set QUICK=False).
 """
 import time
@@ -43,6 +43,24 @@ TRAIN_SUBSET = 2000 if QUICK else None  # None = full 50k
 TEST_SUBSET  = 1000 if QUICK else None
 BATCH = 128
 SEED = 0
+# The dataset is a config axis like KINDS and the LRs. The three facts that must move
+# together -- the torchvision class, the head width, and the normalization stats -- are
+# bound in one record on purpose: picking CIFAR-100 with CIFAR-10's statistics trains
+# normally and only costs accuracy, which is the silent-config failure preflight.py
+# exists for. A record no one can half-set is a cheaper guard than a check.
+DATASETS = {
+    "cifar10": dict(
+        cls=torchvision.datasets.CIFAR10, classes=10,
+        mean=(0.4914, 0.4822, 0.4465), std=(0.2470, 0.2435, 0.2616)
+    ),
+    "cifar100": dict(
+        cls=torchvision.datasets.CIFAR100, classes=100,
+        mean=(0.5071, 0.4865, 0.4409), std=(0.2673, 0.2564, 0.2762)
+    ),
+}
+DATASET = os.environ.get("DATASET", "cifar10")
+if DATASET not in DATASETS:
+    raise ValueError(f"DATASET={DATASET!r}, expected one of {sorted(DATASETS)}")
 # Per-optimizer learning rates, module-level so a notebook can sweep them the same way it
 # overrides KINDS / SEED / LOGFILE. build_optimizer used to hardcode these, which made the
 # LR the one config axis this harness could not vary -- and untuned baselines are the
@@ -74,7 +92,7 @@ LOGFILE = os.path.join(OUTDIR, "runlog.csv")
 
 def make_resnet18():
     """torchvision ResNet-18 adapted for 32x32 CIFAR (3x3 stem, no maxpool)."""
-    m = torchvision.models.resnet18(num_classes=10)
+    m = torchvision.models.resnet18(num_classes=DATASETS[DATASET]["classes"])
     m.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
     m.maxpool = nn.Identity()
     return m
@@ -186,12 +204,14 @@ def evaluate(model, loader):
     return correct / n
 
 def get_loaders(train_g):
-    mean, std = (0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)
-    train_tf = T.Compose([T.RandomCrop(32, padding=4), T.RandomHorizontalFlip(),
-                          T.ToTensor(), T.Normalize(mean, std)])
-    test_tf = T.Compose([T.ToTensor(), T.Normalize(mean, std)])
-    train = torchvision.datasets.CIFAR10("./data", train=True, download=True, transform=train_tf)
-    test = torchvision.datasets.CIFAR10("./data", train=False, download=True, transform=test_tf)
+    spec = DATASETS[DATASET]
+    train_tf = T.Compose([
+        T.RandomCrop(32, padding=4), T.RandomHorizontalFlip(),
+        T.ToTensor(), T.Normalize(spec["mean"], spec["std"])
+    ])
+    test_tf = T.Compose([T.ToTensor(), T.Normalize(spec["mean"], spec["std"])])
+    train = spec["cls"]("./data", train=True, download=True, transform=train_tf)
+    test = spec["cls"]("./data", train=False, download=True, transform=test_tf)
     if TRAIN_SUBSET: train = Subset(train, range(TRAIN_SUBSET))
     if TEST_SUBSET: test = Subset(test, range(TEST_SUBSET))
     train_loader = DataLoader(train, BATCH, shuffle=True, generator=train_g, num_workers=2)
@@ -226,10 +246,25 @@ def main():
           f"| train_subset={TRAIN_SUBSET} | test_subset={TEST_SUBSET}")
     train_g = torch.Generator().manual_seed(SEED)
     train_loader, test_loader = get_loaders(train_g)
+    # preflight can check the DATASETS record, but not that get_loaders actually read it:
+    # a stale second definition of get_loaders shadows the new one and trains a healthy,
+    # plausible, wrong experiment. The loader object is where the choice becomes real, so
+    # assert on that.
+    base = train_loader.dataset
+    base = base.dataset if isinstance(base, Subset) else base
+    assert type(base) is DATASETS[DATASET]["cls"], f"DATASET={DATASET} but the loader holds {type(base).__name__}"
     total_steps = len(train_loader) * EPOCHS
     criterion = nn.CrossEntropyLoss()
 
     log = open(LOGFILE, "w", newline="")
+    # analyze.py:47 keeps '#' lines as notes and prints them, so provenance rides with the
+    # numbers instead of living in a filename someone has to trust. The column layout is
+    # unchanged -- benchmark_tf.py writes the same six.
+    log.write(
+        f"# dataset={DATASET} epochs={EPOCHS} seed={SEED} batch={BATCH} "
+        f"wd={WEIGHT_DECAY} rho_max={RHO_MAX} rho_aux={RHO_AUX} "
+        f"torch={torch.__version__}\n"
+    )
     log.write("optimizer,epoch,train_loss,test_acc,time_s,lr\n")
 
     results = {}

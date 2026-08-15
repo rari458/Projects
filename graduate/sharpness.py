@@ -29,6 +29,7 @@ import torch
 import torch.nn as nn
 import torchvision
 import torchvision.transforms as T
+import benchmark_cifar10 as B
 from torch.utils.data import DataLoader, Subset
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -44,15 +45,15 @@ os.makedirs(OUTDIR, exist_ok=True)
 
 def make_resnet18():
     """Must match benchmark_cifar10.py exactly or the checkpoint will not load."""
-    m = torchvision.models.resnet18(num_classes=10)
+    m = torchvision.models.resnet18(num_classes=B.DATASETS[B.DATASET]["classes"])
     m.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
     m.maxpool = nn.Identity()
     return m
 
 def get_eval_loader(batch=128):
-    mean, std = (0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)
-    tf = T.Compose([T.ToTensor(), T.Normalize(mean, std)])
-    test = torchvision.datasets.CIFAR10("./data", train=False, download=True, transform=tf)
+    spec = B.DATASETS[B.DATASET]
+    tf = T.Compose([T.ToTensor(), T.Normalize(spec["mean"], spec["std"])])
+    test = spec["cls"]("./data", train=False, download=True, transform=tf)
     return DataLoader(Subset(test, range(EVAL_BATCHES * batch)), batch, shuffle=False)
 
 def mean_loss(model, loader, criterion):
