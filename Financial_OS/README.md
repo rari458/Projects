@@ -68,6 +68,7 @@ flowchart LR
 | 3 | Reproduced DeMiguel et al. (2009) "1/N" result on this engine's own walk-forward harness: closed-form tangency, Ledoit-Wolf Σ-shrinkage, and Bayes-Stein μ-shrinkage all tested OOS | OOS Sharpe: **1/N 1.167** > MC-search 1.106 > min-variance 1.050 ≫ raw tangency 0.073 (440% annualized vol) — every μ-using optimizer lost to naive equal-weight out-of-sample |
 | 4 | Distributed the walk-forward evaluation itself via a Celery chord fan-out across a replicated C++ worker pool | worker=1 → **1.183s**, worker=3 → **0.491s** (**2.41x**) on a 42-window job; linear-fit decomposition: ~145ms fixed chord overhead + ~24.7ms/task broker round-trip — the system is currently **orchestration-bound, not compute-bound** (engine compute itself is sub-millisecond) |
 | 5 | Translated the Docker Compose stack to Kubernetes (Deployments/Services/HPA for redis+gateway+worker, `k8s/financial-os.yaml`) on a single-node cluster | Verified byte-identical behavior end-to-end through `kubectl port-forward` — same gateway → Redis → 3-replica worker pool → DuckDB path, `SUCCESS` state with matching engine output; surfaced a real constraint (DuckDB's embedded single-file model only tolerates a `hostPath` mount on a single node) that traces back to the Phase 5 storage choice |
+| 6 | Instrumented the distributed pool with Prometheus + a provisioned Grafana dashboard (`observability/`) — per-replica task counters, a task-duration histogram, and Redis queue depth | Confirmed the scale-out is real *per replica*: a 60-task job split **20 / 20 / 20** across three `instance` labels (only visible because `dns_sd_configs` enumerates every replica — `static_configs` silently merges them). Corrected highlight #4's own number: in-worker execution is **16.8 ms/task**, not the 24.7 ms a two-point fit had attributed to broker overhead. Queue depth peaked at **783** and drained inside one 5s scrape |
 
 See [`ENGINEERING_DECISIONS.md`](./ENGINEERING_DECISIONS.md) for the full story behind each of these — what was assumed, what was measured, and why.
 
@@ -83,6 +84,8 @@ data_store.py          DuckDB persistence layer (pure, no C++ import — testabl
 pytests/               pytest suite for data_store.py (12 cases, in-memory DuckDB + monkeypatched yfinance)
 docker-compose.yml     redis + gateway + horizontally-scalable worker pool
 k8s/                   Kubernetes manifests (redis/gateway/worker Deployments+Services, worker HPA) — alternate deployment target to docker-compose
+observability/         prometheus.yml + Grafana provisioning (datasource, dashboard provider, financial-os.json) — all config-as-code, no UI state
+services/metrics.py    Worker-side Prometheus exporter (Celery signals → task counter + duration histogram on :9100)
 ```
 
 ## Build & run
@@ -101,6 +104,13 @@ pytest                                 # 22 pytest cases (scoped via testpaths i
 # Distributed stack (Phase 6) -- Docker Compose
 docker compose up -d --build
 docker compose up -d --scale worker=3 # horizontal scale-out, byte-identical to the monolith
+
+# Observability (comes up with the stack above)
+# Prometheus  http://localhost:9090  — targets: gateway, redis_exporter, one per worker replica
+# Grafana     http://localhost:3000  (admin/admin) — dashboard is provisioned, not created by hand:
+#             /d/financial-os/financial-os-distributed-workers
+# Note: Grafana's DB lives in the container layer by design (no volume), so provisioning stays
+#       idempotent. Recreate rather than restart after changing observability/ config.
 
 # ...or the same stack on Kubernetes (single-node cluster, e.g. minikube)
 kubectl apply -f k8s/financial-os.yaml
@@ -139,7 +149,7 @@ All 6 phases are complete as of 2026-07-09.
 | Item | Status | Notes |
 |---|---|---|
 | Kubernetes deployment | ✅ done | `k8s/financial-os.yaml` — Deployments/Services/HPA for redis+gateway+worker on a single-node cluster, verified end-to-end (see highlight #5) |
-| Observability (Prometheus/Grafana) | planned | |
+| Observability (Prometheus/Grafana) | ✅ done | `observability/` — worker-side exporter on `worker_ready`, `dns_sd_configs` per-replica scraping, `redis_exporter` queue depth, and a provisioned 4-panel dashboard (see highlight #6) |
 | `optimize` distributed job type | planned | run the Optimizer (MC/analytic/shrinkage) as a Celery job, alongside the existing backtest/walk-forward jobs |
 | Write-side ingestion service | planned | a decoupled write path into the shared DuckDB (workers currently only read via a read-only mount) |
 | Large-universe stress test | planned | push distributed walk-forward further to see the C++ engine itself, not orchestration, become the bottleneck |

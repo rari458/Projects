@@ -39,6 +39,9 @@ services:
     image: oliver006/redis_exporter:latest
     environment:
       REDIS_ADDR: "redis:6379"
+      # Exposes queue backlog as redis_key_size{key="celery"} - the scaling
+      # signal decision #11 identified as correct (CPU is a weak proxy here).
+      REDIS_EXPORTER_CHECK_SINGLE_KEYS: "celery"
     expose:
       - "9121"
 
@@ -62,6 +65,6 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:
-      - ./obervability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - prometheus
