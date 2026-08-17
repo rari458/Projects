@@ -43,19 +43,34 @@ TRAIN_SUBSET = 2000 if QUICK else None  # None = full 50k
 TEST_SUBSET  = 1000 if QUICK else None
 BATCH = 128
 SEED = 0
-# The dataset is a config axis like KINDS and the LRs. The three facts that must move
-# together -- the torchvision class, the head width, and the normalization stats -- are
-# bound in one record on purpose: picking CIFAR-100 with CIFAR-10's statistics trains
-# normally and only costs accuracy, which is the silent-config failure preflight.py
-# exists for. A record no one can half-set is a cheaper guard than a check.
+# The dataset is a config axis like KINDS and the LRs. The five facts that must move
+# together -- the torchvision class, the head width, the input resolution, the constructor's
+# split convention, and the normalization stats -- arevbound in one record on purpose: 
+# picking CIFAR-100 with CIFAR-10's statistics trains normally and only costs accuracy, 
+# which is the silent-config failure preflight.py exists for. A record no one can half-set 
+# is a cheaper guard than a check. Note `px` is this harness's input resolution and is NOT
+# Imagenette's `size=` kwarg, which selects an archive variant == hence the separate names.
 DATASETS = {
     "cifar10": dict(
-        cls=torchvision.datasets.CIFAR10, classes=10,
+        cls=torchvision.datasets.CIFAR10, classes=10, px=32, resize=False,
+        class_sorted=False, train_kw=dict(train=True), test_kw=dict(train=False),
         mean=(0.4914, 0.4822, 0.4465), std=(0.2470, 0.2435, 0.2616)
     ),
     "cifar100": dict(
-        cls=torchvision.datasets.CIFAR100, classes=100,
+        cls=torchvision.datasets.CIFAR100, classes=100, px=32, resize=False,
+        class_sorted=False, train_kw=dict(train=True), test_kw=dict(train=False),
         mean=(0.5071, 0.4865, 0.4409), std=(0.2673, 0.2564, 0.2762)
+    ),
+    # 10 ImageNet classes, 9469 train / 3925 val, variable-size JPEGs. This is the honest
+    # substitute for the proposal's ImageNet rung on a machine with no lab GPU: report it as
+    # Imagenette at 64x64, never as ImageNet. Normalization is ImageNet's published mean/std
+    # rather than a measured one, which is correct here because Imagenette is a subset of
+    # ImageNet -- and it keeps the number citable instead of resting on our own arithmetic.
+    "imagenette": dict(
+        cls=torchvision.datasets.Imagenette, classes=10, px=64, resize=True,
+        class_sorted=True, train_kw=dict(split="train", size="160px"),
+        test_kw=dict(split="val", size="160px"),
+        mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
     ),
 }
 DATASET = os.environ.get("DATASET", "cifar10")
@@ -203,17 +218,41 @@ def evaluate(model, loader):
         n += x.size(0)
     return correct / n
 
+def subset_indices(ds, n, spec):
+    """The first n samples, except where that would be a class-ordered slice.
+    ImageFolder-style sets are stored sorted by class directory, so range(2000) of a
+    9469-image 10-class Imagenette is {963, 955, 82} over three classes: the run trains,
+    converges, and reports a low loss and a high accuracy for a problem it was never
+    given. CIFAR's archives are already shuffled, so range(n) is kept there and every
+    reported CIFAR number stays byte-identical. The permutation seed is fixed at 0 rather
+    than SEED because the subset must be the same sample of the data in every arm and
+    every seed -- it selects the measurement, not the experiment.
+    """
+    if not spec["class_sorted"]:
+        return range(n)
+    return torch.randperm(len(ds), generator=torch.Generator().manual_seed(0))[:n].tolist()
+
 def get_loaders(train_g):
     spec = DATASETS[DATASET]
-    train_tf = T.Compose([
-        T.RandomCrop(32, padding=4), T.RandomHorizontalFlip(),
-        T.ToTensor(), T.Normalize(spec["mean"], spec["std"])
-    ])
-    test_tf = T.Compose([T.ToTensor(), T.Normalize(spec["mean"], spec["std"])])
-    train = spec["cls"]("./data", train=True, download=True, transform=train_tf)
-    test = spec["cls"]("./data", train=False, download=True, transform=test_tf)
-    if TRAIN_SUBSET: train = Subset(train, range(TRAIN_SUBSET))
-    if TEST_SUBSET: test = Subset(test, range(TEST_SUBSET))
+    px, norm = spec["px"], T.Normalize(spec["mean"], spec["std"])
+    if spec["resize"]:
+        # Variable-size JPEGs: the scale-crop is both the resize and the augmentation.
+        # scale=(0.35, 1.0) rather than RandomResizedCrop's (0.08, 1.0) default, which is
+        # tuned for 1.2M images and is too aggressive for 9.5k over 50 epochs.
+        train_pre = [T.RandomResizedCrop(px, scale=(0.35, 1.0)), T.RandomHorizontalFlip()]
+        test_pre = [T.Resize(px * 8 // 7), T.CenterCrop(px)]
+    else:
+        # CIFAR is already px x px. This pair is byte-identical to what every reported
+        # CIFAR-10 and CIFAR-100 number was produced with -- do not "unify" it with the
+        # branch above, or the records in results/ stop being reproducible.
+        train_pre = [T.RandomCrop(px, padding=4), T.RandomHorizontalFlip()]
+        test_pre = []
+    train_tf = T.Compose(train_pre + [T.ToTensor(), norm])
+    test_tf = T.Compose(test_pre + [T.ToTensor(), norm])
+    train = spec["cls"]("./data", download=True, transform=train_tf, **spec["train_kw"])
+    test = spec["cls"]("./data", download=True, transform=test_tf, **spec["test_kw"])
+    if TRAIN_SUBSET: train = Subset(train, subset_indices(train, TRAIN_SUBSET, spec))
+    if TEST_SUBSET: test = Subset(test, subset_indices(test, TEST_SUBSET, spec))
     train_loader = DataLoader(train, BATCH, shuffle=True, generator=train_g, num_workers=2)
     test_loader = DataLoader(test, BATCH, shuffle=False, num_workers=2)
     return train_loader, test_loader
@@ -253,6 +292,11 @@ def main():
     base = train_loader.dataset
     base = base.dataset if isinstance(base, Subset) else base
     assert type(base) is DATASETS[DATASET]["cls"], f"DATASET={DATASET} but the loader holds {type(base).__name__}"
+    # Same reasoning one level down: the record can say px=64 while the transform that
+    # actually resizes sits in the other branch. Only a real batch settles it. Safe to
+    # consume one here -- train_g is re-seeded per optimizer before each run below.
+    got = next(iter(train_loader))[0].shape[-1]
+    assert got == DATASETS[DATASET]["px"], f"loader yields {got}x{got}, {DATASET} record says px={DATASETS[DATASET]['px']}"
     total_steps = len(train_loader) * EPOCHS
     criterion = nn.CrossEntropyLoss()
 
@@ -261,7 +305,7 @@ def main():
     # numbers instead of living in a filename someone has to trust. The column layout is
     # unchanged -- benchmark_tf.py writes the same six.
     log.write(
-        f"# dataset={DATASET} epochs={EPOCHS} seed={SEED} batch={BATCH} "
+        f"# dataset={DATASET} px={DATASETS[DATASET]['px']} epochs={EPOCHS} seed={SEED} batch={BATCH} "
         f"wd={WEIGHT_DECAY} rho_max={RHO_MAX} rho_aux={RHO_AUX} "
         f"torch={torch.__version__}\n"
     )

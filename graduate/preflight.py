@@ -68,7 +68,7 @@ def check_dataset():
     assert spec["cls"].__name__.lower() == B.DATASET, f"DATASETS[{B.DATASET!r}] points at {spec['cls'].__name__}"
     print(
         f"dataset       = {B.DATASET}: {spec['cls'].__name__}, {spec['classes']} classes, "
-        f"mean={spec['mean']}\n"
+        f"{spec['px']}x{spec['px']}, mean={spec['mean']}\n"
     )
 
 def check_lr_wiring():

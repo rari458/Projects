@@ -52,9 +52,14 @@ def make_resnet18():
 
 def get_eval_loader(batch=128):
     spec = B.DATASETS[B.DATASET]
-    tf = T.Compose([T.ToTensor(), T.Normalize(spec["mean"], spec["std"])])
-    test = spec["cls"]("./data", train=False, download=True, transform=tf)
-    return DataLoader(Subset(test, range(EVAL_BATCHES * batch)), batch, shuffle=False)
+    pre = [T.Resize(spec["px"] * 8 // 7), T.CenterCrop(spec["px"])] if spec["resize"] else []
+    tf = T.Compose(pre + [T.ToTensor(), T.Normalize(spec["mean"], spec["std"])])
+    test = spec["cls"]("./data", download=True, transform=tf, **spec["test_kw"])
+    # range(n) here is not a QUICK-path concern: this loader runs on the real 50-epoch
+    # checkpoints. On a class-sorted set it would measure sharpness of a 3-class slice and
+    # print it in the same table as the CIFAR figures, with nothing to signal it.
+    idx = B.subset_indices(test, EVAL_BATCHES * batch, spec)
+    return DataLoader(Subset(test, idx), batch, shuffle=False)
 
 def mean_loss(model, loader, criterion):
     model.eval()
