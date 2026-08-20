@@ -22,9 +22,8 @@ import keras
 import tensorflow as tf
 from keras import layers, ops
 
-from muon_keras import split_variables
-from muon_sam_keras import KerasMuonSAM
-from train_tf import make_train_step
+from muonsam.keras import KerasMuonSAM, split_variables
+from muonsam.keras.train_tf import make_train_step
 
 # Pass criterion is relative to the size of the step itself: "the two implementations
 # agree to within RTOL of one step's worth of weight change". An absolute tolerance is

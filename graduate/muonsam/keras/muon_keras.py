@@ -18,7 +18,7 @@ Two layout facts drive the adapters below.
 import keras
 from keras import ops
 
-from muon_tf import zeropower_via_newtonschulz5, muon_scale
+from .muon_tf import zeropower_via_newtonschulz5, muon_scale
 
 def to_muon_matrix(g):
     """Keras-layout gradient -> muon.py's 2D matrix with rows = output dim."""

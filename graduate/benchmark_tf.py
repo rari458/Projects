@@ -44,9 +44,8 @@ import numpy as np
 import tensorflow as tf
 from keras import layers
 
-from muon_keras import KerasMuon, split_variables
-from muon_sam_keras import KerasMuonSAM
-from train_tf import make_train_step
+from muonsam.keras import KerasMuon, KerasMuonSAM, split_variables
+from muonsam.keras.train_tf import make_train_step
 
 # ---------------- config ----------------
 DEVICE = "gpu" if tf.config.list_physical_devices("GPU") else "cpu"

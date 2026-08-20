@@ -16,21 +16,45 @@ import torch
 import torch.nn as nn
 
 REF = sys.argv[1] if len(sys.argv) > 1 else "HEAD"
-# `<rev>:./path` resolves relative to the cwd, so this works from anywhere in the repo and
-# in any clone. The reference goes under a distinct module name so that `muon_sam` still
-# resolves to the working tree's copy.
-_ref_src = subprocess.check_output(["git", "show", f"{REF}:./muon_sam.py"])
-_ref_dir = tempfile.mkdtemp(prefix="muon_sam_ref_")
-with open(os.path.join(_ref_dir, "muon_sam_ref.py"), "wb") as f:
-    f.write(_ref_src)
-if _ref_src == open("muon_sam.py", "rb").read():
-    print(f"note: muon_sam.py is identical to {REF}, so this run proves nothing. "
-          f"Compare against the pre-change revision instead, e.g. {REF}~1.\n")
-sys.path.insert(0, ".")          # muon.py, muon_sam.py -- the working tree
-sys.path.insert(0, _ref_dir)     # muon_sam_ref.py -- the reference revision
 
-from muon_sam import MuonSAM
-from muon_sam_ref import MuonSAM as MuonSAMRef
+def _show(path):
+    """Bytes of `path` at REF, or None if that revision does not have it."""
+    try:
+        return subprocess.check_output(["git", "show", f"{REF}:./{path}"], stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        return None
+
+# The library moved into muonsam/ on 2026-08-20 and revisions on either side of that must
+# stay comparable, or this gate loses the history it exists to protect. The two layouts
+# need different handling: the old muon_sam.py imports `muon` absolutely, the new one
+# imports `.muon` relatively, and a relative import cannot resolve in a standalone module.
+# Rebuilding the reference as a package covers the new layout; also dropping a top-level
+# muon.py beside it covers the old one. `<rev>:./path` resolves relative to the cwd, so
+# this still works from anywhere in the repo and in any clone.
+_new = _show("muonsam/muon_sam.py")
+_ref_sam = _new if _new is not None else _show("muon_sam.py")
+_ref_muon = _show("muonsam/muon.py") if _new is not None else _show("muon.py")
+if _ref_sam is None or _ref_muon is None:
+    sys.exit(f"cannot read muon_sam.py / muon.py at {REF}")
+
+_ref_dir = tempfile.mkdtemp(prefix="muon_sam_ref_")
+_pkg = os.path.join(_ref_dir, "muonsam_ref")
+os.makedirs(_pkg)
+open(os.path.join(_pkg, "__init__.py"), "w").close()
+for _name, _src in (("muon.py", _ref_muon), ("muon_sam.py", _ref_sam)):
+    with open(os.path.join(_pkg, _name), "wb") as f:
+        f.write(_src)
+with open(os.path.join(_ref_dir, "muon.py"), "wb") as f:    # pre-move refs import it flat
+    f.write(_ref_muon)
+
+if _ref_sam == open("muonsam/muon_sam.py", "rb").read():
+    print(f"note: muonsam/muon_sam.py is identical to {REF}, so this run proves nothing. "
+          f"Compare against the pre-change revision instead, e.g. {REF}~1.\n")
+sys.path.insert(0, ".")          # muonsam/ -- the working tree
+sys.path.insert(0, _ref_dir)     # muonsam_ref/ -- the reference revision
+
+from muonsam import MuonSAM
+from muonsam_ref.muon_sam import MuonSAM as MuonSAMRef
 
 class Tiny(nn.Module):
     """Both param groups, so the Muon branch (e_coef) and the aux branch (e) both run."""

@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 
 import benchmark_cifar10 as B
-from muon_sam import MuonSAM
+from muonsam import MuonSAM
 
 
 class Tiny(nn.Module):

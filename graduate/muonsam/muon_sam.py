@@ -1,5 +1,5 @@
 import torch
-from muon import zeropower_via_newtonschulz5, adam_update
+from .muon import zeropower_via_newtonschulz5, adam_update
 
 class MuonSAM(torch.optim.Optimizer):
     """Muon + SAM with LookSAM-style periodic perturbation, lifted into Muon's spectral geometry.

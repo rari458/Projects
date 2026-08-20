@@ -1,6 +1,14 @@
+"""Muon, adapted from Keller Jordan's implementation (github.com/KellerJordan/Muon).
+
+Two deliberate local modifications, neither of which is a cleanup candidate:
+  1. `p.grad is None` sets a zero gradient instead of `continue`, in all four classes, so
+     that params without grads still take a (zero-gradient) update including weight decay.
+  2. `zeropower_via_newtonschulz5` runs NS5 in fp32 on CPU and bf16 on CUDA. The CUDA path
+     is byte-identical to upstream; the CPU branch is worth 6.7x on a machine without
+     AVX512_BF16, where PyTorch emulates bf16 in software and NS5 dominates the step.
+"""
 import torch
 import torch.distributed as dist
-
 
 def zeropower_via_newtonschulz5(G, steps: int):
     """
@@ -30,7 +38,6 @@ def zeropower_via_newtonschulz5(G, steps: int):
         X = X.mT
     return X
 
-
 def muon_update(grad, momentum, beta=0.95, ns_steps=5, nesterov=True):
     momentum.lerp_(grad, 1 - beta)
     update = grad.lerp_(momentum, beta) if nesterov else momentum
@@ -39,7 +46,6 @@ def muon_update(grad, momentum, beta=0.95, ns_steps=5, nesterov=True):
     update = zeropower_via_newtonschulz5(update, steps=ns_steps)
     update *= max(1, update.size(-2) / update.size(-1))**0.5
     return update
-
 
 class Muon(torch.optim.Optimizer):
     """
@@ -95,7 +101,6 @@ class Muon(torch.optim.Optimizer):
 
         return loss
 
-
 class SingleDeviceMuon(torch.optim.Optimizer):
     """
     Muon variant for usage in non-distributed settings.
@@ -106,12 +111,10 @@ class SingleDeviceMuon(torch.optim.Optimizer):
 
     @torch.no_grad()
     def step(self, closure=None):
-
         loss = None
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
-
         for group in self.param_groups:
             for p in group["params"]:
                 if p.grad is None:
@@ -123,9 +126,7 @@ class SingleDeviceMuon(torch.optim.Optimizer):
                 update = muon_update(p.grad, state["momentum_buffer"], beta=group["momentum"])
                 p.mul_(1 - group["lr"] * group["weight_decay"])
                 p.add_(update.reshape(p.shape), alpha=-group["lr"])
-
         return loss
-
 
 def adam_update(grad, buf1, buf2, step, betas, eps):
     buf1.lerp_(grad, 1 - betas[0])
@@ -133,7 +134,6 @@ def adam_update(grad, buf1, buf2, step, betas, eps):
     buf1c = buf1 / (1 - betas[0]**step)
     buf2c = buf2 / (1 - betas[1]**step)
     return buf1c / (buf2c.sqrt() + eps)
-
 
 class MuonWithAuxAdam(torch.optim.Optimizer):
     """
@@ -223,7 +223,6 @@ class MuonWithAuxAdam(torch.optim.Optimizer):
                     p.add_(update, alpha=-group["lr"])
 
         return loss
-
 
 class SingleDeviceMuonWithAuxAdam(torch.optim.Optimizer):
     """

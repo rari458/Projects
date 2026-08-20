@@ -23,8 +23,8 @@ import keras
 import tensorflow as tf
 from keras import layers, ops
 
-from muon import SingleDeviceMuonWithAuxAdam
-from muon_keras import KerasMuon, split_variables
+from muonsam import SingleDeviceMuonWithAuxAdam
+from muonsam.keras import KerasMuon, split_variables
 
 ATOL = 1e-4
 STEPS = 5

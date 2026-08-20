@@ -28,9 +28,8 @@ import keras
 import tensorflow as tf
 from keras import layers, ops
 
-from muon_sam import MuonSAM
-from muon_keras import KerasMuon, split_variables
-from muon_sam_keras import KerasMuonSAM
+from muonsam import MuonSAM
+from muonsam.keras import KerasMuon, KerasMuonSAM, split_variables
 
 ATOL = 1e-4
 STEPS = 12

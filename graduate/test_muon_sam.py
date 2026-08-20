@@ -1,7 +1,7 @@
 """Smoke test for MuonSAM: verify it runs end-to-end and exercises very code path."""
 import torch
 import torch.nn as nn
-from muon_sam import MuonSAM
+from muonsam import MuonSAM
 
 torch.manual_seed(0)
 
@@ -66,7 +66,7 @@ for step in range(1, 7):
 print("\nOK: if it runs to the end, import / NS5 / 2-pass / schedule branch / restore all work.")
 
 # --- regression: with rho off, momentum_mode='pre_ns5' must equal plain Muon ---
-from muon import SingleDeviceMuonWithAuxAdam
+from muonsam import SingleDeviceMuonWithAuxAdam
 
 def split_params(m):
     mu, ax = [], []

@@ -17,8 +17,8 @@ import torch.nn as nn
 import torchvision
 from keras import ops
 
-from muon import zeropower_via_newtonschulz5 as ns5_torch
-from muon_tf import zeropower_via_newtonschulz5 as ns5_keras, muon_scale
+from muonsam import zeropower_via_newtonschulz5 as ns5_torch
+from muonsam.keras import zeropower_via_newtonschulz5 as ns5_keras, muon_scale
 
 ATOL = 1e-5
 

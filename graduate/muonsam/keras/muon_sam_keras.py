@@ -28,8 +28,8 @@ The step counter is deliberately split for the same reason:
 import keras
 from keras import ops
 
-from muon_tf import zeropower_via_newtonschulz5, muon_scale
-from muon_keras import to_muon_matrix, from_muon_matrix
+from .muon_tf import zeropower_via_newtonschulz5, muon_scale
+from .muon_keras import to_muon_matrix, from_muon_matrix
 
 def muon_matrix_shape(shape):
     """Shape that to_muon_matrix() produces for a variable of this Keras shape.

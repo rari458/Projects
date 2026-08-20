@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "muonsam"
+version = "0.1.0"
+description = "SAM's sharpness-aware perturbation lifted into Muon's spectral geometry"
+readme = ""
+requires-python = ">=3.10"
+authors = [{name = "Sangcheol Moon"}, {name = "Gyuhyun Park"}]
+keywords = ["optimizer", "muon", "sam", "sharpness-aware", "deep-learning"]
+dependencies = ["torch>=2.0"]
+
+[project.optional-dependencies]
+# The Keras port is import-compatible with the TF, JAX and PyTorch Keras backends.
+# Only muonsam.keras.train_tf is TensorFlow-specific, which is why it is not re-exported.
+keras = ["keras>=3.0"]
+# Everything the benchmark harness needs. Not required to use the optimizer.
+bench = ["torchvision>=0.15", "matplotlib>=3.5"]
+
+[tool.setuptools]
+packages = ["muonsam", "muonsam.keras"]

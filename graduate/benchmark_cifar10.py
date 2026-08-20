@@ -25,9 +25,7 @@ import torchvision.transforms as T
 import os
 from torch.utils.data import DataLoader, Subset
 
-from sam import SAM
-from muon import SingleDeviceMuonWithAuxAdam
-from muon_sam import MuonSAM
+from muonsam import SAM, SingleDeviceMuonWithAuxAdam, MuonSAM
 
 # ---------------- config ----------------
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
