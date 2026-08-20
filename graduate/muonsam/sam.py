@@ -1,5 +1,12 @@
-import torch
+"""SAM, following the two-phase wrapper from github.com/davda54/sam (MIT).
 
+The generalization baseline this project compares against, not the contribution -- see
+muonsam/muon_sam.py for that. `first_step` perturbs to w+e, `second_step` restores w and
+lets the base optimizer update. Note that between steps the saved copy IS the parameter
+(sam.py:34 assigns it back), so a memory profiler that ignores aliasing gets SAM's 2x
+peak wrong in both directions.
+"""
+import torch
 
 class SAM(torch.optim.Optimizer):
     def __init__(self, params, base_optimizer, rho=0.05, adaptive=False, **kwargs):

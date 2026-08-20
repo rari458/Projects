@@ -241,6 +241,13 @@ The point of a capstone is the measurement, so the negative results are reported
 
 ---
 
+## Licence
+
+MIT — see [`LICENSE`](LICENSE).
+
+Two files are derived from third-party MIT-licensed projects, whose copyright notices are
+reproduced in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) as that licence requires.
+
 ## Attribution
 
 `muonsam/muon.py` is adapted from [Keller Jordan's Muon](https://github.com/KellerJordan/Muon),
