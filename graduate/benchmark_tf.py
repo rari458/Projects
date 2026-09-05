@@ -2,7 +2,7 @@
 
 Same claim, same shape of evidence: convergence speed (train loss per epoch AND wall-clock)
 and generalization (test accuracy), with identical weight init and identical batch order
-across every optimizer. The runlog is written in the SAME 6-column format the PyTorch harness
+across every optimizer. The runlog is written in the SAME 7-column format the PyTorch harness
 uses, so analyze.py reads a TF run with no changes.
 
 Three things differ from benchmark_cifar10.py, all forced:
@@ -192,19 +192,28 @@ def make_step(kind, model, loss_fn, opt):
     
     return step
 
-def make_eval(model):
+def make_eval(model, loss_fn):
     @tf.function(reduce_retracing=True)
-    def batch_correct(x, y):
-        pred = tf.argmax(model(x, training=False), axis=-1, output_type=tf.int32)
-        return tf.reduce_sum(tf.cast(pred == y, tf.int32))
-    
+    def batch_stats(x, y):
+        out = model(x, training=False)
+        pred = tf.argmax(out, axis=-1, output_type=tf.int32)
+        # loss_fn reduces to a batch mean, so it is re-weighted by batch size here and
+        # divided by the sample count at the end. Mirrors evaluate() in
+        # benchmark_cifar10.py, where the same weighting is what makes a short final
+        # batch count for its own size rather than for a whole one.
+        loss = loss_fn(y, out)
+        n = tf.cast(tf.shape(x)[0], loss.dtype)
+        return tf.reduce_sum(tf.cast(pred == y, tf.int32)), loss * n
+
     def evaluate(ds):
-        correct = n = 0
+        correct, total, n = 0, 0.0, 0
         for x, y in ds:
-            correct += int(batch_correct(x, y))
+            c, l = batch_stats(x, y)
+            correct += int(c)
+            total += float(l)
             n += int(x.shape[0])
-        return correct / n
-    
+        return correct / n, total / n
+
     return evaluate
 
 def maybe_plot(results):
@@ -212,8 +221,7 @@ def maybe_plot(results):
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-    except ImportError:
-        return
+    except ImportError: return
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
     for kind, hist in results.items():
         axes[0].plot([h[0] for h in hist], [h[2] * 100 for h in hist], marker="o", label=kind)
@@ -227,7 +235,7 @@ def maybe_plot(results):
     png = os.path.join(OUTDIR, "benchmark_tf.png")
     fig.savefig(png, dpi=120)
     print(f"saved {png}")
-    
+
 def main():
     print(f"device={DEVICE} | QUICK={QUICK} | epochs={EPOCHS} "
           f"| train_subset={TRAIN_SUBSET} | test_subset={TEST_SUBSET} "
@@ -239,7 +247,7 @@ def main():
     loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     
     log = open(LOGFILE, "w", newline="")
-    log.write("optimizer,epoch,train_loss,test_acc,time_s,lr\n")
+    log.write("optimizer,epoch,train_loss,test_acc,test_loss,time_s,lr\n")
     
     results = {}
     for kind in KINDS:
@@ -247,7 +255,7 @@ def main():
         model = make_resnet18()
         opt = build_optimizer(kind, model, total_steps)
         step = make_step(kind, model, loss_fn, opt)
-        evaluate = make_eval(model)
+        evaluate = make_eval(model, loss_fn)
         batches = iter(make_train_ds(xtr, ytr))  # identical batch order
         lr = primary_lr(kind)
         print(f"\n=== {kind} (lr={lr}) ===")
@@ -257,11 +265,11 @@ def main():
             # equals the PyTorch harness's per-sample weighting.
             total = sum(float(step(*next(batches))) for _ in range(steps_per_epoch))
             tr = total / steps_per_epoch
-            acc = evaluate(test_ds)
+            acc, te = evaluate(test_ds)
             elapsed = time.time() - t0
-            hist.append((ep, tr, acc, elapsed))
-            print(f"  epoch {ep}: train_loss={tr:.4f} test_acc={acc * 100:.2f}% time={elapsed:.1f}s")
-            log.write(f"{kind},{ep},{tr:.4f},{acc * 100:.2f},{elapsed:.1f},{lr}\n")
+            hist.append((ep, tr, acc, elapsed, te))
+            print(f"  epoch {ep}: train_loss={tr:.4f} test_loss={te:.4f} test_acc={acc * 100:.2f}% time={elapsed:.1f}s")
+            log.write(f"{kind},{ep},{tr:.4f},{acc * 100:.2f},{te:.4f},{elapsed:.1f},{lr}\n")
             log.flush()
         results[kind] = hist
         if SAVE_CKPT:
@@ -277,10 +285,10 @@ def main():
     print(f"\n saved {LOGFILE}")
     
     print("\n==== final summary ====")
-    print(f"{'optimizer':<16}{'test_acc':>10}{'time(s)':>10}")
+    print(f"{'optimizer':<16}{'test_acc':>10}{'test_loss':>11}{'time(s)':>10}")
     for kind, hist in results.items():
-        _, _, acc, t = hist[-1]
-        print(f"{kind:<16}{acc * 100:>9.2f}%{t:>10.1f}")
+        _, _, acc, t, te = hist[-1]
+        print(f"{kind:<16}{acc * 100:>9.2f}%{te:>11.4f}{t:>10.1f}")
     maybe_plot(results)
     
 if __name__ == "__main__":

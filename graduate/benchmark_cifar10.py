@@ -23,6 +23,7 @@ import torch.nn as nn
 import torchvision
 import torchvision.transforms as T
 import os
+import itertools
 from torch.utils.data import DataLoader, Subset
 
 from muonsam import SAM, SingleDeviceMuonWithAuxAdam, MuonSAM
@@ -96,6 +97,7 @@ KINDS = ["adamw", "sam", "muon", "muon_nomom", "muonsam_nomom", "muonsam"]
 CLOSURE_KINDS = ("muonsam", "muonsam_nomom", "muon_nomom", "muonsam_gsam", "muonsam_asam", "muonsam_nowarm")
 # Final weights per optimizer, for sharpness.py. ~45MB each; SAVE_CKPT=0 turns it off.
 SAVE_CKPT = os.environ.get("SAVE_CKPT", "1") != "0"
+STEP_EVERY = int(os.environ.get("STEP_EVERY", 5 if QUICK else 50))
 # Artifacts land in OUTDIR, not the cwd. On Kaggle the repo is usually cloned somewhere
 # outside /kaggle/working and the notebook cd's into it, so a relative path silently
 # writes the results where nothing collects them. Pass OUTDIR=/kaggle/working there.
@@ -179,7 +181,7 @@ def build_optimizer(kind, model, total_steps):
         return MuonSAM(groups, total_steps=total_steps, **opts)
     raise ValueError(kind)
 
-def train_epoch(kind, model, opt, loader, criterion):
+def train_epoch(kind, model, opt, loader, criterion, on_step=None):
     model.train()
     total, n = 0.0, 0
     for x, y in loader:
@@ -204,17 +206,28 @@ def train_epoch(kind, model, opt, loader, criterion):
             loss = opt.step(closure)
         total += loss.item() * x.size(0)
         n += x.size(0)
+        if on_step is not None:
+            on_step(loss.item())
     return total / n
 
 @torch.no_grad()
-def evaluate(model, loader):
+def evaluate(model, loader, criterion):
+    """(accuracy, mean cross-entropy) over the test set.
+    
+    The loss is the half of generalization the accuracy column cannot show -- on CIFAR-100
+    the SAM-family arms sit at half the loss of the others while also being more accurate --
+    and nine sessions recorded it only as a final number printed to a console log. It costs
+    nothing: the forward pass that produces argmax is the same one the loss reads.
+    """
     model.eval()
-    correct, n = 0, 0
+    correct, total, n = 0, 0.0, 0
     for x, y in loader:
         x, y = x.to(DEVICE), y.to(DEVICE)
-        correct += (model(x).argmax(1) == y).sum().item()
+        out = model(x)
+        correct += (out.argmax(1) == y).sum().item()
+        total += criterion(out, y).item() * x.size(0)
         n += x.size(0)
-    return correct / n
+    return correct / n, total / n
 
 def subset_indices(ds, n, spec):
     """The first n samples, except where that would be a class-ordered slice.
@@ -261,17 +274,20 @@ def maybe_plot(results):
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError: return
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
     for kind, hist in results.items():
-        eps = [h[0] for h in  hist]
+        eps = [h[0] for h in hist]
         accs = [h[2] * 100 for h in hist]
-        ts = [h[3] for h in hist]
-        axes[0].plot(eps, accs, marker="o", label=kind)
-        axes[1].plot(ts, accs, marker="o", label=kind)
-    axes[0].set(xlabel="epoch", ylabel="test acc (%)", title="acc vs epoch")
-    axes[1].set(xlabel="wall-clock (s)", ylabel="test acc (%)", title="acc vs compute budget")
-    for ax in axes:
-        ax.legend()
+        axes[0][0].plot(eps, accs, marker="o", ms=3, label=kind)
+        axes[0][1].plot([h[3] for h in hist], accs, marker="o", ms=3, label=kind)
+        axes[1][0].plot(eps, [h[1] for h in hist], marker="o", ms=3, label=kind)
+        axes[1][1].plot(eps, [h[4] for h in hist], marker="o", ms=3, label=kind)
+    axes[0][0].set(xlabel="epoch", ylabel="test acc (%)", title="acc vs epoch")
+    axes[0][1].set(xlabel="wall-clock (s)", ylabel="test acc (%)", title="acc vs compute budget")
+    axes[1][0].set(xlabel="epoch", ylabel="train loss", title="train loss vs epoch")
+    axes[1][1].set(xlabel="epoch", ylabel="test loss", title="test loss vs epoch")
+    for ax in axes.flat:
+        ax.legend(fontsize=8)
         ax.grid(True, alpha=0.3)
     fig.tight_layout()
     png = os.path.join(OUTDIR, "benchmark.png")
@@ -300,16 +316,34 @@ def main():
 
     log = open(LOGFILE, "w", newline="")
     # analyze.py:47 keeps '#' lines as notes and prints them, so provenance rides with the
-    # numbers instead of living in a filename someone has to trust. The column layout is
-    # unchanged -- benchmark_tf.py writes the same six.
+    # numbers instead of living in a filename someone has to trust.
     log.write(
         f"# dataset={DATASET} px={DATASETS[DATASET]['px']} epochs={EPOCHS} seed={SEED} batch={BATCH} "
         f"wd={WEIGHT_DECAY} rho_max={RHO_MAX} rho_aux={RHO_AUX} "
         f"torch={torch.__version__}\n"
     )
-    log.write("optimizer,epoch,train_loss,test_acc,time_s,lr\n")
+    log.write("optimizer,epoch,train_loss,test_acc,test_loss,time_s,lr\n")
 
+    steplog = None
+    if STEP_EVERY:
+        # A separate file rather than a column: the two have different row counts and
+        # different meanings for `train_loss` -- an epoch mean there, a STEP_EVERY-batch
+        # mean here -- and merging them would invite reading one as the other.
+        spath = LOGFILE.replace("runlog", "steplog")
+        if spath == LOGFILE: spath = os.path.join(OUTDIR, "steplog.csv")
+        steplog = open(spath, "w", newline="")
+        steplog.write(f"# train_loss is the mean over the preceding {STEP_EVERY} batches\n")
+        steplog.write("optimizer,step,train_loss,lr\n")
+
+    # Console-only numbers are how this project nearly lost a completed run: peak memory
+    # and the sharpness table lived in a Kaggle log and had to be recovered by parsing it.
+    # One row per arm, from the same variables the console prints.
+    spath2 = LOGFILE.replace("runlog", "summary")
+    if spath2 == LOGFILE: spath2 = os.path.join(OUTDIR, "summary.csv")
+    summary = open(spath2, "w", newline="")
+    summary.write("optimizer,final_acc,final_test_loss,total_s,s_per_epoch,peak_mem_mb,lr\n")
     results = {}
+
     for kind in KINDS:
         torch.manual_seed(SEED)          # identical weight init
         train_g.manual_seed(SEED)        # identical batch order
@@ -317,38 +351,53 @@ def main():
         opt = build_optimizer(kind, model, total_steps)
         lr = primary_lr(kind)
         print(f"\n=== {kind} (lr={lr}) ===")
+
+        step, window = itertools.count(1), []
+        def on_step(l, kind=kind, lr=lr):
+            i = next(step)
+            window.append(l)
+            if i % STEP_EVERY == 0:
+                steplog.write(f"{kind},{i},{sum(window) / len(window):.4f},{lr}\n")
+                window.clear()
+
         hist, t0 = [], time.time()
         for ep in range(1, EPOCHS + 1):
-            tr = train_epoch(kind, model, opt, train_loader, criterion)
-            acc = evaluate(model, test_loader)
+            tr = train_epoch(kind, model, opt, train_loader, criterion, on_step if steplog else None)
+            acc, te = evaluate(model, test_loader, criterion)
             elapsed = time.time() - t0
-            hist.append((ep, tr, acc, elapsed))
-            print(f"  epoch {ep}: train_loss={tr:.4f} test_acc={acc * 100:.2f}% time={elapsed:.1f}s")
-            log.write(f"{kind},{ep},{tr:.4f},{acc * 100:.2f},{elapsed:.1f},{lr}\n")
+            hist.append((ep, tr, acc, elapsed, te))
+            print(f"  epoch {ep}: train_loss={tr:.4f} test_loss={te:.4f} test_acc={acc * 100:.2f}% time={elapsed:.1f}s")
+            log.write(f"{kind},{ep},{tr:.4f},{acc * 100:.2f},{te:.4f},{elapsed:.1f},{lr}\n")
             log.flush()
+            if steplog: steplog.flush()
         results[kind] = hist
         if SAVE_CKPT:
             # sharpness.py reads these. Saved per kind rather than per epoch: the claim
             # under test is about the minimum each optimizer converges to.
             ckpt = os.path.join(OUTDIR, f"ckpt_{kind}_seed{SEED}.pt")
-            torch.save(dict(kind=kind, seed=SEED, epoch=EPOCHS, test_acc=acc * 100,
-                            state_dict=model.state_dict()), ckpt)
+            torch.save(dict(kind=kind, seed=SEED, epoch=EPOCHS, test_acc=acc * 100, state_dict=model.state_dict()), ckpt)
             print(f"  saved {ckpt}")
+        peak = ""
         if DEVICE == "cuda":
             # The optimizer-state ratios are exact and device-independent; this is the part
             # that is not -- activations dominate, so the end-to-end cost of MuonSAM's
             # extra state can only be read off a real GPU run.
-            print(f"  peak GPU mem: {torch.cuda.max_memory_allocated() / 1024**2:.0f} MB")
+            peak = f"{torch.cuda.max_memory_allocated() / 1024**2:.0f}"
+            print(f"  peak GPU mem: {peak} MB")
             torch.cuda.reset_peak_memory_stats()
+        summary.write(f"{kind},{acc * 100:.2f},{te:.4f},{elapsed:.1f},{elapsed / EPOCHS:.1f},{peak},{lr}\n")
+        summary.flush()
 
     log.close()
+    if steplog: steplog.close()
+    summary.close()
     print(f"\nsaved {LOGFILE}")
 
     print("\n==== final summary ====")
-    print(f"{'optimizer':<10}{'test_acc':>10}{'time(s)':>10}")
+    print(f"{'optimizer':<14}{'test_acc':>10}{'test_loss':>11}{'time(s)':>10}")
     for kind, hist in results.items():
-        _, _, acc, t = hist[-1]
-        print(f"{kind:<10}{acc * 100:>9.2f}%{t:>10.1f}")
+        _, _, acc, t, te = hist[-1]
+        print(f"{kind:<14}{acc * 100:>9.2f}%{te:>11.4f}{t:>10.1f}")
     maybe_plot(results)
 
 if __name__ == "__main__":

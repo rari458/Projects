@@ -8,6 +8,8 @@ papers/
 /sharpness.png 
 /runlog_tf.csv
 /runlog.csv
+/steplog.csv
+/summary.csv
 venv/
 __pycache__/
 *.py[cod]
