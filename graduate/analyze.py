@@ -107,7 +107,15 @@ def compare(arms, a, b, last, window):
     # Loss runs the opposite way from accuracy: a NEGATIVE value here is A winning.
     la, lb = last_n_loss(ah, last), last_n_loss(bh, last)
     if la is not None and lb is not None: out[f"loss{last}"] = la - lb
-    budget, target = bh[-1][2], bh[-1][1]
+    # The target is the baseline's last-`last` mean, not its final epoch. Windowing was
+    # applied to the measurement side in 2026-08-11 and not to the target, so eq_* and
+    # speedup still hung on one noisy point: Imagenette v2 seed 1 put muon's ep50 1.14pp
+    # under its own window mean and eq_mean5 jumped +0.52 -> +2.22 on that alone. Measured
+    # over the v1 record, windowing the target takes Imagenette's eq_mean5 spread from
+    # +/-0.36 to +/-0.14 and CIFAR-10's from +/-0.20 to +/-0.10, leaves CIFAR-100's +/-0.26
+    # alone, and moves every point estimate by under 0.4pp -- it tightens the noisy datasets
+    # and does not touch the quiet one, which is what a definition fix should look like.
+    budget, target = bh[-1][2], last_n(bh, last)[0]
     eq = at_budget(ah, budget, window)
     if eq:
         single, mean, span = eq
@@ -117,7 +125,7 @@ def compare(arms, a, b, last, window):
     hit = time_to(ah, target)
     if hit:
         out["speedup"] = budget / hit[1]
-        out["_sp_note"] = f"{hit[1]:.0f}s (ep{hit[0]}) vs {budget:.0f}s for {target:.2f}%"
+        out["_sp_note"] = f"{hit[1]:.0f}s (ep{hit[0]}) vs {budget:.0f}s for {target:.2f}% (last-{last} mean)"
     return out
 
 def analyze_file(path, pair, last, window):
