@@ -1,0 +1,5 @@
+optimizer,final_acc,final_test_loss,total_s,s_per_epoch,peak_mem_mb,lr
+adamw,66.85,2.1191,2502.7,50.1,831,0.001
+muon,70.33,2.0588,3704.0,74.1,787,0.02
+sam,65.72,1.2673,4824.2,96.5,835,0.05
+muonsam,73.96,1.1108,5024.3,100.5,836,0.02
