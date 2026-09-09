@@ -26,7 +26,7 @@ from collections import defaultdict
 DEFAULT_PAIR = ("muonsam", "muon")
 
 def load(path):
-    """One CSV -> {arm: [(epoch, test_acc, time_s, test_loss), ...]}, sorted by epoch.
+    """One CSV -> {arm: [(epoch, test_acc, time_s, test_loss, train_loss), ...]}, sorted by epoch.
 
     Three logs in results/ were hand-assembled rather than written by main() -- transcribed
     from a console log, or annotated afterwards -- and open with a block of `#` lines
@@ -53,7 +53,8 @@ def load(path):
         # test_loss is absent from every file written before 2026-09; None rather than 0.0,
         # so a missing column reads as "not measured" instead of "measured as zero".
         te = float(r["test_loss"]) if r.get("test_loss") else None
-        rows[(kind, lr)].append((int(r["epoch"]), float(r["test_acc"]), float(r["time_s"]), te))
+        tr = float(r["train_loss"]) if r.get("train_loss") else None
+        rows[(kind, lr)].append((int(r["epoch"]), float(r["test_acc"]), float(r["time_s"]), te, tr))
         lrs[kind].add(lr)
     arms = {(kind if len(lrs[kind]) == 1 else f"{kind}@{lr}"): sorted(hist) for (kind, lr), hist in rows.items()}
     return arms, notes
