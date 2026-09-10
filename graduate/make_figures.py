@@ -30,6 +30,29 @@ import matplotlib
 matplotlib.use("Agg")       # headless here, and headless on Kaggle too
 import matplotlib.pyplot as plt
 
+# Everything is drawn at final print scale rather than shrunk into place. Word fits an
+# oversized image to the column, so a 15-inch figure lands at 0.45x and its 7pt labels come
+# out at 3.1pt -- unreadable on paper while looking fine on screen, which is the worst shape
+# a defect can take in the one artifact the advisor actually asked for. TW is the report's
+# text width (9638 twips), so the scale is 1.0 and every point size below is the point size
+# on the page.
+TW = 6.69
+plt.rcParams.update({
+    "font.size": 7,
+    "axes.titlesize": 7.5,
+    "axes.labelsize": 7,
+    "xtick.labelsize": 6.5,
+    "ytick.labelsize": 6.5,
+    "legend.fontsize": 6.5,
+    "figure.titlesize": 8.5,
+    "axes.linewidth": 0.6,
+    "xtick.major.width": 0.6,
+    "ytick.major.width": 0.6,
+    "grid.linewidth": 0.4,
+})
+# Curve width and its increment along ORDER; see _plot for why the increment exists at all.
+LW0, LWD = 0.9, 0.13
+
 from analyze import load, last_n, last_n_loss    # one runlog reader for the project, not two
 
 V2 = "results/v2"
@@ -101,7 +124,7 @@ def _plot(ax, arm, xs, mean, sd, n):
     # underneath still shows as a halo instead of vanishing, so the coincidence reads as a
     # finding rather than as a missing curve.
     i = ORDER.index(arm) if arm in ORDER else len(ORDER)
-    ax.plot(xs, mean, color=c, lw=1.3+0.16 * i, label=arm, zorder=10 - i)
+    ax.plot(xs, mean, color=c, lw=LW0 + LWD * i, label=arm, zorder=10 - i)
     if n > 1 and any(sd):
         ax.fill_between(
             xs, [m - s for m, s in zip(mean, sd)],
@@ -112,7 +135,7 @@ def _finish(fig, name):
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, name)
     fig.tight_layout()
-    fig.savefig(path, dpi=160)
+    fig.savefig(path, dpi=400)
     plt.close(fig)
     print(f"  wrote {path}")
     
@@ -139,17 +162,17 @@ def fig_curves(tag):
         ("test_loss", "test loss (full test set)"),
         ("test_acc", "test accuracy (%)")
     ]
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.4))
+    fig, axes = plt.subplots(1, 3, figsize=(TW, 2.6))
     for ax, (metric, ylab) in zip(axes, panels):
         for arm in ORDER:
             if arm in curves and metric in curves[arm]:
                 _plot(ax, arm, *curves[arm][metric], n)
         ax.set_xlabel("epoch")
         ax.set_ylabel(ylab)
-        ax.grid(alpha=0.3, lw=0.5)
-    axes[0].legend(fontsize=8)
+        ax.grid(alpha=0.3)
+    axes[0].legend()
     seeds = f"mean of {n} seeds, band +/-1 sd" if n > 1 else "1 seed"
-    fig.suptitle(f"{DATASETS[tag]} -- {seeds}", fontsize=11)
+    fig.suptitle(f"{DATASETS[tag]} -- {seeds}")
     _finish(fig, f"fig01_curves_{tag}.png")
     
 def fig_steps(tags):
@@ -157,22 +180,22 @@ def fig_steps(tags):
     if not have:
         print("  skip step figure: no steplog files")
         return
-    fig, axes = plt.subplots(1, len(have), figsize=(5 * len(have), 4.4), squeeze=False)
+    fig, axes = plt.subplots(1, len(have), figsize=(TW, 2.9), squeeze=False)
     for ax, (tag, curves, n) in zip(axes[0], have):
         for arm in ORDER:
             if arm in curves:
                 _plot(ax, arm, *curves[arm], n)
         ax.set_xlabel("training step")
         ax.set_ylabel("train loss (50-batch window mean)")
-        ax.set_title(f"{DATASETS[tag]} ({n} seed{'s' if n > 1 else ''})", fontsize=10)
+        ax.set_title(f"{DATASETS[tag]} ({n} seed{'s' if n > 1 else ''})")
         # A second x-axis in epochs, because the panels are not comparable without it: 50
         # epochs is 3700 steps on Imagenette and 19550 on CIFAR, and the sawtooth below has
         # a period of exactly one epoch, which is unreadable on a step axis alone.
         spe = max(max(c[0]) for c in curves.values()) / 50
         sec = ax.secondary_xaxis("top", functions=(lambda s, k=spe: s / k, lambda e, k=spe: e * k))
         sec.set_xlabel("epoch")
-        ax.grid(alpha=0.3, lw=0.5)
-    _legend(axes[0], fontsize=8)
+        ax.grid(alpha=0.3)
+    _legend(axes[0])
     _finish(fig, "fig02_step_trainloss.png")
 
 def fig_equal_compute(tags):
@@ -189,7 +212,7 @@ def fig_equal_compute(tags):
     if not rows:
         print("  skip equal-compute figure: no seed-0 runlogs")
         return
-    fig, axes = plt.subplots(1, len(rows), figsize=(5 * len(rows), 4.4), squeeze=False)
+    fig, axes = plt.subplots(1, len(rows), figsize=(TW, 2.7), squeeze=False)
     for ax, (tag, arms) in zip(axes[0], rows):
         floor = min(h[-1][1] for h in arms.values()) - 12
         for arm in ORDER:
@@ -197,20 +220,24 @@ def fig_equal_compute(tags):
             i, h = ORDER.index(arm), arms[arm]
             ax.plot(
                 [r[2] / 3600 for r in h], [r[1] for r in h], color=COLOR[arm],
-                lw=1.3 + 0.16 * i, label=arm, zorder=10 - i
+                lw=LW0 + LWD * i, label=arm, zorder=10 - i
             )
         # The budget lines are what make this the equal-compute figure rather than a second
         # accuracy plot: everything to the left of a baseline's line was bought with compute
         # that baseline also had.
         for base in ("muon", "adamw"):
             if base in arms:
-                ax.axvline(arms[base][-1][2] / 3600, color=COLOR[base], ls="--", lw=1.1, alpha=0.8, zorder=2)
-        ax.set_xlabel("wall-clock (hours); dashed = that baseline's total")
+                ax.axvline(arms[base][-1][2] / 3600, color=COLOR[base], ls="--", lw=0.8, alpha=0.8, zorder=2)
+        ax.set_xlabel("wall-clock (hours)")
         ax.set_ylabel("test accuracy (%)")
         ax.set_ylim(bottom=floor)
-        ax.set_title(f"{DATASETS[tag]} (seed 0)", fontsize=10)
-        ax.grid(alpha=0.3, lw=0.5)
-    _legend(axes[0], fontsize=8, loc="lower right")
+        ax.set_title(DATASETS[tag])
+        ax.grid(alpha=0.3)
+    _legend(axes[0], loc="lower right", fontsize=5.5)
+    fig.suptitle(
+        "seed 0 only -- wall-clock is comparable only within one session; "
+        "dashed = each baseline's own total"
+    )
     _finish(fig, "fig03_equal_compute.png")
 
 def fig_paired(tags):
@@ -221,7 +248,7 @@ def fig_paired(tags):
     """
     pairs = [("muonsam", "muon"), ("sam", "adamw")]
     marks = {"muonsam": "o", "sam": "s"}
-    fig, ax = plt.subplots(figsize=(7.5, 4.4))
+    fig, ax = plt.subplots(figsize=(TW, 3.4))
     seen = set()
     for x, tag in enumerate(tags):
         for k, (a, b) in enumerate(pairs):
@@ -234,16 +261,16 @@ def fig_paired(tags):
             off, c = -0.14 + 0.28 * k, COLOR[a]
             label = f"{a} - {b}" if a not in seen else None
             seen.add(a)
-            ax.scatter([x + off] * len(vals), vals, s=36, color=c, marker=marks[a], zorder=3, label=label)
+            ax.scatter([x + off] * len(vals), vals, s=16, color=c, marker=marks[a], zorder=3, label=label)
             m = statistics.mean(vals)
-            ax.plot([x + off - 0.09, x + off + 0.09], [m, m], color=c, lw=2.4, zorder=4)
-    ax.axhline(0, color="#444444", lw=0.9, zorder=1)
+            ax.plot([x + off - 0.09, x + off + 0.09], [m, m], color=c, lw=1.8, zorder=4)
+    ax.axhline(0, color="#444444", lw=0.7, zorder=1)
     ax.set_xticks(range(len(tags)))
     ax.set_xticklabels([DATASETS[t] for t in tags])
     ax.set_ylabel("last-10 accuracy difference (pp)")
-    ax.set_title("Paired differences, one dot per seed, bar at the mean", fontsize=10)
-    ax.grid(axis="y", alpha=0.3, lw=0.5)
-    ax.legend(fontsize=8)
+    ax.set_title("Paired differences, one dot per seed, bar at the mean")
+    ax.grid(axis="y", alpha=0.3)
+    ax.legend()
     _finish(fig, "fig04_paired_diffs.png")
 
 def _sharpness(tag):
@@ -313,7 +340,7 @@ def fig_ablation(tags):
         if any(not all(a in src for a in CELLS.values()) for src, *_ in panels):
             print(f"  skip 2x2 for {tag}: needs all four arms on all three axes")
             continue
-        fig, axes = plt.subplots(1, 3, figsize=(14, 4.6))
+        fig, axes = plt.subplots(1, 3, figsize=(TW, 2.9))
         for ax, (src, ylab, rule, truncate, fmt) in zip(axes, panels):
             means = {c: statistics.mean(src[CELLS[c]]) for c in CELLS}
             sds = {c: statistics.stdev(src[CELLS[c]]) if len(src[CELLS[c]]) > 1 else 0.0 for c in CELLS}
@@ -323,27 +350,35 @@ def fig_ablation(tags):
                 xs, [means[c] for c in cells], width=0.56,
                 color=[COLOR[CELLS[c]] for c in cells],
                 yerr=[sds[c] for c in cells] if any(sds.values()) else None,
-                capsize=3, zorder=3
+                capsize=2, zorder=3
             )
             for x, c in zip(xs, cells):
                 ax.annotate(
                     fmt.format(means[c]), (x, means[c] + sds[c]), textcoords="offset points",
-                    xytext=(0, 3), ha="center", fontsize=7.5, zorder=4
+                    xytext=(0, 3), ha="center", fontsize=6, zorder=4
                 )
             base, only_s, only_m, both = means[0, 0], means[0, 1], means[1, 0], means[1, 1]
             pred = only_s * only_m / base if rule == "mul" else only_s + only_m - base
             x11 = 2 + 0.44
-            ax.plot([x11 - 0.32, x11 + 0.32], [pred, pred], color="#333333", ls="--", lw=1.3, zorder=5)
+            ax.plot([x11 - 0.32, x11 + 0.32], [pred, pred], color="#333333", ls="--", lw=1.0, zorder=5)
             lo, hi = min(means.values()), max(max(means.values()), pred)
             if truncate: ax.set_ylim(lo - 0.35 * (hi - lo) - 0.2, hi + 0.22 * (hi - lo))
             else: ax.set_ylim(0, hi * 1.18)
             ax.set_xticks(xs)
-            ax.set_xticklabels([f"{CELLS[c]}\nmom {'on' if c[0] else 'off'}, SAM {'on' if c[1] else 'off'}" for c in cells], fontsize=6.5)
+            ax.set_xticklabels([f"mom {'on' if c[0] else 'off'}\nSAM {'on' if c[1] else 'off'}" for c in cells], fontsize=6)
             ax.set_ylabel(ylab)
-            ax.set_title(f"if independent {fmt.format(pred)}   measured {fmt.format(both)}", fontsize=9)
-            ax.grid(axis="y", alpha=0.3, lw=0.5, zorder=0)
+            ax.set_title(f"if independent {fmt.format(pred)}\nmeasured {fmt.format(both)}")
+            ax.grid(axis="y", alpha=0.3, zorder=0)
+        # The arm names would collide under adjacent bars at 2.2in per panel, so the
+        # x axis carries the 2x2 state and one legend carries the names.
+        cells = sorted(CELLS)
+        axes[0].legend(
+            [plt.Rectangle((0, 0), 1, 1, color=COLOR[CELLS[c]]) for c in cells],
+            [CELLS[c] for c in cells], loc="upper left", fontsize=5.5,
+            handlelength=1.0, handleheight=0.8, borderpad=0.4, labelspacing=0.3
+        )
         n = len(files)
-        fig.suptitle(f"{DATASETS[tag]} -- momentum x SAM, {n} seed{'s' if n > 1 else ''}; dashed = what independent mechanisms would give", fontsize=11)
+        fig.suptitle(f"{DATASETS[tag]} -- momentum x SAM, {n} seed{'s' if n > 1 else ''}; dashed = what independent mechanisms would give")
         _finish(fig, f"fig05_ablation_{tag}.png")
 
 def fig_cost(tags):
@@ -363,7 +398,7 @@ def fig_cost(tags):
     if not have:
         print("  skip cost figure: no summary files")
         return
-    fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.4))
+    fig, axes = plt.subplots(1, 2, figsize=(TW, 3.0))
     for ax, (field, name) in zip(axes, [("s_per_epoch", "wall-clock per epoch"), ("peak_mem_mb", "peak GPU memory")]):
         tops = []
         for k, (a, b) in enumerate(pairs):
@@ -375,21 +410,21 @@ def fig_cost(tags):
             sd = [statistics.stdev(v) if len(v) > 1 else 0.0 for _, v in keep]
             ax.bar(
                 [x for x, _ in keep], m, width=0.34, color=COLOR[a],
-                yerr=sd if any(sd) else None, capsize=3, label=f"{a} over {b}", zorder=3
+                yerr=sd if any(sd) else None, capsize=2, label=f"{a} over {b}", zorder=3
             )
             for (x, _), y, e in zip(keep, m, sd):
                 tops.append(y + e)
-                ax.annotate(f"{y:+.1f}%", (x, y + e), textcoords="offset points", xytext=(0, 3), ha="center", fontsize=7.5, zorder=4)
-        ax.axhline(0, color="#444444", lw=0.9, zorder=1)
+                ax.annotate(f"{y:+.1f}%", (x, y + e), textcoords="offset points", xytext=(0, 3), ha="center", fontsize=6, zorder=4)
+        ax.axhline(0, color="#444444", lw=0.7, zorder=1)
         ax.set_xticks(range(len(have)))
-        ax.set_xticklabels([DATASETS[t] for t in have], fontsize=8)
+        ax.set_xticklabels([DATASETS[t] for t in have])
         ax.set_ylabel("overhead over its own baseline (%)")
-        ax.set_title(name, fontsize=10)
-        ax.grid(axis="y", alpha=0.3, lw=0.5, zorder=0)
+        ax.set_title(name)
+        ax.grid(axis="y", alpha=0.3, zorder=0)
         # Headroom first, then the legend pinned into it. Six bars leave "best" placement
         # nowhere to go, and it put the box on top of a bar on the wall-clock panel.
         if tops: ax.set_ylim(top=max(tops) * 1.24)
-        ax.legend(fontsize=8, loc = "upper center", ncol=2)
+        ax.legend(loc="upper center", ncol=2)
     _finish(fig, "fig06_cost_memory.png")
 
 def main():
