@@ -361,7 +361,12 @@ def fig_ablation(tags):
             pred = only_s * only_m / base if rule == "mul" else only_s + only_m - base
             x11 = 2 + 0.44
             ax.plot([x11 - 0.32, x11 + 0.32], [pred, pred], color="#333333", ls="--", lw=1.0, zorder=5)
-            lo, hi = min(means.values()), max(max(means.values()), pred)
+            # The extent has to include the error bars. With one seed every sd was 0 and
+            # the means alone bounded the panel; at three seeds muon_nomom's sharpness sd
+            # is 0.36, so both its whisker and its value label fell outside the axis -- the
+            # tallest bar in the panel was the one with no number on it.
+            tops = [means[c] + sds[c] for c in CELLS]
+            lo, hi = min(means.values()), max(max(tops), pred)
             if truncate: ax.set_ylim(lo - 0.35 * (hi - lo) - 0.2, hi + 0.22 * (hi - lo))
             else: ax.set_ylim(0, hi * 1.18)
             ax.set_xticks(xs)

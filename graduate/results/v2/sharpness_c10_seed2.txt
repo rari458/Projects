@@ -1,0 +1,12 @@
+device=cpu | eval on 8 batches | rho=0.5 | 5 ascent steps | outdir=/home/anstk/kaggle-out/c10_s2
+
+optimizer         test_acc     loss   sharpness   rise@a=1
+sam                 90.33%   0.2728      0.0560     1.7516
+adamw               92.16%   0.3206      0.0687     7.1204
+muonsam             93.86%   0.1778      0.0994     4.8888
+muon                93.30%   0.2640      0.1374    16.4869
+muonsam_nomom       93.45%   0.1978      0.1374     2.3604
+muon_nomom          90.41%   0.4529      0.7130    14.6598
+
+Lower sharpness = flatter minimum. Compare against test_acc: the claim this file exists to test is that they move together.
+saved /home/anstk/kaggle-out/c10_s2/sharpness_seed2.png
