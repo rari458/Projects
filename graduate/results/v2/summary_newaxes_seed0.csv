@@ -1,0 +1,5 @@
+optimizer,final_acc,final_test_loss,total_s,s_per_epoch,peak_mem_mb,lr
+muonsam,93.65,0.2015,4894.6,97.9,835,0.02
+muonsam_nowarm,93.82,0.2052,5449.3,109.0,838,0.02
+muonsam_gsam,93.99,0.1958,5056.4,101.1,837,0.02
+muonsam_asam,93.64,0.2673,4907.2,98.1,832,0.02
