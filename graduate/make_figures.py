@@ -22,6 +22,7 @@ Korean as empty boxes. Captions are written in Word, where the fonts exist.
 import csv
 import glob
 import os
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -431,6 +432,84 @@ def fig_cost(tags):
         if tops: ax.set_ylim(top=max(tops) * 1.24)
         ax.legend(loc="upper center", ncol=2)
     _finish(fig, "fig06_cost_memory.png")
+    
+def rho_points():
+    """{rho: {"acc": [per seed], "loss": [per seed]}} for the rho screen.
+    
+    rho comes from each runlog's own provenance line rather than from its filename. The tag
+    in the name is a spelling of the value -- p025 for 0.025 -- and a map between the two is
+    one more thing to keep in step, where the harness already wrote down the number it
+    actually used. It is also the only thing inside a file that distinguishes these runs:
+    all eighteen carry kind=muonsam at lr=0.02, which is why each rho needed its own log.
+    """
+    acc = defaultdict(lambda: defaultdict(list))
+    for path in sorted(glob.glob(os.path.join(V2, "runlog_rho_*_seed*.csv"))):
+        arms, notes = load(path)
+        m = re.search(r"rho_max=([\d.]+)", " ".join(notes))
+        if m is None or "muonsam" not in arms:
+            print(f"  skip {os.path.basename(path)}: no rho_max line or no muonsam arm")
+            continue
+        hist = arms["muonsam"]
+        acc[float(m.group(1))]["acc"].append(last_n(hist, 10)[0])
+        acc[float(m.group(1))]["loss"].append(last_n_loss(hist, 10))
+    return acc
+
+def fig_rho(tags):
+    """The rho screen: six points over a 32x range, three seeds, CIFAR-10, muonsam alone.
+    
+    A picture rather than a table because the shape is the finding. The curve is unimodal
+    and asymmetric -- it climbs 0.29pp from the default to 0.10 and falls 0.47 from the peak
+    to 0.40 -- and six numbers in a column do not show that, while the reason to recommend
+    the interior of the plateau rather than its top follows from the asymmetry directly.
+    
+    Accuracy and test loss get a panel each because they disagree in the one place that
+    matters: rho=0.40 is indistinguishable from the default on accuracy and 18% worse on
+    loss. Wall-clock is deliberately absent -- it is flat in rho to within 0.5% inside every
+    session, so a third panel would draw a flat line, and the four-point and bracket runs at
+    one seed come from different sessions, where time is not comparable anyway.
+    """
+    if "c10" not in tags: return
+    pts = rho_points()
+    if not pts:
+        print(f"  skip rho figure: no runlog_rho_* in {V2}")
+        return
+    rhos = sorted(pts)
+    c = COLOR["muonsam"]
+    fig, axes = plt.subplots(1, 2, figsize=(TW, 3.0))
+    panels = [("acc", "last-10 test accuracy (%)", "accuracy"), ("loss", "last-10 test loss", "test loss")]
+    for ax, (key, ylab, title) in zip(axes, panels):
+        series = [pts[r][key] for r in rhos]
+        if any(v is None for s in series for v in s):
+            ax.set_visible(False)       # a pre-2026-09 log has no test_loss to plot
+            continue
+        # The plateau is shaded rather than marked with a winning point: 0.10 and 0.20 are
+        # +0.13 +/- 0.08 apart, under half the rerun floor, so drawing one of them as the
+        # optimum would claim a separation these three seeds do not have.
+        ax.axvspan(0.10, 0.20, color=c, alpha=0.08, lw=0, zorder=0)
+        ax.axvline(0.05, color="#444444", lw=0.7, ls="--", zorder=1)
+        ax.annotate(
+            "default", (0.05, 1.0), xycoords=("data", "axes fraction"),
+            textcoords="offset points", xytext=(3, -9), fontsize=6, color="#444444"
+        )
+        for r, s in zip(rhos, series): 
+            ax.scatter([r] * len(s), s, s=9, color=c, alpha=0.45, lw=0, zorder=3)
+        ax.errorbar(
+            rhos, [statistics.mean(s) for s in series],
+            yerr=[statistics.stdev(s) if len(s) > 1 else 0.0 for s in series],
+            color=c, lw=1.1, marker="o", ms=3.2, capsize=2, zorder=4
+        )
+        # Log x because the sweep is geometric: on a linear axis the four points below 0.2
+        # pile into the left eighth and the asymmetry this figure exists to show disappears.
+        ax.set_xscale("log")
+        ax.set_xticks(rhos)
+        ax.set_xticklabels([f"{r:g}" for r in rhos])
+        ax.minorticks_off()            # decade minors otherwise crowd six hand-placed ticks
+        ax.set_xlabel("rho_max (log scale)")
+        ax.set_ylabel(ylab)
+        ax.set_title(title)
+        ax.grid(alpha=0.3, zorder=0)
+    fig.suptitle("CIFAR-10, three seeds -- dots are seeds, bars +/-1 sd, shaded band the 0.10-0.20 plateau")
+    _finish(fig, "fig07_rho_screen.png")
 
 def main():
     bad = [t for t in sys.argv[1:] if t not in DATASETS]
@@ -445,6 +524,7 @@ def main():
     fig_paired(tags)
     fig_ablation(tags)
     fig_cost(tags)
+    fig_rho(tags)
     
 if __name__ == "__main__":
     main()
