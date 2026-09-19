@@ -17,40 +17,46 @@ optimizer memory AdamW already costs**.
 
 ## Results
 
-`muonsam − muon`, paired within each session so the seed cancels. Three seeds per dataset;
-CIFAR-10 pools six sessions because two independent runs exist per seed. ResNet-18, 50 epochs,
-batch 128, identical weight init and identical batch order across arms.
+`muonsam − muon`, paired within each session so the seed cancels. Three seeds per dataset, all
+from one self-consistent set of runs. ResNet-18, 50 epochs, batch 128, identical weight init and
+identical batch order across arms.
 
 | dataset | sessions | last 10 ep | at equal compute | speedup |
 |---|---|---|---|---|
-| CIFAR-10 | 6 | **+0.97 ± 0.19** pp | +0.72 ± 0.22 pp | 2.42 ± 0.35× |
-| CIFAR-100 | 3 | **+3.08 ± 0.22** pp | +2.75 ± 0.25 pp | 2.78 ± 0.24× |
-| Imagenette 64×64 | 3 | **+1.51 ± 0.27** pp | +0.89 ± 0.36 pp | 2.13 ± 0.18× |
+| CIFAR-10 | 3 | **+0.81 ± 0.06** pp | +0.57 ± 0.20 pp | 2.41 ± 0.36× |
+| CIFAR-100 | 3 | **+2.94 ± 0.29** pp | +2.43 ± 0.24 pp | 2.70 ± 0.13× |
+| Imagenette 64×64 | 3 | **+1.74 ± 0.12** pp | +1.39 ± 0.26 pp | 2.49 ± 0.16× |
+
+An earlier campaign measured the same comparison on separate runs. Pooling both gives
+**+0.92 ± 0.17 pp over 9 sessions** on CIFAR-10 and **+3.01 ± 0.24 pp over 6** on CIFAR-100 —
+the table above stays single-campaign so that every number in it comes from the same runs.
 
 *Equal compute* = MuonSAM's accuracy at the wall-clock Muon needed for its whole run, averaged
 over the last 5 epochs finishing inside that budget. *Speedup* = time for MuonSAM to reach Muon's
-final accuracy. Both are reported because a method that costs more has to justify it on the axis
-that matters, not on epochs.
+last-10 mean. Both are reported because a method that costs more has to justify it on the axis
+that matters, not on epochs. Both sides are windowed: reading a single final epoch off a noisy
+curve was measurably less stable, on both the measurement and the target.
 
-The gap tracks headroom rather than class count — 93.9% final → +0.97, 90.6% → +1.51,
-74.1% → +3.08 — so expect more benefit where the model has room left.
+The gap tracks headroom rather than class count — 93.7% final → +0.81, 90.6% → +1.74,
+73.7% → +2.94 — so expect more benefit where the model has room left.
 
 CIFAR-100 in full, mean of the last 10 epochs over 3 seeds:
 
 | optimizer | accuracy | s/epoch | peak GPU mem |
 |---|---|---|---|
-| **MuonSAM** | **73.75%** | 99.6 | 838 MB |
-| Muon | 70.67% | 73.3 | 787 MB |
-| AdamW | 67.69% | 48.8 | 832 MB |
-| SAM | 66.10% | 93.1 | 836 MB |
+| **MuonSAM** | **73.67%** | 98.6 | 836 MB |
+| Muon | 70.74% | 72.6 | 787 MB |
+| AdamW | 67.76% | 48.3 | 831 MB |
+| SAM | 66.36% | 92.6 | 835 MB |
 
 ### Why not just use SAM?
 
 Because it does not pay for itself. On Imagenette — the small, overfitting-prone dataset where
-SAM should look best — `sam` is indistinguishable from `adamw` on accuracy (+0.54 ± 0.78 pp,
-2/3 seeds positive), and **at equal compute it loses by 5.07 ± 1.21 pp, 3/3 seeds**, needing 1.5×
-the wall-clock to reach AdamW's final accuracy. MuonSAM over Muon on the same dataset is
-**+0.89 ± 0.36 pp at equal compute, 3/3 seeds**.
+SAM should look best — `sam` is indistinguishable from `adamw` on accuracy (+0.49 ± 0.83 pp,
+2/3 seeds positive), and **at equal compute it loses by 4.39 ± 1.00 pp, 3/3 seeds**: at +86–90%
+per step it is only at **epoch 26 of 50, in all three seeds**, when AdamW finishes, and its
+speed ratio to AdamW's converged accuracy is 0.79 ± 0.05 — under 1 in all six sessions measured.
+MuonSAM over Muon on the same dataset is **+1.39 ± 0.26 pp at equal compute, 3/3 seeds**.
 
 Both buy SAM's generalization. Only one can afford it. That is what the periodic 2-pass is for.
 
@@ -117,7 +123,7 @@ Every published variant is a keyword, not a code path.
 | argument | default | what it does |
 |---|---|---|
 | `total_steps` | *required* | drives the ρ schedule |
-| `rho_max` | `0.05` | peak perturbation radius; also each group's default `rho` |
+| `rho_max` | `0.05` | peak perturbation radius; also each group's default `rho`. **The default is conservative** — see below |
 | `rho_warmup_frac` | `0.0` | fraction of training with ρ=0 (pure Muon) before the linear ramp. **Use 0.3**; the reported runs do |
 | `sam_period` | `5` | LookSAM *k*. Full 2-pass every *k* steps, 1-pass in between |
 | `momentum_mode` | `"pre_ns5"` | `"pre_ns5"` momentum on the raw gradient (matches Muon; ρ=0 reduces to plain Muon **exactly**), `"post_ns5"` on the orthogonalized direction, `"none"` no Muon momentum |
@@ -129,6 +135,28 @@ Every published variant is a keyword, not a code path.
 `rho_warmup_frac` is not just a speed trick: [2509.21818](https://arxiv.org/abs/2509.21818) shows
 SAM can converge to points where the *perturbed* gradient vanishes while the true one does not,
 and names a short warm-start before enabling SAM as the safeguard.
+
+**`rho_max` is worth raising, and it is free.** Six points across a 32× range at three seeds on
+CIFAR-10, `muonsam` alone:
+
+| `rho_max` | 0.025 | **0.05** (default) | 0.10 | 0.20 | 0.40 | 0.80 |
+|---|---|---|---|---|---|---|
+| last-10 accuracy | 93.51 | 93.79 | **94.09** | **94.22** | 93.75 | 93.47 |
+| last-10 test loss | 0.2183 | 0.2048 | **0.1908** | 0.1892 | 0.2423 | 0.2770 |
+
+The curve is unimodal and the optimum is the **0.10–0.20 plateau, two to four times the
+default**: paired within-seed against 0.05 that is +0.31 ± 0.06 pp at 0.10 and +0.44 ± 0.10 pp at
+0.20, each 3/3. ρ scales the perturbation and not the work, so per-epoch time is flat to within
+0.5% inside a session — the gain costs nothing. **Try 0.10 before 0.20**: the two are
+statistically tied (+0.13 ± 0.08 pp) but the curve falls off faster above the peak than below it
+(−0.47 ± 0.11 pp at 0.40), so 0.20 sits on the shoulder where being a factor of two high is
+expensive and 0.10 does not.
+
+Two caveats. This is **CIFAR-10 only**, so the *location* of the optimum is not claimed to
+transfer — what probably does is the shape, which is broad: over the whole 32× range accuracy
+moves 0.75 pp, and at 0.80, sixteen times the default, training still converges to 0.32 ± 0.04 pp
+under the default with no divergence at any seed. And **the default is what every number on this
+page was measured at**, which makes those gaps lower bounds rather than tuned results.
 
 ---
 
@@ -190,13 +218,15 @@ The benchmark harness lives at the repo root and is not part of the package.
 python preflight.py                          # every optimizer variant builds with the right config
 python benchmark_cifar10.py                  # auto-QUICK on CPU, full 50-epoch run on GPU
 DATASET=cifar100 python benchmark_cifar10.py # also: imagenette
-python analyze.py results/runlog_c100_seed*.csv
+python analyze.py results/v2/runlog_c100_seed*.csv
 python sharpness.py ckpt_*.pt                # post-hoc flatness of each saved minimum
 ```
 
 Set `REQUIRE_GPU=1` on any cloud run: without it a CPU session silently produces a 3-epoch log
-that looks valid. Every run log behind the tables above is in [`results/`](results/), each
-carrying a `#` provenance line.
+that looks valid. Every run log behind the tables above is in [`results/v2/`](results/v2/), each
+carrying a `#` provenance line; [`results/v1/`](results/v1/) holds the earlier campaign that the
+pooled figures draw on. Do not pass a file from each to one invocation unless you mean to pool
+them — the wall-clock comes from different hosts.
 
 Tests — run all of them after touching any Keras file:
 
@@ -215,10 +245,11 @@ python test_muon_sam_keras_graph.py
 
 The point of a capstone is the measurement, so the negative results are reported too.
 
-- **Flatness does not explain Muon's advantage over AdamW.** We measured it. Muon is ~2× *sharper*
-  than AdamW on CIFAR-100 while being more accurate, and *flatter* on Imagenette — the sign
-  reverses across datasets, 3 seeds against 3. A mechanism whose sign depends on the dataset is
-  not the mechanism.
+- **Flatness does not explain Muon's advantage over AdamW.** We measured it. Muon converges
+  *sharper* than AdamW on CIFAR-100 while being more accurate, and *flatter* on Imagenette — the
+  sign reverses across datasets, 6 measurements against 6. A mechanism whose sign depends on the
+  dataset is not the mechanism. The magnitude is not quoted because it does not hold still:
+  the CIFAR-100 ratio spans 1.44–2.15 over those six.
 - **SAM flattens the minimum within the Muon family, but the effect is partly a base-loss
   artifact.** `adaptive_sharpness()` returns an absolute loss rise, and the SAM arms sit at lower
   loss. Absolute: MuonSAM flatter than Muon 6/6. Normalized by base loss: 2 positive,
@@ -227,15 +258,19 @@ The point of a capstone is the measurement, so the negative results are reported
   direction dominates: AdamW returned 0.1970 / 1.0427 / 0.8291 across three seeds of one config.
   A single-seed sharpness number is not evidence.
 - **The two mechanisms are sub-additive.** Momentum and SAM both smooth the update direction, so
-  they partly do the same work: −1.28 ± 0.88 pp interaction, negative in 3/3 seeds. The sign is
-  settled; the magnitude is not.
+  they partly do the same work: **−1.09 ± 0.39 pp interaction, negative in 6/6 sessions**. The
+  same 2×2 is sub-additive in flatness too, 3/3 — the measured minimum is 1.3–3.8× sharper than
+  independence predicts. Direction only on that axis: the spread belongs to the momentum-free
+  arm, which sits in the denominator of every prediction.
 - **Reproducibility floor is ~0.3 pp, and Muon is why.** cuDNN nondeterminism at ~1e-8 is
   amplified roughly 10× per step by Newton-Schulz, because `O(G) = UVᵀ` is ill-conditioned wherever
   `G` is near-rank-deficient. On CPU the harness is bit-reproducible, so the whole floor is that.
   Do not read a single-seed difference below ~0.3 pp as an effect.
 - **Learning rates are not per-optimizer tuned.** A 20-epoch screen found Muon and MuonSAM flat
   over a 4× LR range (0.30 / 0.50 pp) while AdamW moves 0.90 pp — so AdamW is the LR-sensitive arm,
-  and the harness default sits inside its plateau rather than at an edge.
+  and the harness default sits inside its plateau rather than at an edge. **ρ is the axis where
+  that is not true**: its default is 0.44 ± 0.10 pp below the optimum on CIFAR-10, which makes
+  every gap on this page a lower bound. See the `rho_max` note under Config axes.
 - **ImageNet was not run.** No lab GPU was available. Imagenette 64×64 is the honest substitute
   and is described as such, never as ImageNet.
 
