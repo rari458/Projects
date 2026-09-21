@@ -17,3 +17,13 @@ ckpt_*.pt
 build/
 dist/
 *.egg-info/
+
+# Generic tool-output names must never live in results/ -- they carry no dataset or
+# seed tag, so a stray copy is unidentifiable, and a tracked one is silently
+# overwritten by any run pointed at that directory.
+results/**/benchmark.png
+results/**/sharpness.png
+results/**/sharpness_seed*.png
+results/**/runlog.csv
+results/**/steplog.csv
+results/**/summary.csv
