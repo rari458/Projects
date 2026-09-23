@@ -136,27 +136,39 @@ Every published variant is a keyword, not a code path.
 SAM can converge to points where the *perturbed* gradient vanishes while the true one does not,
 and names a short warm-start before enabling SAM as the safeguard.
 
-**`rho_max` is worth raising, and it is free.** Six points across a 32× range at three seeds on
-CIFAR-10, `muonsam` alone:
+**`rho_max` is worth raising, and it is free — but where its optimum sits depends on the
+dataset.** Six points across a 32× range at three seeds per dataset, `muonsam` alone, last-10
+window:
 
-| `rho_max` | 0.025 | **0.05** (default) | 0.10 | 0.20 | 0.40 | 0.80 |
-|---|---|---|---|---|---|---|
-| last-10 accuracy | 93.51 | 93.79 | **94.09** | **94.22** | 93.75 | 93.47 |
-| last-10 test loss | 0.2183 | 0.2048 | **0.1908** | 0.1892 | 0.2423 | 0.2770 |
+| `rho_max` | 0.025 | **0.05** (default) | 0.10 | 0.20 | 0.40 | 0.80 | 1.60 |
+|---|---|---|---|---|---|---|---|
+| CIFAR-10 accuracy | 93.51 | 93.79 | **94.09** | **94.22** | 93.75 | 93.47 | — |
+| CIFAR-10 test loss | 0.2183 | 0.2048 | **0.1908** | **0.1892** | 0.2423 | 0.2770 | — |
+| CIFAR-100 accuracy | — | 73.76 | 74.30 | 74.78 | **75.35** | 74.48 | 73.65 |
+| CIFAR-100 test loss | — | 1.1113 | 1.0400 | 0.9606 | **0.9198** | 1.1543 | 1.3210 |
 
-The curve is unimodal and the optimum is the **0.10–0.20 plateau, two to four times the
-default**: paired within-seed against 0.05 that is +0.31 ± 0.06 pp at 0.10 and +0.44 ± 0.10 pp at
-0.20, each 3/3. ρ scales the perturbation and not the work, so per-epoch time is flat to within
-0.5% inside a session — the gain costs nothing. **Try 0.10 before 0.20**: the two are
-statistically tied (+0.13 ± 0.08 pp) but the curve falls off faster above the peak than below it
-(−0.47 ± 0.11 pp at 0.40), so 0.20 sits on the shoulder where being a factor of two high is
-expensive and 0.10 does not.
+On CIFAR-10 the optimum is the **0.10–0.20 plateau, two to four times the default**: paired
+within-seed against 0.05 that is +0.31 ± 0.06 pp at 0.10 and +0.44 ± 0.10 pp at 0.20, each 3/3.
+On CIFAR-100 it is a single peak at **0.40, eight times the default**, +1.60 ± 0.28 pp over it and
+above both neighbours at every seed (0.20 is −0.58 ± 0.23 pp, 0.80 is −0.87 ± 0.14 pp), with the
+test-loss minimum at the same point in all three seeds. What transfers is the shape — unimodal,
+and falling off faster above the peak than below it. ρ scales the perturbation and not the work,
+so per-epoch time is flat to within 0.5% inside a session on both datasets: the gain costs
+nothing.
 
-Two caveats. This is **CIFAR-10 only**, so the *location* of the optimum is not claimed to
-transfer — what probably does is the shape, which is broad: over the whole 32× range accuracy
-moves 0.75 pp, and at 0.80, sixteen times the default, training still converges to 0.32 ± 0.04 pp
-under the default with no divergence at any seed. And **the default is what every number on this
-page was measured at**, which makes those gaps lower bounds rather than tuned results.
+**If you tune one number, stay at or below the peak.** On CIFAR-10 try 0.10 before 0.20: the two
+are statistically tied (+0.13 ± 0.08 pp), but 0.40 is already −0.47 ± 0.11 pp, so 0.20 sits on
+the shoulder where being a factor of two high is expensive. Without a screen of your own, **0.20
+is the value that helped on both datasets** (+0.44 ± 0.10 pp on CIFAR-10, +1.02 ± 0.10 pp on
+CIFAR-100, each 3/3), where 0.40 would have given nothing on CIFAR-10 at an 18% worse test loss.
+
+Two caveats. Two datasets show that the location moves, not how: CIFAR-100, where the model has
+more headroom, wants a larger ρ, which is the same direction as the MuonSAM gap itself growing
+with headroom — an observation, not a rule. The range is forgiving on both: no point diverges at
+any seed, and the worst point in each 32× sweep is only 0.32 ± 0.04 pp (CIFAR-10, 0.80) and
+0.11 ± 0.05 pp (CIFAR-100, 1.60) under the default. And **the default is what every number on this
+page was measured at**, so those gaps are lower bounds rather than tuned results — by about
+0.4 pp on CIFAR-10 and 1.6 pp on CIFAR-100.
 
 ---
 
@@ -269,8 +281,8 @@ The point of a capstone is the measurement, so the negative results are reported
 - **Learning rates are not per-optimizer tuned.** A 20-epoch screen found Muon and MuonSAM flat
   over a 4× LR range (0.30 / 0.50 pp) while AdamW moves 0.90 pp — so AdamW is the LR-sensitive arm,
   and the harness default sits inside its plateau rather than at an edge. **ρ is the axis where
-  that is not true**: its default is 0.44 ± 0.10 pp below the optimum on CIFAR-10, which makes
-  every gap on this page a lower bound. See the `rho_max` note under Config axes.
+  that is not true**: its default is 0.44 ± 0.10 pp below the optimum on CIFAR-10 and
+  1.60 ± 0.28 pp below it on CIFAR-100, which makes every gap on this page a lower bound. See the `rho_max` note under Config axes.
 - **ImageNet was not run.** No lab GPU was available. Imagenette 64×64 is the honest substitute
   and is described as such, never as ImageNet.
 
