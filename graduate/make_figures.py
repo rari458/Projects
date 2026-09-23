@@ -432,83 +432,109 @@ def fig_cost(tags):
         if tops: ax.set_ylim(top=max(tops) * 1.24)
         ax.legend(loc="upper center", ncol=2)
     _finish(fig, "fig06_cost_memory.png")
+
+# Both rho screens: CIFAR-10 over 0.025-0.80 and CIFAR-100 over 0.05-1.60, each a 32x range.
+# Only CIFAR-10's optimum is a tie between two points; CIFAR-100's is one separated point and
+# needs no band.
+RHO_TAGS = {"c10": "cifar10", "c100": "cifar100"}
+RHO_PLATEAU = {"c10": (0.10, 0.20)}
+
+def rho_points(tag):
+    """{rho: {"acc": [per seed], "loss": [per seed]}} for one dataset's rho screen.
     
-def rho_points():
-    """{rho: {"acc": [per seed], "loss": [per seed]}} for the rho screen.
+    rho, the dataset and the seed all come from each runlog's own provenance line rather than
+    from its filename. The tag in the name is a spelling of the value -- p025 for 0.025 -- and
+    a map between the two is one more thing to keep in step, where the harness already wrote
+    down what it actually used. That line is also the only thing inside a file that tells
+    these runs apart: every one carries kind=muonsam at lr=0.02.
     
-    rho comes from each runlog's own provenance line rather than from its filename. The tag
-    in the name is a spelling of the value -- p025 for 0.025 -- and a map between the two is
-    one more thing to keep in step, where the harness already wrote down the number it
-    actually used. It is also the only thing inside a file that distinguishes these runs:
-    all eighteen carry kind=muonsam at lr=0.02, which is why each rho needed its own log.
+    The dataset filter is not optional. The glob matches both screens and five rho values
+    exist in both, so without it the CIFAR-100 points pool into the CIFAR-10 ones with no
+    error. A (rho, seed) seen twice is therefore a hard failure rather than an extra dot.
     """
-    acc = defaultdict(lambda: defaultdict(list))
+    want = RHO_TAGS[tag]
+    acc, seen = defaultdict(lambda: defaultdict(list)), set()
     for path in sorted(glob.glob(os.path.join(V2, "runlog_rho_*_seed*.csv"))):
         arms, notes = load(path)
-        m = re.search(r"rho_max=([\d.]+)", " ".join(notes))
-        if m is None or "muonsam" not in arms:
-            print(f"  skip {os.path.basename(path)}: no rho_max line or no muonsam arm")
+        prov = dict(re.findall(r"(\w+)=(\S+)", " ".join(notes)))
+        if "rho_max" not in prov or "dataset" not in prov or "muonsam" not in arms:
+            print(f"  skip {os.path.basename(path)}: no rho_max/dataset line or no muonsam arm")
             continue
+        if prov["dataset"] != want: continue
+        key = (float(prov["rho_max"]), prov.get("seed", path))
+        if key in seen:
+            raise SystemExit(f"{os.path.basename(path)}: rho={key[0]} seed={key[1]} appears twice for {want}")
+        seen.add(key)
         hist = arms["muonsam"]
-        acc[float(m.group(1))]["acc"].append(last_n(hist, 10)[0])
-        acc[float(m.group(1))]["loss"].append(last_n_loss(hist, 10))
+        acc[key[0]]["acc"].append(last_n(hist, 10)[0])
+        acc[key[0]]["loss"].append(last_n_loss(hist, 10))
     return acc
 
 def fig_rho(tags):
-    """The rho screen: six points over a 32x range, three seeds, CIFAR-10, muonsam alone.
+    """The rho screens: muonsam alone, three seeds, one row per dataset.
     
-    A picture rather than a table because the shape is the finding. The curve is unimodal
-    and asymmetric -- it climbs 0.29pp from the default to 0.10 and falls 0.47 from the peak
-    to 0.40 -- and six numbers in a column do not show that, while the reason to recommend
-    the interior of the plateau rather than its top follows from the asymmetry directly.
+    A picture rather than a table because the shape is the finding, and with two datasets the
+    finding is that the shape transfers while the location does not. Both curves are unimodal
+    and fall faster above the peak than below it, but CIFAR-10 peaks on a 0.10-0.20 plateau
+    and CIFAR-100 at 0.40. The rows share one log x axis so the shift reads as a shift; their
+    y axes are separate, since the two accuracy ranges do not overlap at all.
     
-    Accuracy and test loss get a panel each because they disagree in the one place that
-    matters: rho=0.40 is indistinguishable from the default on accuracy and 18% worse on
-    loss. Wall-clock is deliberately absent -- it is flat in rho to within 0.5% inside every
-    session, so a third panel would draw a flat line, and the four-point and bracket runs at
-    one seed come from different sessions, where time is not comparable anyway.
+    Accuracy and test loss get a column each because they disagree above the optimum on both
+    datasets: CIFAR-10's 0.40 and CIFAR-100's 1.60 each sit at the default's accuracy with an
+    18-19% worse loss. Wall-clock is deliberately absent -- it is flat in rho to within 0.5%
+    inside every session, and the four-point and bracket runs at one seed come from different
+    sessions, where time is not comparable anyway.
     """
-    if "c10" not in tags: return
-    pts = rho_points()
-    if not pts:
-        print(f"  skip rho figure: no runlog_rho_* in {V2}")
+    rows = [(t, rho_points(t)) for t in RHO_TAGS if t in tags]
+    rows = [(t, p) for t, p in rows if p]
+    if not rows:
+        print(f"  skip rho figure: no runlog_rho_* for {list(RHO_TAGS)} in {V2}")
         return
-    rhos = sorted(pts)
+    ticks = sorted({r for _, p in rows for r in p})
     c = COLOR["muonsam"]
-    fig, axes = plt.subplots(1, 2, figsize=(TW, 3.0))
+    fig, axes = plt.subplots(len(rows), 2, figsize=(TW, 2.7 * len(rows)), sharex=True, squeeze=False)
     panels = [("acc", "last-10 test accuracy (%)", "accuracy"), ("loss", "last-10 test loss", "test loss")]
-    for ax, (key, ylab, title) in zip(axes, panels):
-        series = [pts[r][key] for r in rhos]
-        if any(v is None for s in series for v in s):
-            ax.set_visible(False)       # a pre-2026-09 log has no test_loss to plot
-            continue
-        # The plateau is shaded rather than marked with a winning point: 0.10 and 0.20 are
-        # +0.13 +/- 0.08 apart, under half the rerun floor, so drawing one of them as the
-        # optimum would claim a separation these three seeds do not have.
-        ax.axvspan(0.10, 0.20, color=c, alpha=0.08, lw=0, zorder=0)
-        ax.axvline(0.05, color="#444444", lw=0.7, ls="--", zorder=1)
-        ax.annotate(
-            "default", (0.05, 1.0), xycoords=("data", "axes fraction"),
-            textcoords="offset points", xytext=(3, -9), fontsize=6, color="#444444"
-        )
-        for r, s in zip(rhos, series): 
-            ax.scatter([r] * len(s), s, s=9, color=c, alpha=0.45, lw=0, zorder=3)
-        ax.errorbar(
-            rhos, [statistics.mean(s) for s in series],
-            yerr=[statistics.stdev(s) if len(s) > 1 else 0.0 for s in series],
-            color=c, lw=1.1, marker="o", ms=3.2, capsize=2, zorder=4
-        )
-        # Log x because the sweep is geometric: on a linear axis the four points below 0.2
-        # pile into the left eighth and the asymmetry this figure exists to show disappears.
+    nseeds = set()
+    for (tag, pts), row in zip(rows, axes):
+        rhos = sorted(pts)
+        for ax, (key, ylab, title) in zip(row, panels):
+            series = [pts[r][key] for r in rhos]
+            if any(v is None for s in series for v in s):
+                ax.set_visible(False)       # a pre-2026-09 log has no test_loss to plot
+                continue
+            nseeds |= {len(s) for s in series}
+            # A plateau is shaded rather than marked with a winning point: CIFAR-10's 0.10 and
+            # 0.20 are +0.13 +/- 0.08 apart, under half the rerun floor, so drawing one of them
+            # as the optimum would claim a separation three seeds do not have.
+            if tag in RHO_PLATEAU:
+                ax.axvspan(*RHO_PLATEAU[tag], color=c, alpha=0.08, lw=0, zorder=0)
+            ax.axvline(0.05, color="#444444", lw=0.7, ls="--", zorder=1)
+            ax.annotate(
+                "default", (0.05, 1.0), xycoords=("data", "axes fraction"),
+                textcoords="offset points", xytext=(3, -9), fontsize=6, color="#444444"
+            )
+            for r, s in zip(rhos, series):
+                ax.scatter([r] * len(s), s, s=9, color=c, alpha=0.45, lw=0, zorder=3)
+            ax.errorbar(
+                rhos, [statistics.mean(s) for s in series],
+                yerr=[statistics.stdev(s) if len(s) > 1 else 0.0 for s in series],
+                color=c, lw=1.1, marker="o", ms=3.2, capsize=2, zorder=4
+            )
+            ax.set_ylabel(ylab)
+            ax.set_title(f"{DATASETS[tag]} -- {title}")
+            ax.grid(alpha=0.3, zorder=0)
+    # Log x because each sweep is geometric: on a linear axis the points below 0.2 pile into
+    # the left edge and the asymmetry this figure exists to show disappears. The ticks are the
+    # union of both sweeps, so the two rows read against one scale.
+    for ax in axes.flat:
         ax.set_xscale("log")
-        ax.set_xticks(rhos)
-        ax.set_xticklabels([f"{r:g}" for r in rhos])
-        ax.minorticks_off()            # decade minors otherwise crowd six hand-placed ticks
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([f"{r:g}" for r in ticks])
+        ax.minorticks_off()             # decade minors otherwise crowd the hand-placed ticks
+    for ax in axes[-1]:
         ax.set_xlabel("rho_max (log scale)")
-        ax.set_ylabel(ylab)
-        ax.set_title(title)
-        ax.grid(alpha=0.3, zorder=0)
-    fig.suptitle("CIFAR-10, three seeds -- dots are seeds, bars +/-1 sd, shaded band the 0.10-0.20 plateau")
+    seeds = "/".join(str(n) for n in sorted(nseeds))
+    fig.suptitle(f"muonsam alone, {seeds} seeds -- dots are seeds, bars +/-1 sd, shaded band CIFAR-10's tied plateau")
     _finish(fig, "fig07_rho_screen.png")
 
 def main():
