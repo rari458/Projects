@@ -1,0 +1,10 @@
+device=cuda | eval on 8 batches | rho=0.5 | 5 ascent steps | outdir=/kaggle/working
+
+optimizer         test_acc     loss   sharpness   rise@a=1
+muonsam             90.62%   0.3022      0.0841     4.3508
+muon                88.89%   0.4039      0.1862    10.4367
+muonsam_nomom       88.66%   0.3714      0.8728     2.8419
+muon_nomom          84.61%   0.7763      3.2448    42.6114
+
+Lower sharpness = flatter minimum. Compare against test_acc: the claim this file exists to test is that they move together.
+saved /kaggle/working/sharpness_seed2.png

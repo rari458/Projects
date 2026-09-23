@@ -269,11 +269,14 @@ The point of a capstone is the measurement, so the negative results are reported
 - **`adaptive_sharpness()` is heavy-tailed.** It maximizes over a 5-step ascent, so one steep
   direction dominates: AdamW returned 0.1970 / 1.0427 / 0.8291 across three seeds of one config.
   A single-seed sharpness number is not evidence.
-- **The two mechanisms are sub-additive.** Momentum and SAM both smooth the update direction, so
-  they partly do the same work: **−1.09 ± 0.39 pp interaction, negative in 6/6 sessions**. The
-  same 2×2 is sub-additive in flatness too, 3/3 — the measured minimum is 1.3–3.8× sharper than
-  independence predicts. Direction only on that axis: the spread belongs to the momentum-free
-  arm, which sits in the denominator of every prediction.
+- **The two mechanisms are sub-additive, on both datasets where the 2×2 was run.** Momentum and
+  SAM both smooth the update direction, so they partly do the same work. On CIFAR-10 the
+  interaction is **−1.09 ± 0.39 pp, negative in 6/6 sessions**. On Imagenette 64×64, in a
+  dedicated four-arm session at three seeds, it is **−2.68 ± 0.17 pp, 3/3**: SAM alone adds
+  +4.14 pp and momentum alone +3.72, but both together add only +5.18. The same 2×2 is
+  sub-additive in flatness too, 6/6 across the two datasets — the measured minimum is 1.3–5.0×
+  sharper than independence predicts. Direction only on that axis: the spread belongs to the
+  momentum-free arm, which sits in the denominator of every prediction.
 - **Reproducibility floor is ~0.3 pp, and Muon is why.** cuDNN nondeterminism at ~1e-8 is
   amplified roughly 10× per step by Newton-Schulz, because `O(G) = UVᵀ` is ill-conditioned wherever
   `G` is near-rank-deficient. On CPU the harness is bit-reproducible, so the whole floor is that.

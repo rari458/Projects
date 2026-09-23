@@ -307,41 +307,58 @@ def _summary(tag, field):
 
 # The 2x2 ablation as (momentum, sam) -> arm. Both nomom cells are MuonSAM with
 # momentum_mode="none"; muon_nomom additionally pins rho_warmup_frac=1.0, which holds the
-# rho schedule at 0 for the whole run so its SAM branch never fires.
+# rho schedule at 0 for the whole run so its SAM brach never fires.
 CELLS = {(0, 0): "muon_nomom", (0, 1): "muonsam_nomom", (1, 0): "muon", (1, 1): "muonsam"}
 
+# Where each dataset's 2x2 comes from. CIFAR-10's main sessions ran all six arms, so its four
+# cells are there already. The Imagenette record ran four arms without the two nomom cells,
+# so its 2x2 is a separate four-arm session at the same three seeds, tagged inette2x2 so that
+# no other figure's glob picks it up. CIFAR-100 has no 2x2
+ABLATION_SRC = {"c10": "c10", "inette": "inette2x2"}
+
+def _ablation_panels(src):
+    """(panels, n_files) for one dataset's 2x2; panels is None if any axis lacks a cell."""
+    files = _files("runlog", src)
+    if not files: return None, 0
+    acc, loss = defaultdict(list), defaultdict(list)
+    for path in files:
+        arms, _ = load(path)
+        for arm, hist in arms.items():
+            acc[arm].append(last_n(hist, 10)[0])
+            tl = last_n_loss(hist, 10)
+            if tl is not None: loss[arm].append(tl)
+    panels = [
+        (acc, "last-10 test accuracy (%)", "add", True, "{:.2f}"),
+        (_sharpness(src), "adaptive sharpness (lower = flatter)", "mul", False, "{:.4f}"),
+        (loss, "last-10 test loss (lower is better)", "add", False, "{:.4f}"),
+    ]
+    if any(not all(a in s for a in CELLS.values()) for s, *_ in panels): return None, len(files)
+    return panels, len(files)
+
 def fig_ablation(tags):
-    """The 2x2 momentum x SAM ablation on three axes at once.
+    """The 2x2 momentum x SAM ablation on three axes at once, one row per dataset.
     
-    Only a six-arm session has all four cells, and only one has never saved checkpoints for
-    the two nomom ones, so the flatness panel is data that did not exist before 2026-09-09.
     The dashed line over the fourth bar is what the two mechanisms would give if they acted
     independently -- accuracy and loss combined additively, sharpness multiplicatively,
-    which is how the record states each of them -- and every panel falls short of it.
+    which is how the record states each of them -- and every panel on both datasets falls
+    short of it. One figure rather than one per dataset, so the report's figure for this
+    ablation keeps its number when a second dataset joins it.
     
-    Accuracy is drawn on truncated axis because the whole effect is 2.8pp on a 91-94 range;
-    every bar is annotated with its value so the truncation cannot mislead.
+    Accuracy is drawn on a truncated axis because the whole effect is a few points on a
+    high baseline; every bar is annotated with its value so the trucation cannot mislead.
     """
-    for tag in tags:
-        files = _files("runlog", tag)
-        if not files: continue
-        acc, loss = defaultdict(list), defaultdict(list)
-        for path in files:
-            arms, _ = load(path)
-            for arm, hist in arms.items():
-                acc[arm].append(last_n(hist, 10)[0])
-                tl = last_n_loss(hist, 10)
-                if tl is not None: loss[arm].append(tl)
-        sharp = _sharpness(tag)
-        panels = [
-            (acc, "last-10 test accuracy (%)", "add", True, "{:.2f}"),
-            (sharp, "adaptive sharpness (lower = flatter)", "mul", False, "{:.4f}"),
-            (loss, "last-10 test loss (lower is better)", "add", False, "{:.4f}"),
-        ]
-        if any(not all(a in src for a in CELLS.values()) for src, *_ in panels):
+    rows = []
+    for tag in (t for t in ABLATION_SRC if t in tags):
+        panels, n = _ablation_panels(ABLATION_SRC[tag])
+        if panels is None:
             print(f"  skip 2x2 for {tag}: needs all four arms on all three axes")
             continue
-        fig, axes = plt.subplots(1, 3, figsize=(TW, 2.9))
+        rows.append((tag, panels, n))
+    for tag in tags:
+        if tag not in ABLATION_SRC: print(f"  skip 2x2 for {tag}: no four-cell session")
+    if not rows: return
+    fig, grid = plt.subplots(len(rows), 3, figsize=(TW, 2.9 * len(rows)), squeeze=False)
+    for (tag, panels, n), axes in zip(rows, grid):
         for ax, (src, ylab, rule, truncate, fmt) in zip(axes, panels):
             means = {c: statistics.mean(src[CELLS[c]]) for c in CELLS}
             sds = {c: statistics.stdev(src[CELLS[c]]) if len(src[CELLS[c]]) > 1 else 0.0 for c in CELLS}
@@ -373,19 +390,19 @@ def fig_ablation(tags):
             ax.set_xticks(xs)
             ax.set_xticklabels([f"mom {'on' if c[0] else 'off'}\nSAM {'on' if c[1] else 'off'}" for c in cells], fontsize=6)
             ax.set_ylabel(ylab)
-            ax.set_title(f"if independent {fmt.format(pred)}\nmeasured {fmt.format(both)}")
+            ax.set_title(f"{DATASETS[tag]}\nindependent {fmt.format(pred)}\nmeasured {fmt.format(both)}")
             ax.grid(axis="y", alpha=0.3, zorder=0)
-        # The arm names would collide under adjacent bars at 2.2in per panel, so the
-        # x axis carries the 2x2 state and one legend carries the names.
-        cells = sorted(CELLS)
-        axes[0].legend(
-            [plt.Rectangle((0, 0), 1, 1, color=COLOR[CELLS[c]]) for c in cells],
-            [CELLS[c] for c in cells], loc="upper left", fontsize=5.5,
-            handlelength=1.0, handleheight=0.8, borderpad=0.4, labelspacing=0.3
-        )
-        n = len(files)
-        fig.suptitle(f"{DATASETS[tag]} -- momentum x SAM, {n} seed{'s' if n > 1 else ''}; dashed = what independent mechanisms would give")
-        _finish(fig, f"fig05_ablation_{tag}.png")
+    # The arm names would collide under adjacent bars at 2.2in per panel, so the x axis
+    # carries the 2x2 state and one legend, on the first panel only, carries the names.
+    cells = sorted(CELLS)
+    grid[0][0].legend(
+        [plt.Rectangle((0, 0), 1, 1, color=COLOR[CELLS[c]]) for c in cells],
+        [CELLS[c] for c in cells], loc="upper left", fontsize=5.5,
+        handlelength=1.0, handleheight=0.8, borderpad=0.4, labelspacing=0.3
+    )
+    seeds = "/".join(str(n) for n in sorted({n for *_, n in rows}))
+    fig.suptitle(f"momentum x SAM, {seeds} seeds per dataset; dashed = what independent mechanisms would give")
+    _finish(fig, "fig05_ablation.png")
 
 def fig_cost(tags):
     """Wall-clock and peak-memory overhead, each arm against its own baseline.
