@@ -65,7 +65,11 @@ def check_dataset():
     spec = B.DATASETS[B.DATASET]
     head = B.make_resnet18().fc.out_features
     assert head == spec["classes"], f"head is {head}, {B.DATASET} needs {spec['classes']}"
-    assert spec["cls"].__name__.lower() == B.DATASET, f"DATASETS[{B.DATASET!r}] points at {spec['cls'].__name__}"
+    # A key may carry its resolution as a suffix -- imagenette128 is Imagenette at px=128 --
+    # and nothing looser: startswith would let a cifar100 record point at CIFAR10 unnoticed,
+    # which is the confusion this check exists for.
+    name = spec["cls"].__name__.lower()
+    assert B.DATASET in (name, f"{name}{spec['px']}"), f"DATASETS[{B.DATASET!r}] points at {spec['cls'].__name__} at px={spec['px']}"
     print(
         f"dataset       = {B.DATASET}: {spec['cls'].__name__}, {spec['classes']} classes, "
         f"{spec['px']}x{spec['px']}, mean={spec['mean']}\n"

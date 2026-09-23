@@ -71,6 +71,12 @@ DATASETS = {
         test_kw=dict(split="val", size="160px"),
         mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
     ),
+    "imagenette128": dict(
+        cls=torchvision.datasets.Imagenette, classes=10, px=128, resize=True,
+        class_sorted=True, train_kw=dict(split="train", size="160px"),
+        test_kw=dict(split="val", size="160px"),
+        mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
+    ),
 }
 DATASET = os.environ.get("DATASET", "cifar10")
 if DATASET not in DATASETS:
