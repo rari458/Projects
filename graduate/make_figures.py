@@ -357,7 +357,7 @@ def fig_ablation(tags):
     for tag in tags:
         if tag not in ABLATION_SRC: print(f"  skip 2x2 for {tag}: no four-cell session")
     if not rows: return
-    fig, grid = plt.subplots(len(rows), 3, figsize=(TW, 2.9 * len(rows)), squeeze=False)
+    fig, grid = plt.subplots(len(rows), 3, figsize=(TW, 2.5 * len(rows)), squeeze=False)
     for (tag, panels, n), axes in zip(rows, grid):
         for ax, (src, ylab, rule, truncate, fmt) in zip(axes, panels):
             means = {c: statistics.mean(src[CELLS[c]]) for c in CELLS}
@@ -404,20 +404,33 @@ def fig_ablation(tags):
     fig.suptitle(f"momentum x SAM, {seeds} seeds per dataset; dashed = what independent mechanisms would give")
     _finish(fig, "fig05_ablation.png")
 
+# Imagenette at 128px ran muon and muonsam only, to test one prediction about how the
+# parameter-bound part of MuonSAM's overhead dilutes with pixels per step. It belongs on this
+# figure and no other, so it is listed here, under the dataset it extends, rather than in
+# DATASETS, where every per-dataset figure would pick it up.
+COST_EXTRA = {"inette128": ("inette", "Imagenette 128x128")}
+# Left to right by pixels per image, so the dilution reads as a trend: 32, 32, 64, 128.
+COST_ORDER = ["c10", "c100", "inette", "inette128"]
+
 def fig_cost(tags):
     """Wall-clock and peak-memory overhead, each arm against its own baseline.
     
-    One mechanism explains both panels and it is report's scalability argument.
+    One mechanism explains both panels and it is the report's scalability argument.
     The periodic 2-pass is activation-bound and does not dilute as the input grows;
     the extra NS5 and the LookSAM slots are parameter-bound and do. So MuonSAM's overhead
-    falls from +35% at 32x32 to +20% at 64x64 while vanilla SAM's, being a second pass
-    every step, stays where it is -- two arms, two predicted behaviours, both visible here.
+    falls from +35% at 32x32 to +20% at 64x64 and about +15% at 128x128, while vanilla
+    SAM's, being a second pass every step, stays where it is -- two arms, two predicted
+    behaviours, both visible here. The 128x128 point has no SAM bar because that session
+    ran the MuonSAM pair only.
     
     Every ratio is formed inside one session before being averaged, since wall-clock is
     comparable only within a session.
     """
     pairs = [("muonsam", "muon"), ("sam", "adamw")]
-    have = [t for t in tags if _files("summary", t)]
+    labels = dict(DATASETS, **{t: lab for t, (_, lab) in COST_EXTRA.items()})
+    wanted = set(tags) | {t for t, (base, _) in COST_EXTRA.items() if base in tags}
+    order = COST_ORDER + [t for t in DATASETS if t not in COST_ORDER]
+    have = [t for t in order if t in wanted and _files("summary", t)]
     if not have:
         print("  skip cost figure: no summary files")
         return
@@ -440,7 +453,8 @@ def fig_cost(tags):
                 ax.annotate(f"{y:+.1f}%", (x, y + e), textcoords="offset points", xytext=(0, 3), ha="center", fontsize=6, zorder=4)
         ax.axhline(0, color="#444444", lw=0.7, zorder=1)
         ax.set_xticks(range(len(have)))
-        ax.set_xticklabels([DATASETS[t] for t in have])
+        # Two lines per label: four datasets at a third of the text width do not fit on one.
+        ax.set_xticklabels([labels[t].replace(" ", "\n") for t in have])
         ax.set_ylabel("overhead over its own baseline (%)")
         ax.set_title(name)
         ax.grid(axis="y", alpha=0.3, zorder=0)
@@ -450,10 +464,10 @@ def fig_cost(tags):
         ax.legend(loc="upper center", ncol=2)
     _finish(fig, "fig06_cost_memory.png")
 
-# Both rho screens: CIFAR-10 over 0.025-0.80 and CIFAR-100 over 0.05-1.60, each a 32x range.
-# Only CIFAR-10's optimum is a tie between two points; CIFAR-100's is one separated point and
-# needs no band.
-RHO_TAGS = {"c10": "cifar10", "c100": "cifar100"}
+# The rho screens: CIFAR-10 over 0.025-0.80, CIFAR-100 and Imagenette over 0.05-1.60, each a
+# 32x range. Only CIFAR-10's optimum is a measured tie between two points, so only it gets a
+# shaded band.
+RHO_TAGS = {"c10": "cifar10", "c100": "cifar100", "inette": "imagenette"}
 RHO_PLATEAU = {"c10": (0.10, 0.20)}
 
 def rho_points(tag):
@@ -465,8 +479,8 @@ def rho_points(tag):
     down what it actually used. That line is also the only thing inside a file that tells
     these runs apart: every one carries kind=muonsam at lr=0.02.
     
-    The dataset filter is not optional. The glob matches both screens and five rho values
-    exist in both, so without it the CIFAR-100 points pool into the CIFAR-10 ones with no
+    The dataset filter is not optional. The glob matches every screen and several rho values
+    exist in more than one, so without it one dataset's points pool into another's with no
     error. A (rho, seed) seen twice is therefore a hard failure rather than an extra dot.
     """
     want = RHO_TAGS[tag]
@@ -488,33 +502,35 @@ def rho_points(tag):
     return acc
 
 def fig_rho(tags):
-    """The rho screens: muonsam alone, three seeds, one row per dataset.
+    """The rho screens: muonsam alone, three seeds, one column per dataset.
     
-    A picture rather than a table because the shape is the finding, and with two datasets the
-    finding is that the shape transfers while the location does not. Both curves are unimodal
-    and fall faster above the peak than below it, but CIFAR-10 peaks on a 0.10-0.20 plateau
-    and CIFAR-100 at 0.40. The rows share one log x axis so the shift reads as a shift; their
-    y axes are separate, since the two accuracy ranges do not overlap at all.
+    A picture rather than a table because the shape is the finding, and across datasets the
+    finding is that the shape transfers while the location does not: every curve is unimodal
+    and falls faster above its peak than below it, but the peaks sit in different places.
+    The columns share one log x axis so a shift reads as a shift; the y axes are separate,
+    since the accuracy ranges do not overlap.
     
-    Accuracy and test loss get a column each because they disagree above the optimum on both
-    datasets: CIFAR-10's 0.40 and CIFAR-100's 1.60 each sit at the default's accuracy with an
-    18-19% worse loss. Wall-clock is deliberately absent -- it is flat in rho to within 0.5%
-    inside every session, and the four-point and bracket runs at one seed come from different
-    sessions, where time is not comparable anyway.
+    Accuracy sits above test loss because the two disagree above the optimum: a point can be
+    back at the default's accuracy with a clearly worse loss. Wall-clock is deliberately
+    absent -- it is flat in rho to within 0.5% inside every session.
+    
+    Datasets run side by side rather than stacked so the figure stays short enough to share
+    a page with its caption; three stacked rows would not.
     """
-    rows = [(t, rho_points(t)) for t in RHO_TAGS if t in tags]
-    rows = [(t, p) for t, p in rows if p]
-    if not rows:
+    cols = [(t, rho_points(t)) for t in RHO_TAGS if t in tags]
+    cols = [(t, p) for t, p in cols if p]
+    if not cols:
         print(f"  skip rho figure: no runlog_rho_* for {list(RHO_TAGS)} in {V2}")
         return
-    ticks = sorted({r for _, p in rows for r in p})
+    ticks = sorted({r for _, p in cols for r in p})
     c = COLOR["muonsam"]
-    fig, axes = plt.subplots(len(rows), 2, figsize=(TW, 2.7 * len(rows)), sharex=True, squeeze=False)
-    panels = [("acc", "last-10 test accuracy (%)", "accuracy"), ("loss", "last-10 test loss", "test loss")]
+    fig, axes = plt.subplots(2, len(cols), figsize=(TW, 4.6), sharex=True, squeeze=False)
+    rows = [("acc", "last-10 test accuracy (%)"), ("loss", "last-10 test loss")]
     nseeds = set()
-    for (tag, pts), row in zip(rows, axes):
+    for j, (tag, pts) in enumerate(cols):
         rhos = sorted(pts)
-        for ax, (key, ylab, title) in zip(row, panels):
+        for i, (key, ylab) in enumerate(rows):
+            ax = axes[i][j]
             series = [pts[r][key] for r in rhos]
             if any(v is None for s in series for v in s):
                 ax.set_visible(False)       # a pre-2026-09 log has no test_loss to plot
@@ -537,21 +553,23 @@ def fig_rho(tags):
                 yerr=[statistics.stdev(s) if len(s) > 1 else 0.0 for s in series],
                 color=c, lw=1.1, marker="o", ms=3.2, capsize=2, zorder=4
             )
-            ax.set_ylabel(ylab)
-            ax.set_title(f"{DATASETS[tag]} -- {title}")
+            if j == 0: ax.set_ylabel(ylab)
+            if i == 0: ax.set_title(DATASETS[tag])
             ax.grid(alpha=0.3, zorder=0)
     # Log x because each sweep is geometric: on a linear axis the points below 0.2 pile into
     # the left edge and the asymmetry this figure exists to show disappears. The ticks are the
-    # union of both sweeps, so the two rows read against one scale.
+    # union of all sweeps, so every column reads against one scale; they are turned 45 degrees
+    # because seven labels do not fit a third of the text width flat.
     for ax in axes.flat:
         ax.set_xscale("log")
         ax.set_xticks(ticks)
-        ax.set_xticklabels([f"{r:g}" for r in ticks])
+        ax.set_xticklabels([f"{r:g}" for r in ticks], rotation=45, ha="right")
         ax.minorticks_off()             # decade minors otherwise crowd the hand-placed ticks
     for ax in axes[-1]:
         ax.set_xlabel("rho_max (log scale)")
     seeds = "/".join(str(n) for n in sorted(nseeds))
-    fig.suptitle(f"muonsam alone, {seeds} seeds -- dots are seeds, bars +/-1 sd, shaded band CIFAR-10's tied plateau")
+    band = ", shaded band CIFAR-10's tied plateau" if any(t in RHO_PLATEAU for t, _ in cols) else ""
+    fig.suptitle(f"muonsam alone, {seeds} seeds -- dots are seeds, bars +/-1 sd{band}")
     _finish(fig, "fig07_rho_screen.png")
 
 def main():

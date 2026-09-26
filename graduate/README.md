@@ -7,7 +7,7 @@ step. MuonSAM perturbs along the *orthogonalized* gradient — `ε = ρ · O(g)`
 Newton-Schulz orthogonalization — and amortizes the second pass LookSAM-style, running it once
 every `sam_period` steps and reusing a slowly-varying correction in between.
 
-The result beats plain Muon on every dataset we measured, at **+20–37% wall-clock and the same
+The result beats plain Muon on every dataset we measured, at **+15–37% wall-clock and the same
 optimizer memory AdamW already costs**.
 
 > Hanyang University graduate capstone, Team 9 (문상철 / 박규현), advisor 이성윤, 2026.
@@ -146,29 +146,37 @@ window:
 | CIFAR-10 test loss | 0.2183 | 0.2048 | **0.1908** | **0.1892** | 0.2423 | 0.2770 | — |
 | CIFAR-100 accuracy | — | 73.76 | 74.30 | 74.78 | **75.35** | 74.48 | 73.65 |
 | CIFAR-100 test loss | — | 1.1113 | 1.0400 | 0.9606 | **0.9198** | 1.1543 | 1.3210 |
+| Imagenette 64×64 accuracy | — | 90.30 | 90.84 | 91.23 | **91.48** | 91.06 | 89.90 |
+| Imagenette 64×64 test loss | — | 0.3108 | 0.2924 | 0.2866 | **0.2855** | 0.2881 | 0.3308 |
 
 On CIFAR-10 the optimum is the **0.10–0.20 plateau, two to four times the default**: paired
 within-seed against 0.05 that is +0.31 ± 0.06 pp at 0.10 and +0.44 ± 0.10 pp at 0.20, each 3/3.
 On CIFAR-100 it is a single peak at **0.40, eight times the default**, +1.60 ± 0.28 pp over it and
 above both neighbours at every seed (0.20 is −0.58 ± 0.23 pp, 0.80 is −0.87 ± 0.14 pp), with the
-test-loss minimum at the same point in all three seeds. What transfers is the shape — unimodal,
-and falling off faster above the peak than below it. ρ scales the perturbation and not the work,
-so per-epoch time is flat to within 0.5% inside a session on both datasets: the gain costs
-nothing.
+test-loss minimum at the same point in all three seeds. **On Imagenette it is 0.40 again**,
++1.17 ± 0.26 pp over the default and the best point at every seed (0.20 is −0.25 ± 0.07 pp) —
+against a prediction, written down before the runs, that it would sit near 0.20. What transfers
+is the shape: unimodal, and falling off faster above the peak than below it, on all three. ρ
+scales the perturbation and not the work, so per-epoch time is flat to within 0.5% inside a
+session on every dataset: the gain costs nothing.
 
 **If you tune one number, stay at or below the peak.** On CIFAR-10 try 0.10 before 0.20: the two
 are statistically tied (+0.13 ± 0.08 pp), but 0.40 is already −0.47 ± 0.11 pp, so 0.20 sits on
 the shoulder where being a factor of two high is expensive. Without a screen of your own, **0.20
-is the value that helped on both datasets** (+0.44 ± 0.10 pp on CIFAR-10, +1.02 ± 0.10 pp on
-CIFAR-100, each 3/3), where 0.40 would have given nothing on CIFAR-10 at an 18% worse test loss.
+is the value that helped on all three datasets** (+0.44 ± 0.10 pp on CIFAR-10, +1.02 ± 0.10 pp on
+CIFAR-100, +0.92 ± 0.33 pp on Imagenette, each 3/3), where 0.40 would have given nothing on
+CIFAR-10 at an 18% worse test loss.
 
-Two caveats. Two datasets show that the location moves, not how: CIFAR-100, where the model has
-more headroom, wants a larger ρ, which is the same direction as the MuonSAM gap itself growing
-with headroom — an observation, not a rule. The range is forgiving on both: no point diverges at
-any seed, and the worst point in each 32× sweep is only 0.32 ± 0.04 pp (CIFAR-10, 0.80) and
-0.11 ± 0.05 pp (CIFAR-100, 1.60) under the default. And **the default is what every number on this
-page was measured at**, so those gaps are lower bounds rather than tuned results — by about
-0.4 pp on CIFAR-10 and 1.6 pp on CIFAR-100.
+Three caveats. **What tuning ρ buys follows headroom; where the optimum sits does not.** The
+default's shortfall grows with how far the model is from saturating — 0.44 pp on CIFAR-10,
+1.17 on Imagenette, 1.60 on CIFAR-100 — but Imagenette, nearer CIFAR-10 on headroom, peaks where
+CIFAR-100 does. Train images per class (5,000 / ~950 / 500) would fit the location better, but that
+was noticed after the fact and is a hypothesis, not a finding. The range is forgiving everywhere:
+no point diverges at any seed, and the worst point in each 32× sweep is only 0.32 ± 0.04 pp
+(CIFAR-10, 0.80), 0.11 ± 0.05 pp (CIFAR-100, 1.60) and 0.40 ± 0.36 pp (Imagenette, 1.60) under
+the default. And **the default is what every number on this page was measured at**, so those gaps
+are lower bounds rather than tuned results — by about 0.4 pp on CIFAR-10, 1.2 on Imagenette and
+1.6 on CIFAR-100.
 
 ---
 
@@ -206,11 +214,16 @@ the same step as the eager loop at ~6× the speed.
 
 ## Cost
 
-| | 32×32 inputs | 64×64 inputs |
-|---|---|---|
-| wall-clock vs Muon | +35–37% | +20% |
-| peak GPU memory vs Muon | 1.06× | 1.02× |
-| optimizer state | **2.00× parameter bytes** | 2.00× (invariant) |
+| | 32×32 inputs | 64×64 inputs | 128×128 inputs |
+|---|---|---|---|
+| wall-clock vs Muon | +35–37% | +20% | +14.5% |
+| peak GPU memory vs Muon | 1.06× | 1.02× | 1.0045× |
+| optimizer state | **2.00× parameter bytes** | 2.00× (invariant) | 2.00× (invariant) |
+
+The 128×128 column is Imagenette at twice the side, and it was a prediction before it was a
+measurement: the decomposition below, fitted on the first two columns, gave about +15% and
+about 1.005×, written into the commit log before the three runs, which came back at
++14.52 ± 0.09% and 1.0045×.
 
 Vanilla SAM would cost ~2×; the periodic 2-pass is what buys the difference.
 
