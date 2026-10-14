@@ -1,0 +1,117 @@
+Project 1: C++/Rust Hybrid Ultra-Low Latency Event-Driven Engine 명세서
+
+본 명세서는 향후 전사적 리스크 관리 및 자산 운용의 근간(Core OS)이 될 초저지연 시뮬레이션 엔진의 설계도입니다. 네트워크 I/O 비동기 처리에 강한 Rust와 인메모리 연산 최적화에 강한 C++을 결합한 IPC(Inter-Process Communication) 아키텍처를 적용하여 마이크로초(μs) 단위의 시장 미시구조를 복원합니다.
+
+1. System Overview & Architecture
+목표: 틱(Tick) 레벨의 L2/L3 데이터를 지연 없이 수집하고, 공유 메모리를 통해 체결 엔진으로 전달하여 슬리피지(Slippage)와 큐 포지션(Queue Position)을 정밀 시뮬레이션하는 시스템 구축.
+
+아키텍처 분리 전략:
+
+Data Router (Rust): 비동기 런타임(Tokio)을 활용해 다중 거래소 WebSocket 연결 유지 및 데이터 수신. 문자열 기반의 JSON 데이터를 고정 길이 바이너리로 직렬화하여 공유 메모리(Shared Memory)에 적재.
+
+Core Engine (C++20): 락(Lock) 없는 폴링(Polling) 방식으로 공유 메모리에서 이벤트를 읽어와 오더북을 갱신하고 가상 체결 및 리스크(PnL)를 산출.
+
+Research Interface (Python 3.10+): pybind11을 통해 C++ 엔진과 바인딩되어, 백테스트 실행 및 결과 시각화 담당.
+
+2. Memory Schema & IPC (Inter-Process Communication)
+Rust 라우터와 C++ 엔진 간의 데이터 직렬화 스키마입니다. 메모리 단편화와 캐시 미스(Cache Miss)를 극단적으로 줄이기 위해 단일 이벤트 객체를 CPU 캐시 라인 크기인 64바이트(Bytes)로 고정합니다.
+
+설계 원칙:
+
+문자열(String) 사용을 엄격히 금지하고 심볼("BTCUSDT")은 내부 정수 ID(e.g., 101)로 매핑.
+
+도달 시간(Local Timestamp)을 포함하여 네트워크 계층부터 엔진까지의 End-to-End 지연 시간 측정.
+
+// Rust: Data Schema (Shared with C++)
+#[repr(C, align(64))]
+pub struct MarketEvent {
+    pub instrument_id: u32,   // 4 bytes: Mapped from ticker (e.g., "BTCUSDT" -> 1)
+    pub event_type: u8,       // 1 byte: 0=Trade, 1=Snapshot, 2=Update
+    pub side: u8,             // 1 byte: 0=Bid, 1=Ask
+    pub _padding1: [u8; 2],   // 2 bytes: Explicit padding for 8-byte boundary
+
+    pub exchange_ts: u64,     // 8 bytes: Exchange origin timestamp (ns)
+    pub local_ts: u64,        // 8 bytes: Local machine receipt timestamp (ns)
+    
+    pub price: f64,           // 8 bytes: Order or Trade Price
+    pub quantity: f64,        // 8 bytes: Order or Trade Quantity
+    
+    pub _padding2: [u8; 24],  // 24 bytes: Padding to strict 64-byte Cache Line
+}
+
+// C++: Struct mapping matching the Rust definition
+#include <cstdint>
+
+struct alignas(64) MarketEvent {
+    uint32_t instrument_id;
+    uint8_t event_type;
+    uint8_t side;
+    uint8_t _padding1[2];
+
+    uint64_t exchange_ts;
+    uint64_t local_ts;
+
+    double price;
+    double quantity;
+
+    uint8_t _padding2[24];
+};
+
+3. Data Ingestion (Rust Router)
+Asynchronous I/O: tokio-tungstenite 크레이트를 활용하여 외부 거래소 스트림 수신 시 발생하는 I/O 블로킹 제거.
+
+Lock-Free SPSC Queue 적재: 수신된 JSON 틱 데이터를 파싱하여 MarketEvent 구조체로 변환한 뒤, C++과 연결된 POSIX Shared Memory (mmap) 영역의 단일 생산자-단일 소비자(Single-Producer Single-Consumer) 링 버퍼에 push 실행.
+
+4. Core Matching Engine (C++ Hot Path)
+Zero-Allocation: 엔진 메인 루프 실행 이후 힙 메모리 할당(new, malloc) 및 해제를 전면 금지. 모든 오더북 노드와 큐는 엔진 초기화 단계에서 메모리 풀(Memory Pool) 형태로 사전 할당(Pre-allocation).
+
+Thread Affinity: 엔진 메인 스레드를 특정 CPU 코어에 격리(Pinning)하여 컨텍스트 스위칭 오버헤드 차단.
+
+Spin-lock Polling: std::mutex나 condition_variable을 사용하지 않고, 링 버퍼의 tail 포인터를 원자적(Atomic)으로 검사하며 이벤트를 획득.
+
+// C++: Spin-lock Polling Logic
+inline void poll_shared_memory() {
+    MarketEvent event;
+    while (engine_running) {
+        if (ring_buffer.pop(event)) {
+            process_event(event); // Update Limit Order Book
+        } else {
+            _mm_pause(); // Prevent CPU pipeline flush during busy-wait
+        }
+    }
+}
+
+5. Limit Order Book (LOB) Data Structure
+Price Levels: 해시맵(Hash Map) 대신 미리 할당된 1D 배열(Array) 형태의 가격 틱 인덱스를 사용하여 가격대(Price Level) 탐색을 $O(1)$로 처리.
+
+Queue Position: 특정 가격 내의 대기 주문들은 이중 연결 리스트(Doubly Linked List)로 관리하되, 노드들은 사전 할당된 배열에서 인덱스 포인터로 연결하여 캐시 지역성(Cache Locality) 확보.
+
+6. Python Interface (pybind11)
+리서처는 인프라의 복잡성을 모른 채, 파이썬 환경에서 직관적인 API를 통해 시뮬레이션을 구동합니다. C++의 네이티브 포인터 배열을 Python의 Numpy 배열로 Zero-copy 반환하여 분석 시각화의 속도를 높입니다.
+
+# Python: Strategy Integration Example
+import core_engine
+import numpy as np
+
+# 1. Initialize Hybrid Environment
+env = core_engine.HybridEnvironment(
+    shared_mem_name="/market_data_ring",
+    latency_model="constant", 
+    latency_ms=2.5
+)
+
+# 2. Execute Strategy
+result = env.run()
+
+# 3. Analyze Latency & PnL without overhead
+pnl_curve = np.array(result.get_pnl_array(), copy=False)
+print(f"Total Return: {pnl_curve[-1]:.2f}")
+
+7. Performance Benchmarks (Deliverables)
+프로젝트 완료 시 면접관 및 외부 검증용으로 제출할 성능 지표입니다.
+
+IPC Latency: Rust 라우터가 수신한 데이터가 C++ 엔진 LOB에 반영되기까지의 소요 시간 (목표: < 1μs).
+
+Throughput: 초당 1,000만 건의 메시지 처리량 달성 여부.
+
+Memory Profiler Log: Valgrind를 통한 시뮬레이션 중 동적 메모리 할당 0건 증명 리포트.

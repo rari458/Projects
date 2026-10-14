@@ -1,0 +1,1 @@
+/usr/bin/c++ -g -Wl,--dependency-file=CMakeFiles/ring_bench.dir/link.d CMakeFiles/ring_bench.dir/ring_bench.cpp.o -o ring_bench

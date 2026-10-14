@@ -1,0 +1,20 @@
+[
+{
+  "directory": "/home/anstk/Projects/portfolio/project_1/build",
+  "command": "/usr/bin/c++   -g -std=c++20 -Wall -Wextra -Werror -O2 -march=native -fno-omit-frame-pointer -o CMakeFiles/noise_floor.dir/noise_floor.cpp.o -c /home/anstk/Projects/portfolio/project_1/noise_floor.cpp",
+  "file": "/home/anstk/Projects/portfolio/project_1/noise_floor.cpp",
+  "output": "CMakeFiles/noise_floor.dir/noise_floor.cpp.o"
+},
+{
+  "directory": "/home/anstk/Projects/portfolio/project_1/build",
+  "command": "/usr/bin/c++   -g -std=c++20 -Wall -Wextra -Werror -O2 -march=native -fno-omit-frame-pointer -o CMakeFiles/ring_bench.dir/ring_bench.cpp.o -c /home/anstk/Projects/portfolio/project_1/ring_bench.cpp",
+  "file": "/home/anstk/Projects/portfolio/project_1/ring_bench.cpp",
+  "output": "CMakeFiles/ring_bench.dir/ring_bench.cpp.o"
+},
+{
+  "directory": "/home/anstk/Projects/portfolio/project_1/build",
+  "command": "/usr/bin/c++   -g -std=c++20 -Wall -Wextra -Werror -O2 -march=native -fno-omit-frame-pointer -o CMakeFiles/layout_dump.dir/layout_dump.cpp.o -c /home/anstk/Projects/portfolio/project_1/layout_dump.cpp",
+  "file": "/home/anstk/Projects/portfolio/project_1/layout_dump.cpp",
+  "output": "CMakeFiles/layout_dump.dir/layout_dump.cpp.o"
+}
+]

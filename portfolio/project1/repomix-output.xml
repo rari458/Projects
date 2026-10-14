@@ -1,0 +1,2088 @@
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: build/**, **/CMakeFiles/**
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+router/
+  src/
+    event.rs
+    instruments_generated.rs
+    lib.rs
+  Cargo.toml
+tools/
+  gen_instruments.py
+.clang-format
+bench_util.hpp
+CLAUDE.md
+CMakeLists.txt
+DESIGN.md
+instruments_generated.hpp
+instruments.csv
+layout_dump.cpp
+market_event.hpp
+noise_floor.cpp
+Project_1_C++Rust_Hybrid_Ultra-Low.txt
+ring_bench.cpp
+ring.hpp
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="router/src/event.rs">
+//! The Rust half of the payload contract (DESIGN.md §13).
+//! 
+//! This declaration is one of two. The C++ one is market_event.hpp, and nothing
+//! generated ties them together: both assert the same literal offsets,
+//! so reordering a field here fails this build rather than corrupting a run.
+
+/// Bumped whenever the layout or the meaning of a field changes.
+pub const SCHEMA_VERSION: u32 = 1;
+
+pub mod event_type
+{
+    pub const TRADE: u8 = 0;
+    pub const SNAPSHOT: u8 = 1;
+    pub const UPDATE: u8 = 2;
+}
+
+pub mod side
+{
+    pub const BID: u8 = 0;
+    pub const ASK: u8 = 1;
+}
+
+pub mod flag
+{
+    pub const SNAPSHOT_BEGIN: u8 = 1 << 0;
+    pub const SNAPSHOT_END: u8 = 1 << 1;
+    pub const AGGRESSOR_BUY: u8 = 1 << 2;
+    /// Set here, not in the engine: exchange-specific sequencing is parse-time
+    /// knowledge, and the engine must not learn one exchange's dialect to find
+    /// out that its book is wrong.
+    pub const GAP_BEFORE: u8 = 1 << 3;
+}
+
+#[repr(C, align(64))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MarketEvent
+{
+    /// Index into INSTRUMENTS; 0 is reserved as invalid.
+    pub instrument_id: u32,
+    pub event_type: u8,
+    pub side: u8,
+    pub flags: u8,
+    pub reserved0: u8,
+
+    /// The exchange's own update id, for gap detection.
+    pub exchange_seq: u64,
+    /// Nanoseconds since the Unix epoch, on the EXCHANGE's clock. Anything
+    /// derived from it is a data-quality metric, not a latency measurement.
+    pub exchange_ts: u64,
+    /// Raw TSC on this core, stamped at receipt. Deliverable §7.1 is the
+    /// difference between this and the engine's TSC at LOB update.
+    pub local_ts: u64,
+
+    /// L3 order identity; 0 when the feed is L2-only.
+    pub order_id: u64,
+    /// Whole ticks of this instrument. Never a float: §5 indexes price levels
+    /// by tick, and a rounding convention that differs in the last bit between
+    /// the two sides produces a plausible book rather than an error.
+    pub price_ticks: i64,
+    /// Smallest quantity unit. On an Update this is the new ABSOLUTE resting
+    /// size at the level, and 0 removes the level.
+    pub quantity: i64,
+    pub reserved1: u64, 
+}
+
+const _: () = assert!(core::mem::size_of::<MarketEvent>() == 64);
+const _: () = assert!(core::mem::align_of::<MarketEvent>() == 64);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, instrument_id) == 0);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, event_type) == 4);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, side) == 5);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, flags) == 6);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, reserved0) == 7);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, exchange_seq) == 8);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, exchange_ts) == 16);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, local_ts) == 24);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, order_id) == 32);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, price_ticks) == 40);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, quantity) == 48);
+const _: () = assert!(core::mem::offset_of!(MarketEvent, reserved1) == 56);
+</file>
+
+<file path="router/src/instruments_generated.rs">
+// GENERATED by tools/gen_instruments.py from instruments.csv. Do not edit.
+
+pub const INSTRUMENT_COUNT: u32 = 3;
+
+#[derive(Clone, Copy, Debug)]
+pub struct Instrument {
+    pub symbol: &'static str,
+    pub exchange: &'static str,
+    pub price_decimals: u8,
+    pub tick_units: i64,
+    pub qty_decimals: u8,
+}
+
+/// Index 0 is the reserved invalid id, so `instrument_id` indexes
+/// this table directly with no offset.
+pub const INSTRUMENTS: [Instrument; 3 + 1] = [
+    Instrument { symbol: "", exchange: "", price_decimals: 0, tick_units: 0, qty_decimals: 0 },
+   Instrument { symbol: "BTCUSDT", exchange: "binance", price_decimals: 2, tick_units: 1, qty_decimals: 5 },
+   Instrument { symbol: "ETHUSDT", exchange: "binance", price_decimals: 2, tick_units: 1, qty_decimals: 4 },
+   Instrument { symbol: "SOLUSDT", exchange: "binance", price_decimals: 2, tick_units: 1, qty_decimals: 2 },
+];
+
+pub const ID_BTCUSDT: u32 = 1;
+pub const ID_ETHUSDT: u32 = 2;
+pub const ID_SOLUSDT: u32 = 3;
+</file>
+
+<file path="router/src/lib.rs">
+//! Data Router (Rust). At this stage the crate carries only the shared-memory
+//! contract: the payload declaration and the generated instrument table.
+//! The tokio WebSocket ingestion of §3 lands on top of these.
+
+pub mod event;
+pub mod instruments_generated;
+</file>
+
+<file path="router/Cargo.toml">
+[package]
+name = "router"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+</file>
+
+<file path="tools/gen_instruments.py">
+#!/usr/bin/env python3
+"""Generate the instrument table for both sides from instruments.csv.
+
+DESIGN.md §13: symbols must not appear in the hot path, and the symbol-to-id
+mapping needs one source of truth rather than two that agree today. The CSV is
+
+Generated files are committed so that building needs no Python. CI runs
+--check, which fails if a generated file has drifted from the CSV.
+
+    ./tools/gen_instruments.py              # write
+    ./tools/gen_instruments.py --check      # verify, exit 1 on drift
+"""
+
+import argparse
+import csv
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+CSV = ROOT / "instruments.csv"
+HPP = ROOT / "instruments_generated.hpp"
+RS = ROOT / "router" / "src" / "instruments_generated.rs"
+
+BANNER = "// GENERATED by tools/gen_instruments.py from instruments.csv. Do not edit."
+
+def load():
+    rows = []
+    with CSV.open(newline="") as f:
+        for raw in csv.reader(r for r in f if not r.lstrip().startswith("#") and r.strip()):
+            iid, sym, exch, pdec, tick, qdec = (c.strip() for c in raw)
+            rows.append(
+                dict(id=int(iid), symbol=sym, exchange=exch,
+                price_decimals=int(pdec), tick_units=int(tick),
+                qty_decimals=int(qdec))
+            )
+    if not rows: sys.exit("instruments.csv has no rows")
+    # id is an array index, so the ids must be exactly 1..n with no holes --
+    # a gap would mean the engine's per-instrument arrays have dead entries
+    # that index arithmetic would still happily reach.
+    if [r["id"] for r in rows] != list(range(1, len(rows) + 1)):
+        sys.exit("instrument ids must be 1..n contiguous, in order")
+    if len(set(r["symbol"] for r in rows)) != len(rows):
+        sys.exit("duplicate symbol")
+    for r in rows:
+        if r["tick_units"] < 1:
+            sys.exit(f"{r['symbol']}: tick_units must be >= 1")
+    return rows
+
+def cpp(rows):
+    n = len(rows)
+    out = [
+        BANNER, "", "#pragma once", "", "#include <cstdint>", "",
+        "namespace mkt", "{", "",
+        f"inline constexpr uint32_t kInstrumentCount = {n};", "",
+        "struct Instrument",
+        "{",
+        "    const char *symbol;",
+        "    const char *exchange;",
+        "    uint8_t price_decimals;",
+        "    int64_t tick_units;",
+        "    uint8_t qty_decimals;",
+        "};", "",
+        "// Index 0 is the reserved invalid id and is present so that",
+        "// instrument_id indexes this array directly, with no offset.",
+        f"inline constexpr Instrument kInstruments[{n} + 1] = {{",
+        '    {"", "", 0, 0, 0},'
+    ]
+    for r in rows:
+        out.append(
+            f'   {{"{r["symbol"]}", "{r["exchange"]}", '
+            f'{r["price_decimals"]}, {r["tick_units"]}, {r["qty_decimals"]}}},'
+        )
+    out += ["", "}  // namespace mkt", ""]
+    return "\n".join(out)
+
+def rust(rows):
+    n = len(rows)
+    out = [
+        BANNER, "", f"pub const INSTRUMENT_COUNT: u32 = {n};", "",
+        "#[derive(Clone, Copy, Debug)]",
+        "pub struct Instrument {",
+        "    pub symbol: &'static str,",
+        "    pub exchange: &'static str,",
+        "    pub price_decimals: u8,",
+        "    pub tick_units: i64,",
+        "    pub qty_decimals: u8,",
+        "}", "",
+        "/// Index 0 is the reserved invalid id, so `instrument_id` indexes",
+        "/// this table directly with no offset.",
+        f"pub const INSTRUMENTS: [Instrument; {n} + 1] = [",
+        '    Instrument { symbol: "", exchange: "", price_decimals: 0, '
+        "tick_units: 0, qty_decimals: 0 },"
+    ]
+    for r in rows:
+        out.append(
+            f'   Instrument {{ symbol: "{r["symbol"]}", exchange: "{r["exchange"]}", '
+            f'price_decimals: {r["price_decimals"]}, tick_units: {r["tick_units"]}, '
+            f'qty_decimals: {r["qty_decimals"]} }},'
+        )
+    out += ["];", ""]
+    for r in rows:
+        out.append(f'pub const ID_{r["symbol"].upper()}: u32 = {r["id"]};')
+    out.append("")
+    return "\n".join(out)
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--check", action="store_true")
+    args = ap.parse_args()
+    
+    rows = load()
+    want = {HPP: cpp(rows), RS: rust(rows)}
+    bad = False
+    for path, text in want.items():
+        if args.check:
+            have = path.read_text() if path.exists() else None
+            if have != text:
+                print(f"drift: {path.relative_to(ROOT)}", file=sys.stderr)
+                bad = True
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+            print(f"wrote {path.relative_to(ROOT)}")
+    if bad: sys.exit("regenerate with tools/gen_instruments.py")
+    
+if __name__ == "__main__":
+    main()
+</file>
+
+<file path=".clang-format">
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 0
+
+AllowShortIfStatementsOnASingleLine: Always
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Always
+AllowShortFunctionsOnASingleLine: All
+
+Cpp11BracedListStyle: true
+spacesInContainerLiterals: false
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+    AfterEnum: true
+    AfterClass: true
+    AfterControlStatement: Always
+    AfterFunction: true
+    AfterNamespace: true
+    AfterStruct: true
+    SplitEmptyFunction: false
+    SplitEmptyRecord: false
+    SplitEmptyNamespace: false
+</file>
+
+<file path="bench_util.hpp">
+// bench_util.hpp -- histogram, clocks and CPU pinning shared by the benches.
+//
+// Both benches must compute percentiles identically. DESIGN.md §11 is the
+// baseline every ring figure is read against, and a divergence in how the two
+// binaries bucket their samples would make that comparison quietly wrong.
+
+#pragma once
+
+#include <immintrin.h>
+#include <pthread.h>
+#include <sched.h>
+#include <time.h>
+
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <vector>
+
+namespace bench
+{
+// ---------------------------------------------------------------- histogram
+// 1 ns per bucket up to 64 us, exact values kept above that. Bucket width equals
+// the clock's own resolution, so percentiles inside the linear range are exact
+// rather than interpolated, and rare outliers do not distort the scale.
+constexpr size_t kLinearBuckets = 65536;
+
+class Hist
+{
+    public:
+        Hist() : bucket_(kLinearBuckets, 0) { overflow_.reserve(1u << 16); }
+
+        void add(uint64_t v)
+        {
+            ++n_;
+            sum_ += v;
+            if (v < min_) min_ = v;
+            if (v > max_) max_ = v;
+            if (v < kLinearBuckets) ++bucket_[v];
+            else
+            {
+                overflow_.push_back(v);
+                sorted_ = false;
+            }
+        }
+
+        uint64_t count() const { return n_; }
+        uint64_t min() const { return n_ ? min_ : 0; }
+        uint64_t max() const { return max_; }
+        double mean() const { return n_ ? static_cast<double>(sum_) / static_cast<double>(n_) : 0.0; }
+
+        // Number of samples at or above a threshold -- used to count preemptions.
+        uint64_t count_at_least(uint64_t threshold)
+        {
+            uint64_t c = 0;
+            for (size_t i = threshold; i < kLinearBuckets; ++i) c += bucket_[i];
+            for (uint64_t v : overflow_) 
+                if (v >= threshold) ++c;
+            return c;
+        }
+
+        uint64_t percentile(double p)
+        {
+            if (n_ == 0) return 0;
+            uint64_t target = static_cast<uint64_t>(p * static_cast<double>(n_));
+            if (target >= n_) target = n_ - 1;
+            uint64_t acc = 0;
+            for (size_t i = 0; i < kLinearBuckets; ++i)
+            {
+                acc += bucket_[i];
+                if (acc > target) return static_cast<uint64_t>(i);
+            }
+            if (overflow_.empty()) return max_;
+            if (!sorted_)
+            {
+                std::sort(overflow_.begin(), overflow_.end());
+                sorted_ = true;
+            }
+            uint64_t idx = target - acc;
+            if (idx >= overflow_.size()) idx = overflow_.size() - 1;
+            return overflow_[static_cast<size_t>(idx)];
+        }
+
+    private:
+        std::vector<uint64_t> bucket_;
+        std::vector<uint64_t> overflow_;
+        uint64_t n_ = 0;
+        uint64_t sum_ = 0;
+        uint64_t min_ = UINT64_MAX;
+        uint64_t max_ = 0;
+        bool sorted_ = true;
+};
+
+inline void report(const char* label, Hist& h)
+{
+    std::printf(
+        " %-30s n=%-11llu min=%6llu p50=%6llu p99=%7llu p99.9=%8llu max=%10llu\n",
+        label,
+        static_cast<unsigned long long>(h.count()),
+        static_cast<unsigned long long>(h.min()),
+        static_cast<unsigned long long>(h.percentile(0.50)),
+        static_cast<unsigned long long>(h.percentile(0.99)),
+        static_cast<unsigned long long>(h.percentile(0.999)),
+        static_cast<unsigned long long>(h.max())
+    );
+}
+
+// -------------------------------------------------------------------- clocks
+inline uint64_t now_ns(clockid_t clk) 
+{
+    timespec ts;
+    clock_gettime(clk, &ts);
+    return static_cast<uint64_t>(ts.tv_sec) * 1000000000ull + static_cast<uint64_t>(ts.tv_nsec);
+}
+
+inline uint64_t rdtscp_now()
+{
+    unsigned aux;
+    return __rdtscp(&aux);
+}
+
+inline bool pin_to(int cpu)
+{
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    CPU_SET(cpu, &set);
+    return pthread_setaffinity_np(pthread_self(), sizeof(set), &set) == 0;
+}
+
+// TSC frequency against CLOCK_MONOTONIC. Run more than once: a figure that moves
+// between runs means the TSC is not usable as a timebase here, whatever the
+// constant_tsc/nonstop_tsc flags claim.
+inline double calibrate_tsc_hz(uint64_t window_ns)
+{
+    const uint64_t t0 = now_ns(CLOCK_MONOTONIC);
+    const uint64_t c0 = rdtscp_now();
+    while (now_ns(CLOCK_MONOTONIC) - t0 < window_ns) _mm_pause();
+    const uint64_t c1 = rdtscp_now();
+    const uint64_t t1 = now_ns(CLOCK_MONOTONIC);
+    return static_cast<double>(c1 - c0) * 1e9 / static_cast<double>(t1 - t0);
+}
+} // namespace bench
+</file>
+
+<file path="CLAUDE.md">
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Working rules
+
+- **Do not edit non-Markdown files directly — show the user the code instead.** Source (`.rs`, `.cpp`, `.hpp`, `.py`, `CMakeLists.txt`, `Cargo.toml`) is proposed as code blocks anchored to `file:line`; the user applies every edit. New files go in their own section. `.md` files are the exception: edit those in place and say what changed.
+- **All executions are done by the user.** Do not run `cargo`, `cmake`, the engine, or the benchmarks yourself — give the command and wait for the pasted output. A latency number Claude produced is a number the user cannot defend in an interview, which is the entire point of this project.
+- **Code comments, docstrings, and commit messages must be in English only — never Korean.** Chat explanations to the user stay in Korean.
+- The git root is **`/home/anstk/Projects`**, not this directory. `portfolio/` is currently untracked, and the existing `.github/workflows/smoke.yml` is scoped to `graduate/**`, so nothing here runs in CI yet.
+
+## What this is
+
+Portfolio project 1 of 3 (`portfolio/project_2` = Monte-Carlo pricing / risk, `portfolio/project_3` = Rust→ML feature pipeline). They are independent deliverables, not one system.
+
+**`Project_1_C++Rust_Hybrid_Ultra-Low.txt` is the spec and the only source of truth in this directory — but its code blocks are illustrative, not normative.** The prose requirements bind; the struct definitions, the polling loop and the Python snippet are sketches of intent, so do not treat their field offsets, names, signatures or omissions as decisions already made. There is no code yet — no `Cargo.toml`, no `CMakeLists.txt`, no Python package. Any build/test/lint command in this file will have to be written when the first module lands; do not invent one before then. Toolchain present on this machine: cargo 1.93, cmake 4.2, g++ 15.2 (C++20 fine), python3 3.14, valgrind 3.26, 16 cores, x86_64, `/dev/shm` mounted at 3.9G.
+
+Goal: a tick-level (L2/L3) event-driven backtester that reconstructs market microstructure — slippage and queue position — at microsecond resolution, split across three processes.
+
+## Architecture: three processes, one shared-memory contract
+
+```
+Rust Data Router  ──write──▶  POSIX shm ring buffer  ──poll──▶  C++ Core Engine  ──pybind11──▶  Python
+(tokio, WebSocket)            (SPSC, 64B slots)                 (LOB, fills, PnL)             (research)
+```
+
+- **Data Router (Rust)** — `tokio` + `tokio-tungstenite` holds the exchange WebSocket connections, parses JSON ticks, converts them to fixed-length binary events, and pushes into an `mmap`ed SPSC ring buffer. Sole producer.
+- **Core Engine (C++20)** — spins on the ring buffer's tail, updates the limit order book, simulates fills, computes PnL. Sole consumer, pinned to one core.
+- **Research Interface (Python 3.10+)** — a pybind11 module driving the engine — construct an environment over a named shared-memory segment with a configurable latency model, run, then read PnL and latency series back. Results return to NumPy **zero-copy**, so the C++ buffer must outlive the NumPy view. Module and class names in the spec are placeholders.
+
+### The IPC schema is the load-bearing invariant
+
+The event struct is declared **twice** — once in Rust, once in C++ — with no generated binding tying them together. The two declarations are the whole contract, and a silent mismatch corrupts every downstream number rather than erroring. Design requirements the spec actually states:
+
+- **One event is fixed-length and pinned to a 64-byte cache line**, to keep fragmentation and cache misses out of the hot path. Layout is still open — the spec's field list is a sketch — but whatever it becomes, both sides must agree byte for byte, and explicit padding is structural rather than filler.
+- **No strings in the hot path.** Symbols are mapped to integer IDs; the mapping needs one shared source of truth generated for both sides.
+- **Every event carries both an exchange timestamp and a local receipt timestamp**, so end-to-end latency is measurable from the event itself rather than reconstructed.
+- Size and alignment assertions on both sides are the cheapest way to make a mismatch a build failure instead of a silent one.
+
+### C++ hot-path constraints
+
+These are acceptance criteria, not style preferences — one of the deliverables is a Valgrind report proving zero dynamic allocation during simulation.
+
+- **Zero allocation after init.** No `new`/`malloc`/`free` once the main loop starts. Order-book nodes and queues are pre-allocated as memory pools at startup. This bans `std::vector` growth, `std::string`, `std::map`, and any container that allocates on insert from the loop.
+- **Spin, don't block.** No `std::mutex`, no `condition_variable` — atomically check the ring tail and issue a pause intrinsic while busy-waiting, so the CPU pipeline is not flushed on every empty poll.
+- **Thread affinity.** The engine thread is pinned to a dedicated core to keep context switches out of the measurement.
+- **LOB structure:** price levels are a pre-allocated 1D array indexed by price tick — O(1), no hash map. Orders within a level are a doubly linked list whose nodes live in a pre-allocated array and link by **index, not pointer**, for cache locality. Queue position falls out of this list, and queue position is what the simulator exists to model.
+
+## Deliverables (how this project is judged)
+
+1. **IPC latency** — Rust receipt to LOB update, target **< 1μs**.
+2. **Throughput** — 10M messages/sec.
+3. **Valgrind log** proving 0 dynamic allocations during simulation.
+
+Measurement caveat worth stating up front: this machine is **WSL2**, where the clock is virtualized and cores cannot be isolated (`isolcpus`) from the host scheduler. Sub-microsecond numbers taken here are indicative, not defensible — plan for the headline benchmark to be re-run on bare-metal Linux, and record which environment produced any figure that gets quoted.
+</file>
+
+<file path="CMakeLists.txt">
+cmake_minimum_required(VERSION 3.20)
+project(hybrid_backtester CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+find_package(Threads REQUIRED)
+
+set(BENCH_FLAGS -Wall -Wextra -Werror -O2 -march=native -fno-omit-frame-pointer)
+
+add_executable(noise_floor noise_floor.cpp)
+target_compile_options(noise_floor PRIVATE ${BENCH_FLAGS})
+target_link_libraries(noise_floor PRIVATE Threads::Threads)
+
+add_executable(ring_bench ring_bench.cpp)
+target_compile_options(ring_bench PRIVATE ${BENCH_FLAGS})
+target_link_libraries(ring_bench PRIVATE Threads::Threads)
+
+add_executable(layout_dump layout_dump.cpp)
+target_compile_options(layout_dump PRIVATE ${BENCH_FLAGS})
+</file>
+
+<file path="DESIGN.md">
+# Ring Buffer Protocol
+
+The shared-memory contract between the Rust data router (producer) and the C++ core engine (consumer). This is the one interface that spans two languages, two processes and an on-disk format, so it is designed before code; everything behind it — order book internals, fill model, Python API — is deliberately left open.
+
+**Scope.** Segment layout, index scheme, memory ordering, full-ring policy, lifecycle. **Not in scope:** the event schema. The ring treats a slot as 64 opaque bytes; what goes inside is a separate contract with its own document.
+
+---
+
+## 1. Segment layout
+
+One POSIX shared-memory object, `mmap`ed by both processes:
+
+```
+┌──────────────────────────────────────────────┐
+│ Header — 384 B, three 128 B regions          │
+│   ┌────────────────────────────────────────┐ │
+│   │   0  static     magic, version,        │ │  ← written at init, then read-only
+│   │                 slot_bytes, capacity,  │ │
+│   │                 clock_id               │ │
+│   ├────────────────────────────────────────┤ │
+│   │ 128  producer   write_idx,             │ │  ← producer writes, consumer reads
+│   │                 dropped_count,         │ │
+│   │                 producer_state         │ │
+│   ├────────────────────────────────────────┤ │
+│   │ 256  consumer   read_idx               │ │  ← consumer writes, producer reads
+│   └────────────────────────────────────────┘ │
+├──────────────────────────────────────────────┤
+│ 384  Slot array — capacity × 64 B            │
+└──────────────────────────────────────────────┘
+```
+
+**The regions are grouped by writer, and each is 128 B — not 64.** If `write_idx` and `read_idx` share a line, every producer index update invalidates the line the consumer is spinning on and the two cores ping-pong it on every single event. 128 rather than 64 because Intel's L2 adjacent-line prefetcher works on 128-byte pairs, so 64-byte separation still lets the two indices travel together. The slot array keeps 64-byte elements, where that same prefetcher is a benefit rather than a cost.
+
+Grouping by writer rather than by field is the actual rule, because false sharing is a property of writes. `dropped_count` moves only on a drop and `producer_state` twice per run, and both are producer-written, so putting them in `write_idx`'s region costs the consumer — which reads all three and writes none — nothing, and saves a region. The static block shares no line with anything mutable, so the validation §6 performs on attach never touches a line either side is writing.
+
+Three regions at 128 B is 384 B, and 384 is a multiple of 64, so the slot array starts slot-aligned. This padding is part of the on-disk format, not an implementation detail — that is precisely why it belongs in the frozen contract.
+
+## 2. Index scheme: monotonic counters
+
+`write_idx` and `read_idx` are `u64` counters that **never wrap**. The slot is derived:
+
+```
+slot = idx & (capacity - 1)        // capacity is a power of two
+```
+
+- empty: `write_idx == read_idx`
+- full: `write_idx - read_idx == capacity`
+- occupancy: `write_idx - read_idx`, always exact
+
+Wrapped indices force you to either sacrifice a slot or carry a separate full flag, and both make the full/empty test racy under concurrent update. Monotonic counters make it a subtraction with no ambiguity.
+
+Overflow is not a practical concern: at the 10M msg/s target, `u64` exhausts in ~1.8×10¹² seconds, roughly 58,000 years. Do not add wrap handling for it.
+
+**Consequence:** `capacity` must be a power of two, validated at init. The masking is what makes the derivation a single `AND` instead of a division.
+
+## 3. Memory ordering
+
+Standard release/acquire handoff. The index store publishes the slot payload.
+
+**Producer (Rust):**
+```
+1. if write_idx - cached_read_idx == capacity:
+       cached_read_idx = load(read_idx, Acquire)      // only when it looks full
+       if still full → apply full-ring policy (§5)
+2. write slot[write_idx & mask]                        // plain stores
+3. store(write_idx, write_idx + 1, Release)            // publishes step 2
+```
+
+**Consumer (C++):**
+```
+1. if read_idx == cached_write_idx:
+       cached_write_idx = load(write_idx, Acquire)     // only when it looks empty
+       if still empty → pause and retry
+2. read slot[read_idx & mask]                          // plain loads
+3. store(read_idx, read_idx + 1, Release)              // frees the slot
+```
+
+The `Release` on `write_idx` and the matching `Acquire` are what make the slot writes visible; the payload itself needs no atomics. **On x86-64 these compile to plain `MOV`** — the ordering is free at runtime and exists for the compiler — but they must still be written, and they become real barriers if this is ever run on ARM.
+
+**The consumer's `pause` in step 1 is measured, not conventional.** All three strategies available on this host were run against each other: a tight spin with no PAUSE is *slower*, because exiting a hammered spin loop costs a memory-order machine clear larger than the PAUSE granularity it saves, and `UMWAIT` — which the hardware does support here — is slower still at p50 and roughly five times worse at p99.9. PAUSE wins. See §11.
+
+**No per-slot sequence numbers.** They are required for MPMC rings (Vyukov) and are commonly copied into SPSC designs where they buy nothing. With one producer and one consumer, the index handoff alone excludes tearing.
+
+## 4. Cached indices
+
+Each side keeps a **private, non-shared** copy of the other's index and consults the shared line only when the cached value says it must stop. Without this, every push reads a line the other core owns, which is the dominant cost in a naive ring — it turns a local check into a cross-core transfer on every event.
+
+The cached copies live in process-local memory, never in the segment.
+
+**Consumer batching:** having taken one `Acquire` load of `write_idx`, drain every event up to it before reloading. This amortizes the only cross-core read across the whole batch and is the main lever for the throughput target, as distinct from the latency target.
+
+## 5. Full-ring policy
+
+Two different correct answers, and the choice must be explicit per source:
+
+| Source | Policy | Why |
+|---|---|---|
+| Synthetic replay (benchmarks) | **Spin / backpressure** | The measurement is sustained throughput. Dropping events would let the ring report a rate it did not actually deliver. |
+| Live exchange feed | **Drop + count** | Backpressure cannot be applied to an exchange. Stalling the tokio task only moves the overflow into the kernel socket buffer, where it is invisible. |
+
+**In both cases `dropped_count` is incremented and lives in the header** so that the engine and the Python report can read it.
+
+**A run with `dropped_count > 0` is reported as invalid, not silently used.** Silent loss is the failure mode that destroys a backtest's credibility, and it is undetectable after the fact unless the counter is carried alongside the results.
+
+## 6. Lifecycle
+
+**The C++ engine creates and sizes the segment; the Rust router attaches and retries until it appears.** The engine is the consumer and the process that defines a run — if the router created it, a stale segment left by a crashed router could be attached with a different capacity, which is unrecoverable and silent.
+
+On attach, the router validates `magic`, `version`, `capacity` and `slot_size`. **A mismatch is a hard failure, never a warning** — this is the only guard against a stale segment or a version-skewed binary, and it is the failure this whole document exists to make loud.
+
+The engine `shm_unlink`s on shutdown. Stale objects in `/dev/shm` outlive the process and will be attached by the next run.
+
+`producer_state` in the header lets the engine distinguish "router not started yet" from "router exited" without a timeout heuristic.
+
+## 7. Sizing
+
+64 B per slot, power-of-two capacity. The L3 column is the one that decides, and §12 is why:
+
+| Slots | Segment | vs 18 MiB L3 | Burst absorbed at 10M msg/s |
+|---|---|---|---|
+| 65,536 | 4 MiB | resident | 6.6 ms |
+| 131,072 | 8 MiB | resident | 13.1 ms |
+| 262,144 | 16 MiB | at the edge | 26.2 ms |
+| 1,048,576 | 64 MiB | 3.6× over | 105 ms |
+
+**The 1 Mi default was wrong and §12 retired it.** The argument for it was sound as far as it went — the consumer's stall has no converged maximum on this host, a 30 s pinned spin peaking at 1.07 ms and a 5 s run at 4.12 ms, so the observed max is a draw from a heavy tail rather than an estimate of it. What the argument never priced was the cache. A 64 MiB ring exceeds L3 by 3.6×, so every wrap-around store misses to DRAM, and it measured 61.29 M msg/s against 294.79 for a 4 MiB ring — a 4.8× throughput penalty paid for absorption the run never used, since `full-stalls` was 0.
+
+**The rule is the largest power of two that stays in L3, sharing it with the consumer.** Absorption and throughput are in direct opposition and the L3 boundary is where the trade is made; `/dev/shm` at 3.9 G never binds.
+
+**128 Ki is the default, and at n=3 the sweep decides it rather than merely permitting it.** §12 measured 4 MiB and 8 MiB as indistinguishable on throughput — 261-332 against 257-372 M msg/s, ranges that overlap almost completely — so throughput does not choose between them. Dwell time does: the producer is blocked on a full ring for 0.06-0.55% of the run at 4 MiB and 0.000-0.033% at 8 MiB, an order of magnitude apart and in the direction a larger ring predicts. 8 MiB also gives 13.1 ms of absorption at the target rate against 4 MiB's 6.55 ms, where the worst stall §11 recorded was 4.12 ms on a distribution that had not converged. Above that, 16 MiB costs half the throughput while still fitting inside 18 MiB of L3, so it is excluded on measurement rather than on the cache arithmetic.
+
+**The constraint to carry to another host is half of L3, not L3.** The measured cliff is between 8 and 16 MiB against an 18 MiB cache, because L3 is shared and 12-way associative and a ring at 89% of it conflict-misses on the wrap-around store. 8 MiB is already 44% of this machine's L3, which is at that edge — and **every number behind this choice was produced by a consumer that only walks a sequence counter.** Once it carries the book and competes for the same cache, the capacity has to be measured again; 64 Ki is the fallback if it does.
+
+**Huge pages for the slot array are worth an `mmap` flag and were never a blocker.** The TLB cost is smaller than it looks: the ring is swept cyclically at 64 slots per 4 KiB page, so it is one page walk per 64 events — under 2 ns per event amortized. 2 MiB pages make it one walk per 32,768. Take it if it is free; it does not decide the capacity, and after §12 nothing about the TLB does.
+
+## 8. Constraints the ring imposes on the slot payload
+
+The event schema is a separate contract, but the ring fixes four properties of it:
+
+1. **Fixed length, 64 B, 64-byte aligned** — one slot is one cache line, and the index arithmetic in §2 assumes a constant stride.
+2. **Trivially copyable / POD** — no constructors, no destructors, no vtables. A slot is published by a plain store, not by running code.
+3. **No pointers or references.** The segment can be mapped at a different base address in each process; an address written by the router is meaningless to the engine. Use offsets or integer IDs.
+4. **Both declarations must agree byte for byte** — see §10.
+
+The schema that satisfies these is `MarketEvent`, specified in §13.
+
+## 9. Latency measurement hook
+
+End-to-end latency is measured across a process boundary, so it constrains the protocol rather than sitting on top of it:
+
+- The producer stamps its receipt time into the slot **immediately before** the `Release` store, so the interval excludes its own parse work.
+- The consumer reads its clock immediately after the `Acquire` load succeeds.
+- **Both processes must read the same clock source**, recorded in the header's `clock_id`. Changing it invalidates every number measured before the change, which is why it is pinned in the contract rather than chosen per call site.
+- **`clock_id` is `RDTSCP`.** It costs 11–12 ns against 15–16 ns for `clock_gettime`, and on a quantity whose floor is ~41 ns that difference is not rounding. The condition this was held on — invariant TSC fixes a common *rate*, not a common *origin*, so a per-vCPU offset would be added to every cross-core figure and could make it negative — is discharged in §11: the offset is bounded inside ±40 ns on all 15 pairs and every interval contains zero.
+- **Calibrate the TSC frequency once per run and never hardcode it.** Two runs an hour apart returned 2.8363 and 2.8276 GHz, 0.31% apart, while the two calibrations *inside* each run agreed to 0.0003%. The counter is stable; the short calibration against `CLOCK_MONOTONIC` is what moves. 0.31% is 0.2 ns on a 70 ns interval and irrelevant now, but it is not irrelevant to anything cumulative.
+- **Report the clock's own cost beside the latency.** Two `RDTSCP` reads are ~23 ns on a handoff whose floor is ~41 ns one-way, more than half the figure. A latency number quoted without it is largely quoting the instrument.
+- Report **p50 / p99 / p99.9, never a mean.** Collect into a histogram from the first commit; a mean latency cannot be reconstructed into a tail afterwards.
+
+## 10. Keeping the two declarations in sync
+
+There is no generated binding — the Rust and C++ declarations are written by hand and nothing ties them together. Two guards, both cheap:
+
+1. **Size and alignment assertions on each side**, evaluated at compile time, so drift is a build failure.
+2. **A layout check in CI:** a small binary in each language emits every field offset plus the header offsets, and the two outputs are compared. Assertions catch a size change; only an offset dump catches two structs that are both 64 bytes with fields in different places.
+
+## 11. Measured noise floor (2026-08-29, WSL2)
+
+Measured by `noise_floor.cpp` before any of this protocol was written, over three runs. These are the numbers every later latency figure is reported against; re-run it on any new host before quoting anything from that host.
+
+Host: i5-12500H (physically 4 P-core + 8 E-core) under Hyper-V/WSL2, 16 vCPUs, TSC 2.83–2.86 GHz.
+
+| Quantity | p50 | p99 | p99.9 | max |
+|---|---|---|---|---|
+| `clock_gettime(CLOCK_MONOTONIC)` | 16 ns | 18 ns | 33–36 ns | 74 µs |
+| `clock_gettime(CLOCK_MONOTONIC_RAW)` | 15 ns | 16 ns | 17 ns | 625 µs |
+| `RDTSCP` | 11–12 ns | 12–13 ns | 13–15 ns | 556 µs |
+| `_mm_pause()` | 58 ns | 58 ns | 142–261 ns | — |
+| Core-to-core RTT, PAUSE spin | 135–163 ns | 223–248 ns | 242–262 ns | — |
+| Core-to-core RTT, tight spin | 172–207 ns | 211–246 ns | 240–352 ns | — |
+| Core-to-core RTT, `UMWAIT` C0.1 | 169–188 ns | 230–267 ns | 720–1751 ns | — |
+| Pinned spin-loop gap | 18 ns | 20–21 ns | 37–38 ns | 0.60 / 1.07 / 4.12 ms |
+
+Bands are across the 15 vCPU pairs and across runs. Per-pair medians move 5–10% between runs, so a difference smaller than that is only meaningful when both arms were measured in the same run — which is how the three spin strategies were compared. Two per-pair artefacts in the third run illustrate the point and should not be read as structure: one pair returned p50 221 ns with a normal p99, and one returned p99.9 6786 ns. At n=200k the p99.9 rests on ~200 samples and a single preemption during that pair's 30 ms moves it.
+
+**TSC is usable as a timebase, and the cross-core origin is common.** Calibrations inside a run agree to 0.0003%, and zero-delta was 0.00% on both `clock_gettime` variants, so the 1 ns resolution is real rather than a coarse counter being interpolated. All three reads stay in userspace; a syscall would be an order of magnitude dearer. The responder's own stamp bounds the per-vCPU TSC offset to within ±40 ns on all 15 pairs in both runs that measured it, every interval containing zero. That bounds the offset rather than measuring it, and nothing below ~40 ns is resolvable this way, but the µs-to-ms desync that would have made cross-core stamping useless is excluded.
+
+**The vCPU numbering carries no locality information.** All 15 pairs land within a narrow band of each other in every spin mode. On real hardware a hyperthread pair sharing L1 is several times faster than a cross-core pair, and Alder Lake's P-to-E handoff differs again; here `cpu 0 <-> 1`, which the kernel reports as siblings, is no faster than `cpu 0 <-> 15`. The topology is fabricated and pinning to a vCPU is not pinning to a physical core. The consequence is benign: the core-pair choice, normally the dominant variable in a benchmark like this, can be neither tuned nor got wrong.
+
+**PAUSE costs 58 ns and is still the fastest of the three spins.** This was measured expecting the opposite. Differencing the modes within a run gives a consistent model. PAUSE adds an average half-PAUSE per direction, so `148 = 2C + 58` puts the coherence round trip at ~89 ns and the **one-way handoff floor at ~45 ns**; the same arithmetic on the earlier run gave 41 ns, so that floor is reproducible. From there `201 = 89 + 2M` puts the cost of exiting a hammered spin loop at ~56 ns per exit, and `184 = 89 + 2W` puts the `UMWAIT` C0.1 wakeup at ~48 ns per wait — more than the 29 ns half-PAUSE it replaces, which is why it loses. The standard explanation for the spin-exit term is a memory-order machine clear, speculative loads on a line that then gets invalidated, which is what PAUSE exists to avoid; the attribution is arithmetic here, not measured, since the PMU is not exposed under WSL2. Independent corroboration: the TSC-offset interval width is a lower bound on the minimum round trip, and it runs ~70 ns with PAUSE against ~110 ns without.
+
+**`UMWAIT` is rejected, and its tail is the reason.** WAITPKG is exposed to the guest and the instruction executes, so this is a real result rather than a missing feature. It loses p50 to PAUSE by ~36 ns, which the wakeup arithmetic above explains, and it loses p99.9 by a factor of four to five — 720–1751 ns against 242–262 ns. The plausible mechanism is that parking a logical core into C0.1 is exactly the signal a hypervisor reads as "this vCPU is idle", and the resume then waits on the host scheduler; that mechanism is inference, but the tail is measured and it is disqualifying on its own. **A latency-critical wait inside a VM must not tell the host it is idle.**
+
+**~45 ns one-way is the handoff floor, so the instrument is now a large share of the measurement.** Two `RDTSCP` reads are ~23 ns against a 45 ns floor. Every reported end-to-end latency must carry the clock cost beside it, or half of what is being quoted is the clock.
+
+**The sub-microsecond target is a p99.9 claim, and the ring size is set by a tail that has not converged.** A 45 ns floor leaves ~95% of a 1 µs budget and the per-pair p99 of ~230 ns is comfortable. The scheduler is the whole problem. Above 10 µs the rate is stationary across runs — 264, 257 and 232 per second — but the far tail is not: three runs produced maxima of 0.60, 1.07 and 4.12 ms, a sevenfold spread, and the run that found the worst one was the shortest. A shorter run finding a worse max means the observed maximum is a draw from a heavy tail, not an estimate of it. Two consequences, and they are the load-bearing ones in this document: the latency claim survives p99.99 and is false at p99.9995 and at max, and the ring must be sized against a stall nobody has yet seen the top of (§7). No configuration of this code changes either; it is the hypervisor's scheduler. Quote the percentile with the number, always.
+
+## 12. Measured ring (2026-08-30, WSL2, two threads, one process)
+
+`ring_bench` drives `ring.hpp` between two pinned threads with no process boundary and no LOB, so what it isolates is the ring's own cost. Every run finished `RUN VALID` — zero gaps, zero drops, `recv == sent`.
+
+| Mode | Config | Result |
+|---|---|---|
+| lat | 64 Ki, paced 1M msg/s, batch 1, cpu 0 → 2 | min 56, p50 100, p99 12,157, p99.9 781,950, max 2,248,925 ns |
+| lat | same, **reversed** cpu 2 → 0 | min 62, p50 111, p99 18,186, p99.9 340,955, max 977,013 ns |
+| lat | same, cpu 0 → 2, **`chrt -f 80`** | min 62, p50 106, p99 571,586, p99.9 664,022, max 703,346 ns |
+| tput | 1 Mi slots = 64 MiB, batch cap 1024 | 61.29 M msg/s, 16.3 ns/msg, mean batch 4.9, 0 full-stalls |
+| tput | 64 Ki slots = 4 MiB, batch cap 1024 | **294.79 M msg/s**, 3.4 ns/msg, mean batch 76.4, 3 full-stalls |
+
+**One-way handoff is 105.5 ns and the cross-core TSC offset is ±5.5 ns, not the ±40 ns §11 allowed.** The latency here is one-way, so θ enters uncancelled — the round trip §11 measured carries it with each sign and cancels it. Running both directions restores the cancellation in the mean: 100 and 111 give L = 105.5 and θ = 5.5 ns. That assumes the two directions have the same true latency, which §11's finding that all vCPU pairs measure identically supports but does not prove; either way the 11 ns spread bounds the offset *and* any asymmetry at about 5.5 ns each. §9's choice of `RDTSCP` now rests on a bound an order of magnitude tighter than the one it was made on, and the procedure is cheap enough to keep: **always report a one-way latency as the mean of both directions.**
+
+**The additive floor this document used was wrong, and the empirical floor is the min.** §11's ~45 ns coherence and ~23 ns RDTSCP-pair figures were summed into a 68 ns floor. They do not compose that way: the two clock reads bracket the interval rather than sitting inside it, so the instruction's internal delay from issue to TSC snapshot appears with each sign and cancels, exactly as θ does. The evidence is that min is ~59 ns in both directions — below a floor that was supposed to bound it. The consequence is that **no marginal cost for the ring can be obtained by subtracting a constructed number**; what is measured is 105.5 ns end to end, and 59 ns is the best case the same path ever achieved. The 46 ns between them is contention and jitter on an otherwise idle machine, not structure.
+
+**L3 residency is worth 3.3x on throughput, and the cliff is at half of L3 rather than at L3.** 1 Mi slots is a 64 MiB ring against 18 MiB of L3: the producer's wrap-around store lands on a line evicted a full lap earlier, and since it writes 16 of the 64 bytes the partial line forces a read-for-ownership from DRAM. Three runs per point, 1e9 events each so that a run lasts seconds rather than a third of one:
+
+| Slots | Segment | M msg/s (3 runs) | mean | ns/msg | producer blocked on full |
+|---|---|---|---|---|---|
+| 65,536 | 4 MiB | 332.27 / 277.70 / 260.97 | 290.31 | 3.0-3.8 | 0.551 / 0.099 / 0.064 % |
+| 131,072 | 8 MiB | 365.08 / 257.02 / 372.31 | **331.47** | 2.7-3.9 | 0.033 / 0.000 / 0.000 % |
+| 262,144 | 16 MiB | 177.62 / 155.65 / 154.62 | 162.63 | 5.6-6.5 | 0.855 / 0.744 / 0.743 % |
+| 524,288 | 32 MiB | 104.25 / 87.47 / 105.46 | 99.06 | 9.5-11.4 | 2.887 / 0.000 / 0.115 % |
+| 1,048,576 | 64 MiB | 61.29 (n=1) | — | 16.3 | not instrumented |
+
+**4 MiB and 8 MiB are indistinguishable, and 16 MiB reads slower than both at this run length — a qualification the next paragraphs turn out to need.** The first two ranges overlap almost completely (261-332 against 257-372) and no reading of one falls outside the other. 16 MiB reads 155-178 with all three below every reading of the two smaller sizes, and 32 MiB reads 87-105 with all three below every reading of 16 MiB. So the ordering is `{4 MiB, 8 MiB} > 16 MiB > 32 MiB > 64 MiB`, and 331.47 M msg/s is 33x the 10 M target.
+
+**The interesting boundary is that 16 MiB is already on the wrong side of it while fitting inside 18 MiB of L3.** "Fits in L3" is the wrong rule. L3 is shared with every other process on the machine and is 12-way associative over 24,576 sets, so a ring occupying 89% of it conflict-misses on the wrap-around store even though it nominally fits. The measured cliff sits between 8 and 16 MiB — **about half of L3** — which is the rule to carry to any other host rather than the 18 MiB number.
+
+**The n=1 correction in the previous revision of this section was itself an over-correction.** A 4 MiB run had read 294.79 M msg/s and a rerun of the identical command read 153.09, and the higher figure was withdrawn as a favourable draw. At n=3 the range is 261-332, so 294.79 was ordinary and **153.09 was the bad draw** — the low reading was believed because it was the second one, not because it was better evidence. Both came from runs of under a second. The lesson is not that either number was wrong but that n=1 is n=1 in whichever direction it happens to fall, and the withdrawn 4.8x is approximately restored: 331.47 against 99.06 is 3.3x, both at n=3.
+
+**Dwell time turns out to carry the decision that throughput could not.** 4 MiB and 8 MiB tie on throughput, but the producer is blocked 0.06-0.55% of the run at 4 MiB against 0.000-0.033% at 8 MiB — an order of magnitude apart, in the direction a larger ring predicts. That is what chooses 128 Ki in §7, and it is only visible because the counter now accumulates cycles: the episode counts for the same two configurations are 71/41/45 and 98/1/0, which suggest the opposite ordering.
+
+**The diagnostic came back with neither answer, and it invalidated the sweep's error bars.** Doubling `--events` at 16 MiB was supposed to separate a startup transient (blocked time stays near 48 ms) from a proportional cost (it doubles). It did neither: blocked time fell to 19.41 ms, episodes fell from ~24,000-35,000 to 8,945, and throughput *rose* from 155-178 to 249.64 M msg/s — outside the range three runs had established. **A range that three runs agree on is not an error bar if changing the run length steps outside it.** This is the third time in this measurement campaign that the uncertainty rather than the effect was the thing that was wrong.
+
+**What actually predicts throughput is the mean batch, and it does so across every capacity.** Sorting all thirteen throughput runs by mean batch rather than by capacity produces an almost perfectly monotone series — 9.4 → 87.47, 13.8 → 105.46, 14.2 → 104.25, 20.7 → 154.62, 24.9 → 155.65, 30.2 → 177.62, 51.3 → 260.97, 52.1 → 257.02, 64.0 → 277.70, 68.4 → 249.64, 111.7 → 332.27, 154.1 → 365.08, 206.1 → 372.31 — with the capacity labels scrambled through it. 16 MiB appears at 154.62 and again at 249.64 depending only on which batch regime that run settled into. The causal chain is that L3 residency sets the producer's speed, the producer's speed sets how far ahead it drifts between polls, and that drift sets the batch over which the consumer amortizes its one `Acquire`. **Capacity is two steps upstream of the thing being measured**, which is why its effect is real at the extremes and unresolvable in the middle.
+
+**This line of measurement is closed, and not because it converged.** Every L3-resident capacity clears the 10 M target by 15-37×, throughput is not the binding constraint on any deliverable, and this host cannot resolve what remains. 128 Ki stands as the default on the evidence in §7; the honest statement of its support is that 32 MiB and 64 MiB never produced a batch above 14 or a throughput above 106 in any run, that 4 and 8 MiB never produced one below 51 or 257, and that 16 MiB did both. Further precision here has no payoff.
+
+**Real-time priority does not fix the tail, which is the evidence that the tail is the hypervisor.** Under `SCHED_FIFO` 80 the max improved 3.2× (2.25 ms → 703 µs) and p99.9 improved slightly, while p99 went from 12 µs to 572 µs and the share of polls finding a backlog rose from 3.2% to 5.6%. RT throttling is not the explanation: `sched_rt_runtime_us` is 950000/1000000 here, so a throttle would appear as a ~50 ms stall and the observed max is 703 µs. The reading is that RT priority removes the guest scheduler — many short preemptions — and leaves a smaller number of much longer ones that nothing inside the VM has authority over. **A latency claim on this host is therefore capped by the hypervisor and not by this code**, which is what makes the bare-metal re-run a requirement rather than a refinement.
+
+**The p99 comparison between those two runs is not apples to apples, and the metric is at fault.** With a paced producer and batch 1, one long stall inflates every sample in the catch-up burst behind it, so a distribution with fewer but longer stalls reports a worse p99 even when the stall count fell. The max and the backlog share are the honest comparisons; p99 here measures burst length as much as it measures delay. Any tail figure quoted from this harness has to say which of the two it is.
+
+**§4 documents consumer batching and has no producer equivalent, which is a deliberate asymmetry that should be written down.** One Release per batch of published slots would amortize the coherence transfer on `write_idx` the same way one Acquire amortizes it on the read side. It is not being added: it makes an event invisible until its batch closes, which is the wrong trade for a live feed, and 294.79 M msg/s is 29.5× the target. It is recorded because it is the first thing to reach for if throughput ever becomes the binding constraint.
+
+## 13. `MarketEvent`: the payload contract
+
+64 B, one slot, one cache line. Every field is naturally aligned and there is no implicit padding, so the two declarations can be compared offset by offset. The spec's sketch is the starting point; four things changed and each is a decision, not a transcription.
+
+| Offset | Size | Field | Type | Meaning |
+|---|---|---|---|---|
+| 0 | 4 | `instrument_id` | u32 | index into the generated instrument table; 0 is reserved as invalid |
+| 4 | 1 | `event_type` | u8 | 0 Trade, 1 Snapshot, 2 Update |
+| 5 | 1 | `side` | u8 | 0 Bid, 1 Ask |
+| 6 | 1 | `flags` | u8 | bit 0 SNAPSHOT_BEGIN, 1 SNAPSHOT_END, 2 AGGRESSOR_BUY, 3 GAP_BEFORE |
+| 7 | 1 | `reserved0` | u8 | explicit, zeroed |
+| 8 | 8 | `exchange_seq` | u64 | the exchange's own update id |
+| 16 | 8 | `exchange_ts` | u64 | ns since the Unix epoch, **exchange clock** |
+| 24 | 8 | `local_ts` | u64 | **raw TSC** on the router's core, stamped at receipt |
+| 32 | 8 | `order_id` | u64 | L3 order identity; 0 when the feed is L2-only |
+| 40 | 8 | `price_ticks` | i64 | price in whole ticks of this instrument |
+| 48 | 8 | `quantity` | i64 | size in the instrument's smallest quantity unit |
+| 56 | 8 | `reserved1` | u64 | explicit, zeroed |
+
+**`price` and `quantity` are integers, and this is the change that matters most.** The sketch had both as `f64`. §5 indexes price levels with a pre-allocated 1D array indexed by price tick, so an `f64` price forces a float-to-integer conversion on the hot path — a divide by the tick size, a rounding decision, and a rounding *convention* that the router and the engine have to agree on without any mechanism forcing them to. Two conventions that differ in the last bit put an order one level away from where it belongs and produce a plausible book rather than an error. Making the router emit whole ticks moves that conversion to the one place that already holds the instrument's tick size and does it once, and it keeps floating point out of the C++ hot path entirely. Quantity has the same argument plus a second one: queue position is maintained by adding and subtracting resting sizes, and float accumulation drifts silently in exactly the number this simulator exists to produce.
+
+**Conversion is decimal-string to integer, never through a float.** The router parses `"43250.50"` at the instrument's `price_decimals` into 4,325,050 units of 1e-2, then divides by `tick_units`. A non-zero remainder means the exchange sent an off-tick price, which is a data error to be reported rather than rounded away.
+
+**`quantity` on an Update is the new absolute resting size at that level, not a delta**, and zero means the level is gone. This is what L2 diff streams send and it is the convention with no accumulated state to get wrong.
+
+**The two timestamps are in different domains and that is deliberate.** `exchange_ts` is wall-clock nanoseconds from a clock this machine does not control, so any exchange-to-local figure derived from it is bounded by the exchange's clock discipline and is a data-quality metric, not a latency measurement. `local_ts` is a raw TSC read on the router's core, which is what makes deliverable §7.1 — router receipt to LOB update — a difference of two TSC values on one host. The header's `clock_id` (§9) names the domain so a segment stamped one way is never read the other. §12 measured the cross-core offset at 5.5 ns; the deliverable runs in one fixed direction, so unlike a latency bench it cannot cancel that offset by averaging and has to subtract it.
+
+**`exchange_seq` and the `GAP_BEFORE` flag exist because a websocket that drops a message does not say so.** The sequence number is the exchange's own, so gap detection is possible at all; the flag is set by the router because the router is where exchange-specific sequencing semantics live, and the engine should not be parsing one exchange's update-id ranges to learn that its book is now wrong.
+
+**`order_id` is what makes the L2/L3 in §1 true rather than aspirational.** Queue position at per-order granularity needs cancels and modifies to find their node in the §5 linked list, and there is no way to do that without identity. It costs 8 of the 24 bytes the sketch left as padding.
+
+**The instrument table is generated for both sides from one CSV**, which is the §1 requirement that symbols never appear in the hot path and that the mapping have a single source of truth. `id` is an index, so the engine's per-instrument arrays are direct-indexed with no hashing.
+
+**Layout is asserted against literal offsets on both sides.** Not against each other — against the same numbers, written twice. Reordering a field on either side fails that side's build, which is the property §10 asks for: a mismatch is a compile error rather than a corrupted run.
+
+---
+
+## Open decisions
+
+- **Benchmark environment.** §12 turned this from a caveat into a blocker and then showed it cannot be worked around from inside: the p99.9 handoff is 781,950 ns against a 1 µs deliverable, and `SCHED_FIFO` 80 improved the max 3.2× while leaving a ~600 µs tail that RT priority has no authority over. The headline number does not exist on this host at any percentile above the median. WSL2 cannot isolate cores or expose real topology, and §11 prices that precisely: the floor is fine — ~45 ns one-way, a common TSC origin, 1 ns clock resolution — and the tail is not, at ~250 preemptions per second above 10 µs and a millisecond-scale maximum that does not converge over three runs. A bare-metal or dedicated-instance target has to be chosen before the headline number is quoted anywhere, and the harness has to stay portable from the start rather than be retrofitted.
+- ~~One-way TSC offset~~ — **settled: θ = 5.5 ns, one-way handoff 105.5 ns** (§12). The standing rule is that a one-way latency is reported as the mean of both directions, since that is what cancels θ. The additive 68 ns floor is withdrawn with it.
+- ~~Where the capacity knee is~~ — **settled at n=3: 128 Ki (8 MiB)** (§7, §12). Throughput ties with 64 Ki and dwell time breaks the tie by an order of magnitude. Re-measure once the consumer carries the LOB, since every figure behind this came from a consumer that only walks a counter.
+- ~~The 48 ms at 16 MiB~~ — **not a transient and not proportional: it fell to 19.41 ms when `--events` doubled, while throughput rose outside the n=3 range** (§12). Mean batch, not capacity, predicts throughput across all thirteen runs. Capacity measurement is closed as over-measured relative to a target every resident size clears by 15-37x.
+- ~~`full_stalls` counts episodes, not time~~ — **settled: the producer now accumulates stalled cycles** (§12), and the dwell figure immediately decided §7's capacity where the episode count had pointed the other way.
+- Huge pages for the slot array (§7) — take them if free; the recomputed TLB cost is under 2 ns per event, so they do not decide anything.
+- ~~Consumer spin strategy~~ — **settled: `_mm_pause()`.** It beats a tight spin by ~53 ns at p50 and `UMWAIT` C0.1 by ~36 ns at p50 and 4–5× at p99.9 (§11).
+- ~~Cross-core TSC offset~~ — **settled: bounded inside ±40 ns with zero in every interval, so `clock_id` is `RDTSCP`** (§9, §11).
+- ~~Capacity default~~ — **settled: 1 Mi for throughput runs, 64 Ki for latency runs** (§7). Whether it is a build-time constant or a runtime parameter is still open; it is in the header either way.
+</file>
+
+<file path="instruments_generated.hpp">
+// GENERATED by tools/gen_instruments.py from instruments.csv. Do not edit.
+
+#pragma once
+
+#include <cstdint>
+
+namespace mkt
+{
+
+inline constexpr uint32_t kInstrumentCount = 3;
+
+struct Instrument
+{
+    const char *symbol;
+    const char *exchange;
+    uint8_t price_decimals;
+    int64_t tick_units;
+    uint8_t qty_decimals;
+};
+
+// Index 0 is the reserved invalid id and is present so that
+// instrument_id indexes this array directly, with no offset.
+inline constexpr Instrument kInstruments[3 + 1] = {
+    {"", "", 0, 0, 0},
+   {"BTCUSDT", "binance", 2, 1, 5},
+   {"ETHUSDT", "binance", 2, 1, 4},
+   {"SOLUSDT", "binance", 2, 1, 2},
+
+}  // namespace mkt
+</file>
+
+<file path="instruments.csv">
+# id,symbol,exchange,price_decimals,tick_units,qty_decimals
+# id is an array index; 0 is reserved as invalid and must not appear here.
+# price_decimals: decimals the exchange sends in its price strings.
+# tick_unit:      tick size expressed in 10^-price_decimals units.
+# qty_decimals:   decimals the exchange sends in its quantity strings.
+#
+# PLACEHOLDER VALUES. These have not been read from the exchange's instrument
+# endpoint and must be before any run is trusted -- an off-by-one in tick_units
+# silently shifts every order one price level.
+1,BTCUSDT,binance,2,1,5
+2,ETHUSDT,binance,2,1,4
+3,SOLUSDT,binance,2,1,2
+</file>
+
+<file path="layout_dump.cpp">
+// layout_dump.cpp -- print the C++ view of the shared-memory contract.
+//
+// The static_asserts in ring.hpp and market_event.hpp are what make a mismatch
+// a build failure. This exists for the other half of §10: a human comparing the
+// two declarations, and a CI job diffing this output against a recorded copy.
+
+#include "market_event.hpp"
+#include "ring.hpp"
+
+#include <cstddef>
+#include <cstdio>
+
+#define ROW(s, f) std::printf("  %-16s %3zu %3zu\n", #f, offsetof(s, f), sizeof(s::f))
+
+int main()
+{
+    std::printf("ring::Header  size=%zu align=%zu\n", sizeof(ring::Header), alignof(ring::Header));
+    std::printf("  %-16s %3zu\n", "stat", offsetof(ring::Header, stat));
+    std::printf("  %-16s %3zu\n", "prod", offsetof(ring::Header, prod));
+    std::printf("  %-16s %3zu\n", "cons", offsetof(ring::Header, cons));
+    std::printf("  slot_bytes=%u header_bytes=%zu\n\n", ring::kSlotBytes, ring::kHeaderBytes);
+    std::printf(
+        "mkt::MarketEvent  size=%zu align=%zu schema_version=%u\n",
+        sizeof(mkt::MarketEvent), alignof(mkt::MarketEvent), mkt::kSchemaVersion);
+    std::printf("  %-16s %3s %3s\n", "field", "off", "sz");
+    ROW(mkt::MarketEvent, instrument_id);
+    ROW(mkt::MarketEvent, event_type);
+    ROW(mkt::MarketEvent, side);
+    ROW(mkt::MarketEvent, flags);
+    ROW(mkt::MarketEvent, reserved0);
+    ROW(mkt::MarketEvent, exchange_seq);
+    ROW(mkt::MarketEvent, exchange_ts);
+    ROW(mkt::MarketEvent, local_ts);
+    ROW(mkt::MarketEvent, order_id);
+    ROW(mkt::MarketEvent, price_ticks);
+    ROW(mkt::MarketEvent, quantity);
+    ROW(mkt::MarketEvent, reserved1);
+    return 0;
+}
+</file>
+
+<file path="market_event.hpp">
+// market_event.hpp -- the C++ half of the payload contract (DESIGN.md §13).
+//
+// This declaration is one of two. The Rust one is router/src/event.rs, and
+// nothing generated ties them together: the offsets below are asserted against
+// literals on both sides, so reordering a field fails that side's build.
+// A mismatch that reached a run would corrupt every downstream number instead of
+// erroring, which is why the asserts are not optional.
+
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <type_traits>
+
+namespace mkt
+{
+
+// Bumped whenever the layout or the meaning of a field changes. Written into
+// the ring header so a stale segment is refused rather than reinterpreted.
+inline constexpr uint32_t kSchemaVersion = 1;
+
+enum class EventType : uint8_t
+{
+    Trade = 0,
+    Snapshot = 1,
+    Update = 2
+};
+
+enum class Side : uint8_t
+{
+    Bid = 0,
+    Ask = 1,
+};
+
+namespace flag
+{
+inline constexpr uint8_t kSnapshotBegin = 1u << 0;
+inline constexpr uint8_t kSnapshotEnd = 1u << 1;
+inline constexpr uint8_t kAggressorBuy = 1u << 2; // Trade only
+// Set by the router when exchange_seq skipped. The router owns this because
+// exchange-specific sequencing (Binance's U/u ranges, and so on) is parse-time
+// knowledge, and the engine must not have to learn one exchange's dialect to
+// find out that its book is wrong.
+inline constexpr uint8_t kGapBefore = 1u << 3;
+} // namespace flag
+
+// The fields are raw integers rather than the enums above: what crosses the
+// segment is bytes, and the enums name the values without claiming the wire
+// format is a C++ type.
+struct alignas(64) MarketEvent
+{
+    uint32_t instrument_id; // index into the generated table; 0 is valid
+    uint8_t event_type;     // EventType
+    uint8_t side;           // Side
+    uint8_t flags;          // flag::*
+    uint8_t reserved0;      // explicit, zeroed
+
+    uint64_t exchange_seq; // the exchange's own update id
+    uint64_t exchange_ts;  // ns since the Unix epoch, EXCHANGE clock
+    uint64_t local_ts;     // raw TSC on the router's core, stamped at receipt
+
+    uint64_t order_id;   // L3 identity; 0 when the feed is L2-only
+    int64_t price_ticks; // whole ticks of this instrument, never a float
+    int64_t quantity;    // smallest quantity unit; on Update this is the new ABSOLUTE resting size, and 0 removes the level
+
+    uint64_t reserved1; // explicit, zeroed
+};
+
+static_assert(sizeof(MarketEvent) == 64, "one event is one cache line");
+static_assert(alignof(MarketEvent) == 64, "one event is one cache line");
+static_assert(std::is_trivially_copyable_v<MarketEvent>, "a slot is published by a plain store");
+static_assert(std::is_standard_layout_v<MarketEvent>, "offsetof must be well defined");
+
+static_assert(offsetof(MarketEvent, instrument_id) == 0, "layout drift");
+static_assert(offsetof(MarketEvent, event_type) == 4, "layout drift");
+static_assert(offsetof(MarketEvent, side) == 5, "layout drift");
+static_assert(offsetof(MarketEvent, flags) == 6, "layout drift");
+static_assert(offsetof(MarketEvent, reserved0) == 7, "layout drift");
+static_assert(offsetof(MarketEvent, exchange_seq) == 8, "layout drift");
+static_assert(offsetof(MarketEvent, exchange_ts) == 16, "layout drift");
+static_assert(offsetof(MarketEvent, local_ts) == 24, "layout drift");
+static_assert(offsetof(MarketEvent, order_id) == 32, "layout drift");
+static_assert(offsetof(MarketEvent, price_ticks) == 40, "layout drift");
+static_assert(offsetof(MarketEvent, quantity) == 48, "layout drift");
+static_assert(offsetof(MarketEvent, reserved1) == 56, "layout drift");
+
+} // namespace mkt
+</file>
+
+<file path="noise_floor.cpp">
+// noise_floor.cpp -- environment characterization for the ultra-low-latency engine.
+//
+// Measures the measuring apparatus before anything is built on top of it:
+//  1. clock read cost and resolution (CLOCK_MONOTONIC, CLOCK_MONOTONIC_RAW, RDTSCP)
+//  2. core-to-core cache line handoff latency, swept over every vCPU pair
+//  3. scheduler jitter on a pinned spin loop
+//
+// Every later latency figure in this project is reported against these numbers.
+// Reported topology on this host is synthesized by the hypervisor, so the pair
+// sweep in test 2 is the only way to find out what the vCPU numbering means.
+//
+// Usage: ./noise_floor [--jitter-seconds N] [--pin-cpu N] [--pairs-iters N]
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
+#include <immintrin.h>
+#include <pthread.h>
+#include <sched.h>
+#include <time.h>
+
+#include <algorithm>
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <thread>
+#include <vector>
+#include "bench_util.hpp"
+
+namespace
+{
+using namespace bench;
+// ------------------------------------------------------ test 1: clock cost
+// samples land in a pre-sized buffer so the measured region stays a pair of
+// clock reads and one store; the histogram is filled afterwards.
+void bench_clock(const char* name, clockid_t clk, size_t iters, std::vector<uint64_t>& raw)
+{
+    for (size_t i = 0; i < 100000; ++i) (void)now_ns(clk);
+    for (size_t i = 0; i < iters; ++i)
+    {
+        const uint64_t t0 = now_ns(clk);
+        const uint64_t t1 = now_ns(clk);
+        raw[i] = t1 - t0;
+    }
+
+    Hist h;
+    uint64_t zeros = 0;
+    for (size_t i = 0; i < iters; ++i)
+    {
+        if (raw[i] == 0) ++zeros;
+        h.add(raw[i]);
+    }
+    report(name, h);
+    std::printf(
+        "  %-30s zero-delta %.2f%%  (a high share means the clock is coarser than one call)\n",
+        "", 100.0 * static_cast<double>(zeros) / static_cast<double>(iters)
+    );
+}
+
+void bench_rdtscp(size_t iters, double tsc_hz, std::vector<uint64_t>& raw)
+{
+    for (size_t i = 0; i < 100000; ++i) (void)rdtscp_now();
+    for (size_t i = 0; i < iters; ++i)
+    {
+        const uint64_t c0 = rdtscp_now();
+        const uint64_t c1 = rdtscp_now();
+        raw[i] = c1 - c0;
+    }
+
+    Hist h;
+    const double ns_per_cycle = 1e9 / tsc_hz;
+    for (size_t i = 0; i < iters; ++i) h.add(static_cast<uint64_t>(static_cast<double>(raw[i]) * ns_per_cycle));
+    report("RDTSCP", h);
+}
+
+// ------------------------------------- test 2: core-to-core cache line handoff
+
+struct alignas(128) PingPong
+{
+    std::atomic<uint64_t> seq{0};
+    uint64_t stamp{0};  // responder's TSC; same line as seq, so it costs no extra transfer
+    char pad[128 - sizeof(std::atomic<uint64_t>)]{};
+};
+
+enum class Spin
+{
+    Pause,
+    Tight,
+    Umwait
+};
+
+const char* spin_name(Spin m)
+{
+    switch (m)
+    {
+        case Spin::Pause:   return "PAUSE";
+        case Spin::Tight:   return "tight";
+        case Spin::Umwait:  return "UMWAIT";
+    }
+    return "?";
+}
+
+// Branch on the spin strategy outside the loop, never inside it.
+//
+// UMWAIT does not spin at all: it parks the logical core until the monitored
+// line is written, so it pays neither PAUSE's granularity nor the memory-order
+// machine clear a hammered spin loop takes on exit. C0.1 (bit 0 of the first
+// operand) is the low-wakeup-latency state; C0.2 saves more power and wakes
+// slower, which is the wrong trade here.
+inline void spin_until(const std::atomic<uint64_t>& seq, uint64_t want, Spin mode)
+{
+    switch (mode)
+    {
+        case Spin::Pause:
+            while (seq.load(std::memory_order_acquire) != want) _mm_pause();
+            return;
+        case Spin::Tight:
+            while (seq.load(std::memory_order_acquire) != want) { }
+            return;
+        case Spin::Umwait:
+#ifdef __WAITPKG__
+        while (seq.load(std::memory_order_acquire) != want)
+        {
+            _umonitor(const_cast<std::atomic<uint64_t>*>(&seq));
+            // Re-check after arming. A store landing between the load above
+            // and the UMONITOR would otherwise be waited on after the fact,
+            // and the wait would only end on the deadline.
+            if (seq.load(std::memory_order_acquire) == want) return;
+            _umwait(1, __rdtsc() + 100000);     // ~35 us deadline; re-arm on timeout
+        }
+#else
+        while (seq.load(std::memory_order_acquire) != want) _mm_pause();
+#endif
+        return;
+    }
+}
+
+// Cost of one PAUSE. 16 per sample amortizes the ~11 ns clock pair away. If this
+// is tens of nanoseconds, a value arriving mid-PAUSE is not observed until the
+// PAUSE retires, and that delay is inside every figure test 2 reports.
+void bench_pause(size_t iters, double tsc_hz)
+{
+    Hist h;
+    const double ns_per_cycle = 1e9 / tsc_hz;
+    for (size_t i = 0; i < 10000; ++i) _mm_pause();
+    for (size_t i = 0; i < iters; ++i)
+    {
+        const uint64_t c0 = rdtscp_now();
+        for (int k = 0; k < 16; ++k) _mm_pause();
+        const uint64_t c1 = rdtscp_now();
+        h.add(static_cast<uint64_t>(static_cast<double>(c1 - c0) * ns_per_cycle / 16.0));
+    }
+    report("per-PAUSE", h);
+}
+
+void responder(PingPong* pp, int cpu, size_t iters, std::atomic<int>* landed, Spin mode)
+{
+    const bool ok = pin_to(cpu);
+    landed->store(ok ? sched_getcpu() : -1, std::memory_order_release);
+    const bool stamp = (mode != Spin::Umwait);
+    for (size_t i = 1; i <= iters; ++i)
+    {
+        spin_until(pp->seq, 2 * i - 1, mode);
+        // UMONITOR arms on a cache-line granule and stamp shares seq's line, so
+        // writing it here would wake the initiator one store early and that wake
+        // would be measured as latency. The offset it bounds is settled anyway.
+        if (stamp) pp->stamp = rdtscp_now();                    // released by the store below
+        pp->seq.store(2 * i, std::memory_order_release);
+    }
+}
+
+// Round trip is measured with RDTSCP rather than clock_gettime: the handoff is
+// expected to be tens of nanoseconds, where a clock call is a large share of the
+// figure rather than a rounding error.
+//
+// The responder's own stamp bounds the cross-core TSC offset. With B's clock at
+// A's + theta and both one-way delays non-negative, theta lies in
+// [-min(c1 - t1), +min(t1 - c0)]. An interval straddling zero means the two cores
+// share an origin; one that excludes it means every cross-core timestamp in this
+// project needs correcting by that amount.
+void bench_pair(int cpu_a, int cpu_b, size_t iters, size_t warmup, double tsc_hz, Spin mode)
+{
+    PingPong pp;
+    std::atomic<int> landed_b{-2};
+    std::vector<uint64_t> raw(iters, 0);
+    std::vector<uint64_t> out(iters, 0);
+
+    std::thread t(responder, &pp, cpu_b, iters + warmup, &landed_b, mode);
+
+    const bool ok_a = pin_to(cpu_a);
+    const int landed_a = ok_a ? sched_getcpu() : -1;
+    while (landed_b.load(std::memory_order_acquire) == -2) _mm_pause();
+
+    for (size_t i = 1; i <= iters + warmup; ++i)
+    {
+        const uint64_t c0 = rdtscp_now();
+        pp.seq.store(2 * i - 1, std::memory_order_release);
+        spin_until(pp.seq, 2 * i, mode);
+        const uint64_t c1 = rdtscp_now();
+        const uint64_t t1 = pp.stamp;
+        if (i > warmup)
+        {
+            raw[i - warmup - 1] = c1 - c0;
+            out[i - warmup - 1] = t1 - c0;                      // meaningless in UMWAIT mode; not printed
+        }
+    }
+    t.join();
+
+    Hist rtt;
+    const double ns_per_cycle = 1e9 / tsc_hz;
+    int64_t min_out = INT64_MAX;
+    int64_t min_back = INT64_MAX;
+    for (size_t i = 0; i < iters; ++i)
+    {
+        rtt.add(static_cast<uint64_t>(static_cast<double>(raw[i]) * ns_per_cycle));
+        const int64_t o = static_cast<int64_t>(out[i]);         // signed: t1 may precede c0
+        const int64_t b = static_cast<int64_t>(raw[i]) - o;
+        if (o < min_out) min_out = o;
+        if (b < min_back) min_back = b;
+    }
+
+    char label[64];
+    std::snprintf(
+        label, sizeof(label), "cpu %2d <-> %2d  (ran on %d,%d)",
+        cpu_a, cpu_b, landed_a, landed_b.load(std::memory_order_acquire)
+    );
+    char offset[48];
+    if (mode == Spin::Umwait)
+    {
+        std::snprintf(offset, sizeof(offset), "tsc-offset n/a");
+    }
+    else
+    {
+        std::snprintf(
+            offset, sizeof(offset), "tsc-offset in [%+.0f, %+.0f]",
+            -static_cast<double>(min_back) * ns_per_cycle,
+            static_cast<double>(min_out) * ns_per_cycle
+        );
+    }
+    std::printf(
+        "  %-30s n=%-1llu p50=%6llu p99=%7llu p99.9=%8llu  one-way p50=%llu  %s\n",
+        label,
+        static_cast<unsigned long long>(rtt.count()),
+        static_cast<unsigned long long>(rtt.percentile(0.50)),
+        static_cast<unsigned long long>(rtt.percentile(0.99)),
+        static_cast<unsigned long long>(rtt.percentile(0.999)),
+        static_cast<unsigned long long>(rtt.percentile(0.50) / 2),
+        offset
+    );
+}
+
+// ------------------------------------------------- test 3: scheduler jitter
+
+// The histogram is filled inside the loop here -- billions of samples cannot be
+// buffered. That adds a branch and an increment to every gap, which matters for
+// the p50 and not at all for the tail, and the tail is the reason this test runs.
+void bench_jitter(int cpu, double seconds)
+{
+    if (!pin_to(cpu)) std::printf("  pinning to cpu %d FAILED -- jitter figures are meaningless\n", cpu);
+    std::printf("  pinned to cpu %d, running on cpu %d\n", cpu, sched_getcpu());
+
+    Hist h;
+    const uint64_t end = now_ns(CLOCK_MONOTONIC) + static_cast<uint64_t>(seconds * 1e9);
+    uint64_t prev = now_ns(CLOCK_MONOTONIC);
+    while (prev < end)
+    {
+        const uint64_t cur = now_ns(CLOCK_MONOTONIC);
+        h.add(cur - prev);
+        prev = cur;
+    }
+
+    report("spin-loop gap", h);
+    std::printf(
+        "  %-30s >10us: %llu   >100us: %llu   >1ms: %llu   (preemptions)\n",
+        "",
+        static_cast<unsigned long long>(h.count_at_least(10000)),
+        static_cast<unsigned long long>(h.count_at_least(100000)),
+        static_cast<unsigned long long>(h.count_at_least(1000000))
+    );
+    std::printf("  %-30s migrated to cpu %d by the end\n", "", sched_getcpu());
+}
+
+}    // namespace
+
+int main(int argc, char** argv)
+{
+    double jitter_seconds = 10.0;
+    int pin_cpu = 0;
+    size_t pair_iters = 200000;
+
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--jitter-seconds") == 0 && i + 1 < argc) {
+            jitter_seconds = std::atof(argv[++i]);
+        } else if (std::strcmp(argv[i], "--pin-cpu") == 0 && i + 1 < argc) {
+            pin_cpu = std::atoi(argv[++i]);
+        } else if (std::strcmp(argv[i], "--pair-iters") == 0 && i + 1 < argc) {
+            pair_iters = static_cast<size_t>(std::atoi(argv[++i]));
+        } else {
+            std::printf("Unknown argument: %s\n", argv[i]);
+            return 2;
+        }
+    }
+
+    const unsigned ncpu = std::thread::hardware_concurrency();
+    std::printf("noise_floor -- all figures in nanoseconds, %u vCPUs visible\n\n", ncpu);
+
+    std::printf("== 0. TSC calibration ==\n");
+    const double hz1 = calibrate_tsc_hz(100000000ull);
+    const double hz2 = calibrate_tsc_hz(100000000ull);
+    std::printf("  run 1: %.4f GHz\n  run 2: %.4f GHz\n  drift: %.4f%%\n\n", hz1 / 1e9, hz2 / 1e9, 100.0 * (hz2 - hz1) / hz1);
+    const double tsc_hz = 0.5 * (hz1 + hz2);
+
+    std::printf("== 1. clock read cost / resolution ==\n");
+    {
+        const size_t iters = 1000000;
+        std::vector<uint64_t> raw(iters, 0);
+        bench_clock("CLOCK_MONOTONIC", CLOCK_MONOTONIC, iters, raw);
+        bench_clock("CLOCK_MONOTONIC_RAW", CLOCK_MONOTONIC_RAW, iters, raw);
+        bench_rdtscp(iters, tsc_hz, raw);
+    }
+    std::printf("\n");
+
+    std::printf("== 2a. PAUSE cost ==\n");
+    bench_pause(200000, tsc_hz);
+    std::printf("\n");
+
+    const Spin modes[] = {Spin::Pause, Spin::Tight, Spin::Umwait};
+    const char* tags[] = {"2b", "2c", "2d"};
+    for (int m = 0; m < 3; ++m)
+    {
+#ifndef __WAITPKG__
+        if (modes[m] == Spin::Umwait)
+        {
+            std::printf("== 2d. UMWAIT: not compiled in, __WAITPKG__ undefined ==\n\n");
+            continue;
+        }
+#endif
+        std::printf(
+            "== %s. core-to-core handoff, %s spin, cpu %d vs every other vCPU ==\n",
+            tags[m], spin_name(modes[m]), pin_cpu
+        );
+        for (unsigned peer = 0; peer < ncpu; ++peer)
+        {
+            if (static_cast<int>(peer) == pin_cpu) continue;
+            bench_pair(pin_cpu, static_cast<int>(peer), pair_iters, 20000, tsc_hz, modes[m]);
+        }
+        std::printf("\n");
+    }
+
+    std::printf("== 3. scheduler jitter, %.1f s pinned spin ==\n", jitter_seconds);
+    bench_jitter(pin_cpu, jitter_seconds);
+
+    return 0;
+}
+</file>
+
+<file path="Project_1_C++Rust_Hybrid_Ultra-Low.txt">
+Project 1: C++/Rust Hybrid Ultra-Low Latency Event-Driven Engine 명세서
+
+본 명세서는 향후 전사적 리스크 관리 및 자산 운용의 근간(Core OS)이 될 초저지연 시뮬레이션 엔진의 설계도입니다. 네트워크 I/O 비동기 처리에 강한 Rust와 인메모리 연산 최적화에 강한 C++을 결합한 IPC(Inter-Process Communication) 아키텍처를 적용하여 마이크로초(μs) 단위의 시장 미시구조를 복원합니다.
+
+1. System Overview & Architecture
+목표: 틱(Tick) 레벨의 L2/L3 데이터를 지연 없이 수집하고, 공유 메모리를 통해 체결 엔진으로 전달하여 슬리피지(Slippage)와 큐 포지션(Queue Position)을 정밀 시뮬레이션하는 시스템 구축.
+
+아키텍처 분리 전략:
+
+Data Router (Rust): 비동기 런타임(Tokio)을 활용해 다중 거래소 WebSocket 연결 유지 및 데이터 수신. 문자열 기반의 JSON 데이터를 고정 길이 바이너리로 직렬화하여 공유 메모리(Shared Memory)에 적재.
+
+Core Engine (C++20): 락(Lock) 없는 폴링(Polling) 방식으로 공유 메모리에서 이벤트를 읽어와 오더북을 갱신하고 가상 체결 및 리스크(PnL)를 산출.
+
+Research Interface (Python 3.10+): pybind11을 통해 C++ 엔진과 바인딩되어, 백테스트 실행 및 결과 시각화 담당.
+
+2. Memory Schema & IPC (Inter-Process Communication)
+Rust 라우터와 C++ 엔진 간의 데이터 직렬화 스키마입니다. 메모리 단편화와 캐시 미스(Cache Miss)를 극단적으로 줄이기 위해 단일 이벤트 객체를 CPU 캐시 라인 크기인 64바이트(Bytes)로 고정합니다.
+
+설계 원칙:
+
+문자열(String) 사용을 엄격히 금지하고 심볼("BTCUSDT")은 내부 정수 ID(e.g., 101)로 매핑.
+
+도달 시간(Local Timestamp)을 포함하여 네트워크 계층부터 엔진까지의 End-to-End 지연 시간 측정.
+
+// Rust: Data Schema (Shared with C++)
+#[repr(C, align(64))]
+pub struct MarketEvent {
+    pub instrument_id: u32,   // 4 bytes: Mapped from ticker (e.g., "BTCUSDT" -> 1)
+    pub event_type: u8,       // 1 byte: 0=Trade, 1=Snapshot, 2=Update
+    pub side: u8,             // 1 byte: 0=Bid, 1=Ask
+    pub _padding1: [u8; 2],   // 2 bytes: Explicit padding for 8-byte boundary
+
+    pub exchange_ts: u64,     // 8 bytes: Exchange origin timestamp (ns)
+    pub local_ts: u64,        // 8 bytes: Local machine receipt timestamp (ns)
+    
+    pub price: f64,           // 8 bytes: Order or Trade Price
+    pub quantity: f64,        // 8 bytes: Order or Trade Quantity
+    
+    pub _padding2: [u8; 24],  // 24 bytes: Padding to strict 64-byte Cache Line
+}
+
+// C++: Struct mapping matching the Rust definition
+#include <cstdint>
+
+struct alignas(64) MarketEvent {
+    uint32_t instrument_id;
+    uint8_t event_type;
+    uint8_t side;
+    uint8_t _padding1[2];
+
+    uint64_t exchange_ts;
+    uint64_t local_ts;
+
+    double price;
+    double quantity;
+
+    uint8_t _padding2[24];
+};
+
+3. Data Ingestion (Rust Router)
+Asynchronous I/O: tokio-tungstenite 크레이트를 활용하여 외부 거래소 스트림 수신 시 발생하는 I/O 블로킹 제거.
+
+Lock-Free SPSC Queue 적재: 수신된 JSON 틱 데이터를 파싱하여 MarketEvent 구조체로 변환한 뒤, C++과 연결된 POSIX Shared Memory (mmap) 영역의 단일 생산자-단일 소비자(Single-Producer Single-Consumer) 링 버퍼에 push 실행.
+
+4. Core Matching Engine (C++ Hot Path)
+Zero-Allocation: 엔진 메인 루프 실행 이후 힙 메모리 할당(new, malloc) 및 해제를 전면 금지. 모든 오더북 노드와 큐는 엔진 초기화 단계에서 메모리 풀(Memory Pool) 형태로 사전 할당(Pre-allocation).
+
+Thread Affinity: 엔진 메인 스레드를 특정 CPU 코어에 격리(Pinning)하여 컨텍스트 스위칭 오버헤드 차단.
+
+Spin-lock Polling: std::mutex나 condition_variable을 사용하지 않고, 링 버퍼의 tail 포인터를 원자적(Atomic)으로 검사하며 이벤트를 획득.
+
+// C++: Spin-lock Polling Logic
+inline void poll_shared_memory() {
+    MarketEvent event;
+    while (engine_running) {
+        if (ring_buffer.pop(event)) {
+            process_event(event); // Update Limit Order Book
+        } else {
+            _mm_pause(); // Prevent CPU pipeline flush during busy-wait
+        }
+    }
+}
+
+5. Limit Order Book (LOB) Data Structure
+Price Levels: 해시맵(Hash Map) 대신 미리 할당된 1D 배열(Array) 형태의 가격 틱 인덱스를 사용하여 가격대(Price Level) 탐색을 $O(1)$로 처리.
+
+Queue Position: 특정 가격 내의 대기 주문들은 이중 연결 리스트(Doubly Linked List)로 관리하되, 노드들은 사전 할당된 배열에서 인덱스 포인터로 연결하여 캐시 지역성(Cache Locality) 확보.
+
+6. Python Interface (pybind11)
+리서처는 인프라의 복잡성을 모른 채, 파이썬 환경에서 직관적인 API를 통해 시뮬레이션을 구동합니다. C++의 네이티브 포인터 배열을 Python의 Numpy 배열로 Zero-copy 반환하여 분석 시각화의 속도를 높입니다.
+
+# Python: Strategy Integration Example
+import core_engine
+import numpy as np
+
+# 1. Initialize Hybrid Environment
+env = core_engine.HybridEnvironment(
+    shared_mem_name="/market_data_ring",
+    latency_model="constant", 
+    latency_ms=2.5
+)
+
+# 2. Execute Strategy
+result = env.run()
+
+# 3. Analyze Latency & PnL without overhead
+pnl_curve = np.array(result.get_pnl_array(), copy=False)
+print(f"Total Return: {pnl_curve[-1]:.2f}")
+
+7. Performance Benchmarks (Deliverables)
+프로젝트 완료 시 면접관 및 외부 검증용으로 제출할 성능 지표입니다.
+
+IPC Latency: Rust 라우터가 수신한 데이터가 C++ 엔진 LOB에 반영되기까지의 소요 시간 (목표: < 1μs).
+
+Throughput: 초당 1,000만 건의 메시지 처리량 달성 여부.
+
+Memory Profiler Log: Valgrind를 통한 시뮬레이션 중 동적 메모리 할당 0건 증명 리포트.
+</file>
+
+<file path="ring_bench.cpp">
+// ring_bench.cpp -- the ring from ring.hpp driven by two pinned threads in one
+// process. No shared memory and no Rust yet, deliberately: this separates what
+// the ring costs from what the process boundary costs, so that when the figure
+// moves after sgm_open lands there is something to attribute the move to.
+//
+// Two modes measuring two different things:
+//   --mode lat    paced producer, one event  per Acquire. Measures the handoff.
+//   --mode tput   producer flat out, consumer batching. Measures capacity.
+// Read every latency figure against DESIGN.md §11: on this host the one-way
+// coherence floor is ~45 ns and an RDTSCP pair costs ~23 ns, so a raw number
+// here is mostly instrument until it is well clear of those.
+
+#include "bench_util.hpp"
+#include "ring.hpp"
+
+#include <immintrin.h>
+#include <sys/mman.h>
+
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <thread>
+#include <type_traits>
+#include <vector>
+
+namespace {
+using namespace bench;
+
+// NOT the market event schema -- DESIGN.md §8 leaves that to its own contract.
+// This is the smallest payload satisfying the four properties the ring fixes,
+// carrying the two things a bench needs: a sequence number, so a gap or a
+// reorder is detectable rather than silent, and the stamp §9 requires.
+struct alignas(ring::kSlotBytes) BenchEvent
+{
+    uint64_t seq;
+    uint64_t t_produce; // TSC, written immediately before publish()
+    uint64_t pad[6];
+};
+static_assert(sizeof(BenchEvent) == ring::kSlotBytes, "one event is one slot");
+static_assert(alignof(BenchEvent) == ring::kSlotBytes, "one event is one cache line");
+static_assert(std::is_trivially_copyable_v<BenchEvent>, "a slot is published by a plain store");
+
+struct Counters
+{
+    std::atomic<uint64_t> sent{0};
+    std::atomic<uint64_t> recv{0};
+    std::atomic<uint64_t> gaps{0};
+    std::atomic<uint64_t> full_stalls{0};
+    std::atomic<uint64_t> polls{0};
+    std::atomic<uint64_t> queued{0}; // polls that found more than one event ready
+    std::atomic<uint64_t> full_cycles{0};
+};
+
+// Paced so the ring stays near-empty. A producer running flat out fills the
+// ring, and the consumer then measures queueing delay -- a figure that still
+// looks small and has stopped meaning what its name says.
+void produce(ring::Header *h, int cpu, uint64_t events, uint64_t period_cycles, bool stamp, Counters *c)
+{
+    if (!pin_to(cpu)) std::fprintf(stderr, "ring_bench: producer failed to pin to cpu %d\n", cpu);
+    ring::Producer p(h);
+
+    const uint64_t t0 = rdtscp_now();
+    for (uint64_t i = 0; i < events; ++i)
+    {
+        if (period_cycles != 0)
+        {
+            const uint64_t deadline = t0 + i * period_cycles;
+            while (rdtscp_now() < deadline) _mm_pause();
+        }
+
+        uint8_t *slot = p.claim();
+        if (slot == nullptr)
+        {
+            // Episodes and dwell are different questions. Once the ring
+            // saturates the producer emits one fresh episode per consumer
+            // commit, so a count alone cannot separate many brief bumps from
+            // one long stall -- and §5's drop-versus-backpressure policy turns
+            // on the dwell, not the count.
+            const uint64_t t_stall = rdtscp_now();
+            c->full_stalls.fetch_add(1, std::memory_order_relaxed);
+            do
+            {
+                _mm_pause();
+                slot = p.claim();
+            } while (slot == nullptr);
+            c->full_cycles.fetch_add(rdtscp_now() - t_stall, std::memory_order_relaxed);
+        }
+
+        BenchEvent *e = reinterpret_cast<BenchEvent *>(slot);
+        e->seq = i;
+        // §9: stamp immediately before the Release store, so the interval
+        // excludes every line above this one.
+        e->t_produce = stamp ? rdtscp_now() : 0;
+        p.publish();
+    }
+
+    c->sent.store(events, std::memory_order_relaxed);
+    p.finish();
+}
+
+void consume(ring::Header *h, int cpu, bool measure, uint64_t max_batch, std::vector<uint64_t> *raw, Counters *c)
+{
+    if (!pin_to(cpu)) std::fprintf(stderr, "ring_bench: consumer failed to pin to cpu %d\n", cpu);
+    ring::Consumer q(h);
+
+    uint64_t expect = 0;
+    uint64_t recv = 0;
+    uint64_t nmeas = 0;
+    uint64_t polls = 0;
+    uint64_t queued = 0;
+
+    while (true)
+    {
+        uint64_t n = q.available();
+        if (n == 0)
+        {
+            // The producer publishes everything, then sets Exited with a
+            // Release. Re-checking after seeing Exited closes the window where
+            // the last publish landed between the two loads.
+            if (h->prod.producer_state.load(std::memory_order_acquire) == static_cast<uint32_t>(ring::ProducerState::Exited) && q.available() == 0) break;
+            _mm_pause();
+            continue;
+        }
+
+        // §9: read the clock immediately after the Acquire succeeds.
+        const uint64_t t_consume = rdtscp_now();
+        ++polls;
+        if (n > 1) ++queued;
+        if (n > max_batch) n = max_batch;
+
+        for (uint64_t k = 0; k < n; ++k)
+        {
+            const BenchEvent *e = reinterpret_cast<const BenchEvent *>(q.peek());
+            if (e->seq != expect) c->gaps.fetch_add(1, std::memory_order_relaxed);
+            expect = e->seq + 1;
+            // Only the first event of a batch was waited for; the rest were
+            // already in the ring and their interval would be queueing.
+            if (measure && k == 0 && nmeas < raw->size()) (*raw)[nmeas++] = t_consume - e->t_produce;
+            ++recv;
+            q.pop();
+        }
+
+        // An unbounded batch amortizes the cross-core read further but holds
+        // read_idx back, which the producer sees as the ring being full. The
+        // cap is where that trade gets made.
+        q.commit();
+    }
+
+    c->recv.store(recv, std::memory_order_relaxed);
+    c->polls.store(polls, std::memory_order_relaxed);
+    c->queued.store(queued, std::memory_order_relaxed);
+    if (measure) raw->resize(nmeas);
+}
+
+} // namespace
+
+int main(int argc, char **argv)
+{
+    const char *mode = "lat";
+    uint64_t capacity = 65536;
+    uint64_t events = 2000000;
+    uint64_t rate = 1000000; // msg/s, latency mode only
+    uint64_t max_batch = 1024;
+    int producer_cpu = 0;
+    int consumer_cpu = 2;
+
+    for (int i = 1; i < argc; ++i)
+    {
+        if (std::strcmp(argv[i], "--mode") == 0 && i + 1 < argc) mode = argv[++i];
+        else if (std::strcmp(argv[i], "--capacity") == 0 && i + 1 < argc)
+            capacity = std::strtoull(argv[++i], nullptr, 10);
+        else if (std::strcmp(argv[i], "--events") == 0 && i + 1 < argc)
+            events = std::strtoull(argv[++i], nullptr, 10);
+        else if (std::strcmp(argv[i], "--rate") == 0 && i + 1 < argc)
+            rate = std::strtoull(argv[++i], nullptr, 10);
+        else if (std::strcmp(argv[i], "--batch") == 0 && i + 1 < argc)
+            max_batch = std::strtoull(argv[++i], nullptr, 10);
+        else if (std::strcmp(argv[i], "--producer-cpu") == 0 && i + 1 < argc)
+            producer_cpu = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--consumer-cpu") == 0 && i + 1 < argc)
+            consumer_cpu = std::atoi(argv[++i]);
+        else
+        {
+            std::printf("unknown argument: %s\n", argv[i]);
+            return 2;
+        }
+    }
+
+    const bool lat = std::strcmp(mode, "lat") == 0;
+    if (!lat && std::strcmp(mode, "tput") != 0)
+    {
+        std::printf("--mode must be lat or tput\n");
+        return 2;
+    }
+
+    const double tsc_hz = calibrate_tsc_hz(100000000ull);
+    const double ns_per_cycle = 1e9 / tsc_hz;
+
+    const size_t bytes = ring::segment_bytes(capacity);
+    // MAP_POPULATE prefaults the whole segment. Without it the first lap of the
+    // ring takes a page fault every 64 slots, and those land squarely in the
+    // p99.9 this batch exists to report.
+    void *base = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE, -1, 0);
+    if (base == MAP_FAILED)
+    {
+        std::perror("mmap");
+        return 1;
+    }
+
+    ring::Header *h = ring::init(base, capacity, ring::ClockId::Rdtscp);
+    // Attach as the router will. In one process this cannot fail; it runs here
+    // so the path that must abort on a stale segment is a path the bench
+    // actually exercises rather than one nothing has ever taken.
+    // clang-format off
+    ring::attach(base, capacity, ring::ClockId::Rdtscp);
+    std::printf(
+        "ring_bench -- mode=%s capacity=%llu (%.1f MiB) events=%llu cpu %d -> %d, TSC %.4f GHz\n",
+        mode, static_cast<unsigned long long>(capacity),
+        static_cast<double>(bytes) / (1024.0 * 1024.0),
+        static_cast<unsigned long long>(events),
+        producer_cpu, consumer_cpu, tsc_hz / 1e9
+    );
+    if (lat) std::printf("            paced at %llu msg/s, batch 1\n", static_cast<unsigned long long>(rate));
+    else     std::printf("            unpaced, batch cap %llu\n", static_cast<unsigned long long>(max_batch));
+    // clang-format on
+    const uint64_t period = lat ? static_cast<uint64_t>(tsc_hz / static_cast<double>(rate)) : 0;
+    const uint64_t batch = lat ? 1 : max_batch;
+
+    std::vector<uint64_t> raw(lat ? events : 1, 0);
+    Counters c;
+
+    const uint64_t wall0 = now_ns(CLOCK_MONOTONIC);
+    std::thread tc(consume, h, consumer_cpu, lat, batch, &raw, &c);
+    std::thread tp(produce, h, producer_cpu, events, period, lat, &c);
+    tp.join();
+    tc.join();
+    const uint64_t wall1 = now_ns(CLOCK_MONOTONIC);
+
+    const uint64_t dropped = h->prod.dropped_count.load(std::memory_order_relaxed);
+    const uint64_t recv = c.recv.load(std::memory_order_relaxed);
+    const uint64_t gaps = c.gaps.load(std::memory_order_relaxed);
+    const uint64_t polls = c.polls.load(std::memory_order_relaxed);
+    const uint64_t queued = c.queued.load(std::memory_order_relaxed);
+    // clang-format off
+    std::printf(
+        "  sent=%llu recv=%llu gaps=%llu dropped=%llu full-stalls=%llu\n",
+        static_cast<unsigned long long>(events),
+        static_cast<unsigned long long>(recv),
+        static_cast<unsigned long long>(gaps),
+        static_cast<unsigned long long>(dropped),
+        static_cast<unsigned long long>(c.full_stalls.load(std::memory_order_relaxed))
+    );
+    // clang-format on
+    if (lat)
+    {
+        Hist hist;
+        for (uint64_t v : raw) hist.add(static_cast<uint64_t>(static_cast<double>(v) * ns_per_cycle));
+        report("produce -> consume", hist);
+        // If this is not near zero the producer is outrunning the consumer and
+        // the figure above is queueing delay, not handoff latency.
+        // clang-format off
+        std::printf(
+            "  %-30s polls that found >1 event ready: %.3f%% (%llu of %llu)\n", "",
+            polls ? 100.0 * static_cast<double>(queued) / static_cast<double>(polls) : 0.0,
+            static_cast<unsigned long long>(queued), static_cast<unsigned long long>(polls)
+        );
+        std::printf("  %-30s reference: RDTSCP pair ~23 ns, one-way coherence floor ~45 ns (DESIGN.md §11)\n", "");
+    }
+    else
+    {
+        const double secs = static_cast<double>(wall1 - wall0) / 1e9;
+        std::printf(
+            "  %-30s %.2f s, %.2f M msg/s, %.1f ns/msg, mean batch %.1f\n", "",
+            secs, static_cast<double>(recv) / secs / 1e6,
+            secs * 1e9 / static_cast<double>(recv),
+            polls ? static_cast<double>(recv) / static_cast<double>(polls) : 0.0
+        );
+        const double stall_ns = static_cast<double>(c.full_cycles.load(std::memory_order_relaxed)) * ns_per_cycle;
+        std::printf(
+            "  %-30s producer blocked on full: %.3f%% of run (%.2f ms)\n", "",
+            100.0 * stall_ns / (secs * 1e9), stall_ns / 1e6
+        );
+    }
+
+    // §5: silent loss is the failure mode that destroys a backtest's
+    // credibility and is undetectable after the fact. Say it here or nowhere.
+    const bool valid = (dropped == 0) && (gaps == 0) && (recv == events);
+    std::printf("  RUN %s\n", valid ? "VALID" : "INVALID");
+
+    munmap(base, bytes);
+    return valid ? 0 : 1;
+}
+</file>
+
+<file path="ring.hpp">
+// ring.hpp -- the SPSC shared-memory ring specified by DESIGN.md
+//
+// This header IS the C++ half of the contract. Every constant and every offset
+// here has a counterpart in the Rust router, and DESIGN.md §10 exists because
+// nothing but a compile-time assert and a CI offset dump ties the two together.
+//
+// The ring treats a slot as kSlotBytes opaque bytes. What goes inside is a
+// separate contract; §8 lists the four properties the ring fixes about it.
+
+#pragma once
+
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <new>
+
+namespace ring {
+inline constexpr uint64_t kMagic = 0x52494e4730303031ull; // "RING0001"
+inline constexpr uint32_t kVersion = 1;
+inline constexpr uint32_t kSlotBytes = 64;
+inline constexpr size_t kRegionBytes = 128;
+
+// Recorded in the header so that a segment stamped with one clock is never
+// compared against numbers taken with another. §9 settled on Rdtscp; the rest
+// exist so the mismatch is loud rather than silent.
+enum class ClockId : uint32_t {
+    Rdtscp = 1,
+    ClockMonotonic = 2,
+    ClockMonotonicRaw = 3
+};
+
+// Lets the consumer tell "router not started yet" from "router exited" without
+// a timeout heuristic (§6).
+enum class ProducerState : uint32_t {
+    NotStarted = 0,
+    Running = 1,
+    Exited = 2,
+};
+
+// Three 128 B regions grouped by writer. False sharing is a property of writes,
+// so the grouping that matters is which side dirties the line -- not which
+// fields are conceptually related. See DESIGN.md §1.
+struct Header {
+    // Written at init, read-only for the life of the segment. Shares no line
+    // with anything mutable, so the validation attach() performs never touches
+    // a line either side is writing.
+    struct alignas(kRegionBytes) StaticBlock {
+        std::atomic<uint64_t> magic; // atomic so that init can publish it last
+        uint32_t version;
+        uint32_t slot_bytes;
+        uint64_t capacity; // power of two, validated at init
+        uint32_t clock_id;
+        uint32_t reserved;
+    } stat;
+
+    // Producer-written. dropped_count moves only on a drop and producer_state
+    // twice per run, so they cost the consumer -- which reads all three and
+    // writes none -- nothing here, and save a region.
+    struct alignas(kRegionBytes) ProducerBlock {
+        std::atomic<uint64_t> write_idx;
+        std::atomic<uint64_t> dropped_count;
+        std::atomic<uint32_t> producer_state;
+    } prod;
+
+    // Consumer-written.
+    struct alignas(kRegionBytes) ConsumerBlock {
+        std::atomic<uint64_t> read_idx;
+    } cons;
+};
+
+inline constexpr size_t kHeaderBytes = sizeof(Header);
+
+static_assert(sizeof(Header::StaticBlock) == kRegionBytes,
+              "static block must own its region");
+static_assert(sizeof(Header::ProducerBlock) == kRegionBytes,
+              "producer block must own its region");
+static_assert(sizeof(Header::ConsumerBlock) == kRegionBytes,
+              "consumer block must own its region");
+static_assert(sizeof(Header) == 3 * kRegionBytes,
+              "header is exactly three regions");
+static_assert(offsetof(Header, prod) == kRegionBytes, "producer block at 128");
+static_assert(offsetof(Header, cons) == 2 * kRegionBytes,
+              "consumer block at 256");
+static_assert(kHeaderBytes % kSlotBytes == 0,
+              "slot array must start slot-aligned");
+static_assert(std::atomic<uint64_t>::is_always_lock_free,
+              "a lock in the header is not a ring");
+
+inline constexpr size_t segment_bytes(uint64_t capacity) {
+    return kHeaderBytes + static_cast<size_t>(capacity) * kSlotBytes;
+}
+
+// The engine creates and sizes the segment; the router only ever attaches (§6).
+inline Header *init(void *base, uint64_t capacity, ClockId clock) {
+    if (capacity == 0 || (capacity & (capacity - 1)) != 0) {
+        std::fprintf(stderr, "ring: capacity %llu is not a power of two\n",
+                     static_cast<unsigned long long>(capacity));
+        std::abort();
+    }
+    if (reinterpret_cast<uintptr_t>(base) % kRegionBytes != 0) {
+        std::fprintf(stderr, "ring: segment base is not %zu-byte aligned\n",
+                     kRegionBytes);
+        std::abort();
+    }
+
+    Header *h = new (base) Header{};
+    h->prod.write_idx.store(0, std::memory_order_relaxed);
+    h->prod.dropped_count.store(0, std::memory_order_relaxed);
+    h->prod.producer_state.store(
+        static_cast<uint32_t>(ProducerState::NotStarted),
+        std::memory_order_relaxed);
+    h->cons.read_idx.store(0, std::memory_order_relaxed);
+    h->stat.version = kVersion;
+    h->stat.slot_bytes = kSlotBytes;
+    h->stat.capacity = capacity;
+    h->stat.clock_id = static_cast<uint32_t>(clock);
+    h->stat.reserved = 0;
+
+    // Magic goes last with a Release. A router attaching mid-init would
+    // otherwise validate against a capacity that has not been written yet and
+    // pass, which is the exact silent failure §6 exists to prevent.
+    h->stat.magic.store(kMagic, std::memory_order_release);
+    return h;
+}
+
+namespace detail {
+inline bool check(const char *field, uint64_t got, uint64_t want) {
+    if (got == want) return true;
+    std::fprintf(
+        stderr,
+        "ring: %s mismatch -- segment has %llu, this build expects %llu\n",
+        field, static_cast<unsigned long long>(got),
+        static_cast<unsigned long long>(want));
+    return false;
+}
+} // namespace detail
+
+// A mismatch is a hard failure, never a warning (§6). Every field checked here
+// is one whose silent disagreement corrupts results instead of erroring, which
+// is why this aborts rather than returning a status nobody checks.
+inline Header *attach(void *base, uint64_t expect_capacity,
+                      ClockId expect_clock) {
+    Header *h = static_cast<Header *>(base);
+    bool ok = true;
+    ok &= detail::check("magic", h->stat.magic.load(std::memory_order_acquire),
+                        kMagic);
+    ok &= detail::check("version", h->stat.version, kVersion);
+    ok &= detail::check("slot_bytes", h->stat.slot_bytes, kSlotBytes);
+    ok &= detail::check("capacity", h->stat.capacity, expect_capacity);
+    ok &= detail::check("clock_id", h->stat.clock_id,
+                        static_cast<uint32_t>(expect_clock));
+    if (!ok) {
+        std::fprintf(stderr, "ring: refusing to attach. This is a stale "
+                             "segment or a version-skewed "
+                             "binary; continuing would corrupt every number "
+                             "downstream rathere than "
+                             "produce an error.\n");
+        std::abort();
+    }
+    return h;
+}
+
+// The producer's view. Its own index lives here, not in the segment: the
+// producer never reads back what it published (§4).
+class Producer {
+  public:
+    explicit Producer(Header *h) noexcept
+        : h_(h), slots_(reinterpret_cast<uint8_t *>(h) + kHeaderBytes),
+          capacity_(h->stat.capacity), mask_(h->stat.capacity - 1),
+          write_idx_(h->prod.write_idx.load(std::memory_order_relaxed)),
+          cached_read_idx_(h->cons.read_idx.load(std::memory_order_acquire)) {
+        h_->prod.producer_state.store(
+            static_cast<uint32_t>(ProducerState::Running),
+            std::memory_order_release);
+    }
+
+    // The slot to write, or nullptr when the ring is full. The consumer's line
+    // is touched only when the cached copy says it has to be -- without that,
+    // every push becomes a cross-core transfer (§4).
+    uint8_t *claim() noexcept {
+        if (write_idx_ - cached_read_idx_ == capacity_) {
+            cached_read_idx_ =
+                h_->cons.read_idx.load(std::memory_order_acquire);
+            if (write_idx_ - cached_read_idx_ == capacity_) return nullptr;
+        }
+        return slots_ + (write_idx_ & mask_) * kSlotBytes;
+    }
+
+    // Publishes what claim() handed out. The Release is what makes the payload
+    // visible; the payload itself needs no atomics. On x86-64 this is a plain
+    // MOV and exists for the compiler (§3).
+    void publish() noexcept {
+        h_->prod.write_idx.store(++write_idx_, std::memory_order_release);
+    }
+
+    void finish() noexcept {
+        h_->prod.producer_state.store(
+            static_cast<uint32_t>(ProducerState::Exited),
+            std::memory_order_release);
+    }
+
+  private:
+    Header *h_;
+    uint8_t *slots_;
+    uint64_t capacity_;
+    uint64_t mask_;
+    uint64_t write_idx_;
+    uint64_t cached_read_idx_;
+};
+
+// The consumer's view. available() is the only cross-core read; peek() and
+// pop() touch nothing shared, which is what lets one Acquire cover a whole
+// batch (§4).
+class Consumer {
+  public:
+    explicit Consumer(Header *h) noexcept
+        : h_(h), slots_(reinterpret_cast<uint8_t *>(h) + kHeaderBytes),
+          mask_(h->stat.capacity - 1),
+          read_idx_(h->cons.read_idx.load(std::memory_order_relaxed)),
+          cached_write_idx_(0) {}
+
+    uint64_t available() noexcept {
+        cached_write_idx_ = h_->prod.write_idx.load(std::memory_order_acquire);
+        return cached_write_idx_ - read_idx_;
+    }
+
+    const uint8_t *peek() const noexcept {
+        return slots_ + (read_idx_ & mask_) * kSlotBytes;
+    }
+
+    // Advances the private index only; the slot is not yet free.
+    void pop() noexcept { ++read_idx_; }
+
+    // Frees every slot popped since the last call. One Release per batch.
+    void commit() noexcept {
+        h_->cons.read_idx.store(read_idx_, std::memory_order_release);
+    }
+
+  private:
+    Header *h_;
+    uint8_t *slots_;
+    uint64_t mask_;
+    uint64_t read_idx_;
+    uint64_t cached_write_idx_;
+};
+
+} // namespace ring
+</file>
+
+</files>

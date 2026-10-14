@@ -1,0 +1,156 @@
+Project 3: High-Throughput Market Data & ML Feature Pipeline 명세서
+본 프로젝트는 어떠한 마케팅이나 외부 확장 이전에, 펀드의 수익 창출(Alpha)을 책임질 모델이 오차 없이 작동할 수 있도록 완벽한 성능의 데이터 인프라를 확립하는 작업입니다. 초고빈도(HFT) 호가 데이터와 온체인 이벤트를 유실 없이 수집하고, 머신러닝(ML) 모델이 즉각적으로 추론할 수 있는 피처(Feature)로 가공하여 전달하는 실시간 파이프라인을 구축합니다.
+
+1. System Overview & Architecture
+목표: CEX(중앙화 거래소) 및 DEX(탈중앙화 거래소)의 스트리밍 데이터를 마이크로초 단위로 가공하여 고빈도 트레이딩 피처(OFI, Micro-price 등)를 생성하고, 이를 ML 추론 서버로 지연 없이 전달.
+
+개발 환경 및 언어 스택:
+
+Ingestion & Feature Engine: Rust (Tokio 비동기 런타임 기반 네트워크 I/O 최적화)
+
+Message Broker (IPC): ZeroMQ (인메모리 브로드캐스팅) 또는 FlatBuffers (직렬화 오버헤드 최소화)
+
+ML Inference (Consumer): Python 3.10+ (ONNX Runtime, TensorRT)
+
+2. Core Architecture & Modules
+네트워크 I/O 바운드 작업과 CPU 바운드(ML 추론) 작업을 프로세스 레벨에서 분리하여 상호 간섭을 차단합니다.
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+|        		Module 명칭            		|           		핵심 역할 및 구현 요구사항               	                                             |                              							데이터 구조 및 아키텍처 특성	                                             |
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+|                Async Data Ingestion                  |     다수의 거래소 WebSocket 및 온체인 RPC 노드 연결 유지, 재연결(Reconnect) 로직 처리. |                            Rust tokio 기반의 멀티플렉싱(Multiplexing). 각 거래소 스트림을 독립된 비동기 태스크로 분리.		     | 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+|                	    Stream                           |     원시 틱 데이터를 실시간으로 집계하여 Order Flow Imbalance (OFI), 			    |  		     						윈도우(Window) 기반 집계를 위해 								             |
+|			Feature Engine			|			비대칭 스프레드 등 파생 변수 연산.							    | 		          				고정 크기의 락프리 링 버퍼(Lock-free Ring Buffer) 활용.                                                 |
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+|                In-Memory Message Broker         |      가공된 피처 벡터를 ML 모델 추론 서버나 C++ 체결 엔진으로 퍼블리싱(Publishing).     |  ZeroMQ의 PUB/SUB 패턴 적용. 직렬화(Serialization) 오버헤드를 없애기 위해 JSON 대신 FlatBuffers 또는 바이너리 캐스팅 사용.   |
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+|                ML Inference Pipeline                 |     스트리밍되는 피처 데이터를 받아 사전 학습된 딥러닝/강화학습 모델을 통과시켜 방향성 신호(Signal) 생성.  |  Python 환경에서 데이터 수신 스레드와 추론 스레드를 분리하고, ONNX Runtime을 활용해 추론 속도 가속화.  |
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+3. System-Level Optimization (엔지니어링 차별화 포인트)
+단순한 API 호출 스크립트가 아닌, 대용량 분산 처리 시스템의 코어 엔지니어로 어필할 수 있는 최적화 기법입니다.
+
+Zero-Copy Serialization:
+
+데이터를 JSON 포맷으로 파싱하고 직렬화하는 과정은 HFT 환경에서 치명적인 병목입니다. 데이터를 고정 크기의 C 구조체 형태나 FlatBuffers로 패킹하여 네트워크 소켓에 바로 밀어 넣고, Python에서 바이트(Byte) 단위로 바로 캐스팅하여 읽도록 설계합니다.
+
+Asynchronous I/O without Thread Blocking:
+
+Rust의 epoll 기반 비동기 런타임을 활용해 수백 개의 웹소켓 커넥션을 단일 스레드 내에서 블로킹 없이 처리합니다.
+
+Pre-allocated Memory for Feature Windows:
+
+이동 평균이나 OFI를 계산할 때 매번 메모리를 할당하는 덱(Deque) 대신, 사전 할당된 원형 배열(Circular Array)을 사용하여 가비지 컬렉션(GC)이나 메모리 파편화를 원천 차단합니다.
+
+4. Core Implementation (Rust Data & Feature Pipeline)
+Rust 코어는 데이터를 수신하고 피처를 연산한 뒤, ZeroMQ를 통해 파이썬으로 브로드캐스팅합니다.
+
+// Rust: Async Data Ingestion and Feature Calculation (Producer)
+
+use std::sync::Arc;
+use tokio::net::TcpStream;
+// Assume tokio-tungstenite and zmq crates are available
+// use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+
+#[repr(C)]
+pub struct MLFeatureVector {
+    pub timestamp: u64,
+    pub micro_price: f64,
+    pub order_flow_imbalance: f64,
+}
+
+pub struct FeatureEngine {
+    // Internal state for rolling calculations
+    bid_volume_prev: f64,
+    ask_volume_prev: f64,
+}
+
+impl FeatureEngine {
+    pub fn update_and_calculate(&mut self, current_bid_vol: f64, current_ask_vol: f64) -> f64 {
+        // Calculate Order Flow Imbalance (OFI)
+        let bid_change = current_bid_vol - self.bid_volume_prev;
+        let ask_change = current_ask_vol - self.ask_volume_prev;
+        
+        self.bid_volume_prev = current_bid_vol;
+        self.ask_volume_prev = current_ask_vol;
+        
+        bid_change - ask_change
+    }
+}
+
+pub async fn run_pipeline() {
+    // Initialize ZeroMQ Publisher
+    let context = zmq::Context::new();
+    let publisher = context.socket(zmq::PUB).unwrap();
+    publisher.bind("tcp://127.0.0.1:5555").expect("Failed to bind ZeroMQ");
+
+    let mut engine = FeatureEngine { bid_volume_prev: 0.0, ask_volume_prev: 0.0 };
+
+    // Async loop receiving data from WebSocket (pseudo-logic for brevity)
+    loop {
+        // let raw_data = websocket.next().await...
+        
+        // Mock extracted data
+        let current_time = 1710000000000; 
+        let micro_price = 50000.50;
+        let ofi = engine.update_and_calculate(10.5, 8.2);
+
+        let feature = MLFeatureVector {
+            timestamp: current_time,
+            micro_price,
+            order_flow_imbalance: ofi,
+        };
+
+        // Zero-copy cast struct to bytes and publish
+        unsafe {
+            let byte_ptr = &feature as *const MLFeatureVector as *const u8;
+            let byte_slice = std::slice::from_raw_parts(byte_ptr, std::mem::size_of::<MLFeatureVector>());
+            publisher.send(byte_slice, 0).unwrap();
+        }
+    }
+}
+
+5. Python Interface (ML Inference Consumer)
+파이썬 환경은 수신된 바이트 스트림을 별도의 파싱 과정 없이 메모리 뷰(Memory View) 형태로 즉각 읽어 들여 ML 모델(ONNX)에 주입합니다.
+
+# Python: Real-time Feature Consumption and ML Inference
+
+import zmq
+import struct
+import numpy as np
+# import onnxruntime as ort
+
+def run_inference_server():
+    context = zmq.Context()
+    subscriber = context.socket(zmq.SUB)
+    subscriber.connect("tcp://127.0.0.1:5555")
+    subscriber.setsockopt_string(zmq.SUBSCRIBE, "")
+
+    # Pre-allocate numpy array for zero-copy operations
+    feature_size = struct.calcsize("Qdd") # uint64, double, double
+    
+    # Initialize ONNX runtime session (Mock)
+    # ort_session = ort.InferenceSession("alpha_model.onnx")
+
+    while True:
+        # Receive binary data directly from Rust
+        raw_bytes = subscriber.recv()
+        
+        # Unpack binary data efficiently
+        timestamp, micro_price, ofi = struct.unpack("Qdd", raw_bytes)
+        
+        # Format for ML inference
+        model_input = np.array([[micro_price, ofi]], dtype=np.float32)
+        
+        # Execute inference
+        # signal = ort_session.run(None, {"input": model_input})[0]
+        
+        # Route signal to Execution Engine...
+        pass
+
+6. Performance Benchmarks (Deliverables)
+프로젝트 완료 시 깃허브에 문서화해야 할 핵심 성과 지표입니다.
+
+End-to-End Latency Profile: 원시 웹소켓 데이터 수신 시점부터 피처 엔지니어링을 거쳐 파이썬에서 모델 추론 결과가 나오기까지의 전체 지연 시간(목표: 네트워크 지연 제외 1ms 이내).
+
+Scalability Test: 단일 Rust 노드가 연결이 끊기거나 메모리 누수 없이 10개 이상의 활성 거래소 웹소켓 스트림을 동시에 소화해 내는 안정성(Uptime) 로그 증명.
