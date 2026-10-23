@@ -1,0 +1,25 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 0
+
+AllowShortIfStatementsOnASingleLine: Always
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Always
+AllowShortFunctionsOnASingleLine: All
+
+Cpp11BracedListStyle: true
+spacesInContainerLiterals: false
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+    AfterEnum: true
+    AfterClass: true
+    AfterControlStatement: Always
+    AfterFunction: true
+    AfterNamespace: true
+    AfterStruct: true
+    SplitEmptyFunction: false
+    SplitEmptyRecord: false
+    SplitEmptyNamespace: false

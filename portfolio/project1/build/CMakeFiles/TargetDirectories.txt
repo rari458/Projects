@@ -1,0 +1,5 @@
+/home/anstk/Projects/portfolio/project_1/build/CMakeFiles/noise_floor.dir
+/home/anstk/Projects/portfolio/project_1/build/CMakeFiles/ring_bench.dir
+/home/anstk/Projects/portfolio/project_1/build/CMakeFiles/layout_dump.dir
+/home/anstk/Projects/portfolio/project_1/build/CMakeFiles/edit_cache.dir
+/home/anstk/Projects/portfolio/project_1/build/CMakeFiles/rebuild_cache.dir

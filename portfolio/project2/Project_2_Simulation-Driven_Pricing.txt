@@ -1,0 +1,127 @@
+Project 2: Simulation-Driven Pricing & Real-Time Risk Engine 명세서
+본 프로젝트는 구조화 상품 및 파생상품 포트폴리오의 실시간 리스크(Greeks)를 산출하고, 극단적 시장 상황을 가정하는 몬테카를로(Monte Carlo) 시뮬레이션을 초고속으로 수행하는 금융 공학 코어 연산 모듈입니다.
+
+1. System Overview & Architecture
+목표: 수만 개의 가상 포지션에 대한 이론가(Theoretical Price), 그릭스(Greeks), VaR(Value at Risk) 및 Expected Shortfall(ES)을 실시간으로 산출.
+
+개발 환경 및 언어 스택:
+
+Math Core: C++20 (SIMD 벡터화 연산 및 멀티스레딩 최적화)
+
+Interface: Python 3.10+ (pybind11) / Numpy (데이터 직렬화)
+
+Dependencies: Intel MKL 또는 OpenBLAS (행렬 연산 가속), xoshiro-cpp (고속 난수 생성)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+|            Module 명칭            |                            핵심 산출 로직                                                           |                                                                          알고리즘 특성                                                                            |
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+|          Pricing Engine            | Black-Scholes-Merton (유러피안), Binomial Tree (아메리칸).                         |                내재 변동성(IV) 역산을 위해 Newton-Raphson 및 Brent's Method 혼합 적용하여 수렴 속도 최적화.                    |
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+|          Greeks Calculator        | Delta, Gamma, Theta, Vega, Rho 실시간 산출.                                            |  비선형 페이오프를 가진 구조화 상품을 위해 유한차분법(Finite Difference Method, FDM) 기반의 범용 그릭스 산출기 포함.   |
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+|          Risk                           |  GBM(Geometric Brownian Motion) 기반 자산       				      |                                                     Cholesky Decomposition을 통해 									|
+|	   Simulator		   |  가격 경로 시뮬레이션 및 포트폴리오 VaR/ES 측정. 				      |                               다중 자산 간의 상관관계(Correlation Matrix)를 반영한 난수 경로 생성.  						|
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+3. System-Level Optimization (엔지니어링 차별화 포인트)
+수학적 모델을 컴퓨터 하드웨어의 극한까지 끌어올려 처리량을 극대화하는 기법을 적용합니다.
+
+SIMD Vectorization (AVX2 / AVX-512):
+
+몬테카를로 시뮬레이션 시 단일 데이터가 아닌 데이터 배열을 CPU 레지스터에 한 번에 올려 연산하는 벡터화(Vectorization) 기법을 강제 적용합니다 (std::execution::par_unseq).
+
+Fast PRNG (Pseudo-Random Number Generator):
+
+표준 라이브러리인 std::mt19937은 속도가 느려 대규모 시뮬레이션에 부적합합니다. 비트 연산 기반의 최신 고속 난수 생성기인 Xoshiro256** 알고리즘을 적용하여 난수 생성 병목을 제거합니다.
+
+Cache-Friendly Data Layout:
+
+포트폴리오 배열을 AoS(Array of Structures) 대신 SoA(Structure of Arrays) 형태로 메모리에 배치하여 CPU 프리페치(Prefetch) 효율을 극대화합니다.
+
+4. Core Implementation (C++20 Monte Carlo Engine)
+
+#include <vector>
+#include <cmath>
+#include <execution>
+#include <numeric>
+// Assume a fast PRNG library like xoshiro256** is included
+#include "xoshiro.hpp" 
+
+struct SimulationParams {
+    double s0; 
+    double strike;
+    double rate;
+    double volatility;
+    double time_to_maturity;
+    size_t num_paths;
+};
+
+class MonteCarloPricer {
+public:
+    static double price_european_call(const SimulationParams& params) {
+        std::vector<double> payoffs(params.num_paths);
+        
+        const double drift = (params.rate - 0.5 * params.volatility * params.volatility) * params.time_to_maturity;
+        const double vol_sqrt_t = params.volatility * std::sqrt(params.time_to_maturity);
+        const double discount_factor = std::exp(-params.rate * params.time_to_maturity);
+
+        // std::execution::par_unseq enables both multi-threading and SIMD vectorization.
+        // It requires the loop body to be free of race conditions and vectorization-safe.
+        std::transform(std::execution::par_unseq, payoffs.begin(), payoffs.end(), payoffs.begin(),
+            [&](double /* unused */) {
+                // Thread-local fast PRNG initialization is assumed here for brevity
+                double z = generate_standard_normal(); 
+                double s_t = params.s0 * std::exp(drift + vol_sqrt_t * z);
+                return std::max(s_t - params.strike, 0.0);
+            }
+        );
+
+        double mean_payoff = std::reduce(std::execution::par_unseq, payoffs.begin(), payoffs.end(), 0.0) / params.num_paths;
+        return mean_payoff * discount_factor;
+    }
+
+private:
+    static inline double generate_standard_normal() {
+        // Implementation of Box-Muller or Ziggurat algorithm using Xoshiro256**
+        return 0.0; // Placeholder
+    }
+};
+
+5. Python Interface (pybind11)
+리서처는 파이썬에서 Numpy 배열 형태로 옵션 체인 데이터와 공분산 행렬(Covariance Matrix)을 넘기고, C++은 메모리 복사(Zero-copy) 없이 바로 연산을 수행하여 결과를 반환합니다.
+
+import risk_core
+import numpy as np
+
+# 1. Prepare portfolio data as flat Numpy arrays (SoA layout for cache efficiency)
+spot_prices = np.array([50000.0, 3000.0, 1.0], dtype=np.float64)
+strikes = np.array([55000.0, 3200.0, 1.1], dtype=np.float64)
+vols = np.array([0.65, 0.80, 0.15], dtype=np.float64)
+
+# 2. Pass to C++ engine without memory copy overhead
+# Engine computes Greeks using Black-Scholes and returns Numpy arrays
+greeks = risk_core.calculate_greeks_vectorized(
+    spots=spot_prices, 
+    strikes=strikes, 
+    vols=vols, 
+    time_to_maturity=30.0/365.0, 
+    risk_free_rate=0.05
+)
+
+print(f"Portfolio Delta: {np.sum(greeks.delta)}")
+print(f"Portfolio Vega: {np.sum(greeks.vega)}")
+
+# 3. Run Monte Carlo VaR Simulation
+var_99 = risk_core.simulate_portfolio_var(
+    portfolio_greeks=greeks,
+    correlation_matrix=np.identity(3),
+    num_paths=100000,
+    confidence_level=0.99
+)
+
+6. Performance Benchmarks (Deliverables)
+프로젝트 완료 시 포트폴리오에 포함할 성능 입증 자료입니다.
+
+Monte Carlo Throughput: 10만 번의 경로(Path)를 생성하고 페이오프를 계산하는 데 걸리는 시간 측정. 단일 스레드(Single-thread) vs 멀티 스레드+SIMD(par_unseq) 간의 속도 향상(Speedup) 비율 그래프 제시.
+
+Precision vs Latency Trade-off: PRNG 알고리즘(std::mt19937 vs Xoshiro256**) 변경 및 Ziggurat 정규분포 난수 생성기 적용 전후의 밀리초(ms) 단위 지연 시간 감소 리포트.
+

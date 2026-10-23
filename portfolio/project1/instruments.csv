@@ -1,0 +1,12 @@
+# id,symbol,exchange,price_decimals,tick_units,qty_decimals
+# id is an array index; 0 is reserved as invalid and must not appear here.
+# price_decimals: decimals the exchange sends in its price strings.
+# tick_unit:      tick size expressed in 10^-price_decimals units.
+# qty_decimals:   decimals the exchange sends in its quantity strings.
+#
+# PLACEHOLDER VALUES. These have not been read from the exchange's instrument
+# endpoint and must be before any run is trusted -- an off-by-one in tick_units
+# silently shifts every order one price level.
+1,BTCUSDT,binance,2,1,5
+2,ETHUSDT,binance,2,1,4
+3,SOLUSDT,binance,2,1,2
