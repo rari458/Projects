@@ -36,44 +36,44 @@ All decided on 2026-10-24 using the **bold** recommendations. The schema-level i
 - [x] **Review rules.** Only users with at least one loan of the book can review it. Keep `UNIQUE(user_id, book_id)`, `rating` 1–5, and let users edit or delete their own review.
 - [x] **Extra features: keep exactly 2 statistics** (rating stats and loan/overdue stats). Don't add any other counts, averages or rankings to other pages, because they could be read as a third statistic. The popular book and author charts are *required* features, not extras.
 - [x] Report redesigned from scratch on 2026-10-26 (12 pages, Chen ER diagram with participation, schema diagram, constraint tables) and re-exported to `assignment4_1_2022065250_문상철.pdf`.
-- [ ] Read the new PDF once and **submit 4-1 to the LMS by Oct 29 23:59**.
+- [x] Read the new PDF once and **submit 4-1 to the LMS by Oct 29 23:59**. Submitted 2026-10-26.
 
 ## Phase 1: Environment
 
 PostgreSQL 18 is already installed and running in WSL.
 
-- [ ] Create a role and a database: `sudo -u postgres createuser -P library` and `sudo -u postgres createdb -O library library`.
-- [ ] Create `assignment_4/.env` with `DATABASE_URL="postgresql://library:<pw>@localhost:5432/library"`.
-- [ ] Create `assignment_4/.env.example` with a placeholder URL. The submission requires an env example file.
-- [ ] Run `npm install`.
+- [x] Create a role and a database: `sudo -u postgres createuser -P library` and `sudo -u postgres createdb -O library library`.
+- [x] Create `assignment_4/.env` with `DATABASE_URL="postgresql://library:<pw>@localhost:5432/library"`.
+- [x] Create `assignment_4/.env.example` with a placeholder URL. The submission requires an env example file.
+- [x] Run `npm install`.
 - **Check:** `psql "$DATABASE_URL" -c 'select 1'` works, and `npm start` serves the dummy pages on :3000.
 
 ## Phase 2: Schema and seed data (`scripts/init_db.js`)
 
-- [ ] Shared password helper, e.g. a new `utils/password.js` using built-in `crypto.scrypt` with a random salt. The seed script and `authController` both use it.
-- [ ] `DROP TABLE IF EXISTS ... CASCADE` in dependency order, then `CREATE TABLE` for all 9 tables:
+- [x] Shared password helper, e.g. a new `utils/password.js` using built-in `crypto.scrypt` with a random salt. The seed script and `authController` both use it.
+- [x] `DROP TABLE IF EXISTS ... CASCADE` in dependency order, then `CREATE TABLE` for all 9 tables:
   - Users, Author, Book, BookCopy, Category, Book_Category, Loan, Review, Reservation
   - include the PKs/FKs, `ON DELETE` rules, CHECKs, UNIQUEs and the two partial unique indexes exactly as listed in CLAUDE.md's Schema section (from 4-1 report §2 and §5)
   - use `SERIAL` (int4) ids so `pg` returns numbers
-- [ ] Seed data that makes every feature demonstrable:
+- [x] Seed data that makes every feature demonstrable:
   - 1–2 admins and 4–5 users with known passwords, written down in the README
   - about 10 books across 4–5 authors and 4–5 categories, some in several categories, with 1–4 copies each
   - loans spread over the last **5–6 months**: some older than 3 months to prove the chart filter, several months for the monthly stats, and some returned late for the overdue rate
   - one user with an unreturned loan of 7+ days (overdue) and one user holding 3 books (at the limit)
   - one book with every copy borrowed and a reservation queue
   - a handful of reviews
-- **Check:** `npm run db:init` runs twice in a row without errors, and the row counts in `psql` match the seed.
+- **Check:** `npm run db:init` runs twice in a row without errors, and the row counts in `psql` match the seed. Passed 2026-10-27.
 
 ## Phase 3: Authentication (`controllers/authController.js`)
 
-- [ ] Set `adminCode = '2022065250'`.
-- [ ] `postRegister`:
+- [x] Set `adminCode = '2022065250'`.
+- [x] `postRegister`:
   - reject an empty or duplicate username
   - reject `role === 'admin'` without the exact admin code
   - force any other role to `'user'`
   - hash the password before inserting
-- [ ] `postLogin`: look up the user, verify the hash, and set `session.userId`, `username` and `role`. A wrong username or password gets one generic error.
-- **Check:** registering as a user works. Registering as admin with a wrong or missing code fails, and with `2022065250` it succeeds. The admin nav shows Categories and Users, and the user nav doesn't. A non-admin requesting `/users` gets a 403.
+- [x] `postLogin`: look up the user, verify the hash, and set `session.userId`, `username` and `role`. A wrong username or password gets one generic error.
+- **Check:** registering as a user works. Registering as admin with a wrong or missing code fails, and with `2022065250` it succeeds. The admin nav shows Categories and Users, and the user nav doesn't. A non-admin requesting `/users` gets a 403. Passed 2026-10-27.
 
 ## Phase 4: Book list (`bookController.getBooksPage`, `getBookInstances`)
 

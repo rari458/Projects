@@ -30,7 +30,7 @@ npm run db:init   # scripts/init_db.js: drop + recreate tables
 npm start         # http://localhost:3000 (port hard-coded in index.js)
 ```
 
-There is no test suite or linter, and `npm test` exits 1 on purpose. To verify a change, run the app and check the DB with `psql`. `dotenv` loads `.env` only into the Node process, so load it into the shell first: `set -a; . ./.env; set +a; psql "$DATABASE_URL"`. Edits to EJS views take effect on the next request (view cache is off unless `NODE_ENV=production`). Edits to JS need a server restart. Sessions use express-session's default in-memory store, so every restart logs everyone out. `init_db.js` catches and logs its own errors, so `npm run db:init` exits 0 even when it fails. Read its output.
+There is no test suite or linter, and `npm test` exits 1 on purpose. To verify a change, run the app and check the DB with `psql`. `dotenv` loads `.env` only into the Node process, so load it into the shell first: `set -a; . ./.env; set +a; psql "$DATABASE_URL"`. Edits to EJS views take effect on the next request (view cache is off unless `NODE_ENV=production`). Edits to JS need a server restart. Sessions use express-session's default in-memory store, so every restart logs everyone out. `init_db.js` runs everything in one transaction: on any error it rolls back, leaves the old tables untouched, logs the error and exits 1. On success it prints a row count per table.
 
 ## Architecture
 
@@ -50,7 +50,7 @@ Search for `TODO` to find the work. Every controller currently renders hard-code
 
 - `postLogin` logs everyone in as admin `userId = 1`. `postRegister` does nothing.
 - `adminCode` in `authController.js` must be the student ID `2022065250`.
-- `scripts/init_db.js` is empty. Charts only show loans from the last 3 months, so seed data with recent loan dates makes the demo work.
+- `scripts/init_db.js` is done (Phase 2). It seeds `admin`/`admin1234` and `alice`, `bob`, `carol`, `dave`, `erin`, `frank` (all `user1234`), 10 books with 20 copies, 43 loans, 14 reviews and 4 reservations. Loan dates count back from the day of the init, which sets up the demo cases: bob holds 3 books, carol is overdue, both Orient Express copies are out with erin then frank queued, and some loans are older than 3 months. bob turns overdue too about 3 days after an init, so re-run `npm run db:init` right before recording the demo.
 - The spec says admins can **add** categories, but the skeleton only has a delete route and button. Categories can currently be created only as a side effect of add-book.
 - The README asks for a popular **author** chart too, but `charts.ejs` has only the two book tables.
 
