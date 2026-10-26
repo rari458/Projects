@@ -1,0 +1,13 @@
+build/
+*.o
+*.exe
+*.out
+a.out
+cmake-build-*/
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+.venv/
+.vscode/
+.idea/
+.DS_Store

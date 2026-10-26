@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <%- include('../components/header') %>
+        <main>
+            <div class="card">
+                <h2 class="mb-3"><%= title %></h2>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Book ID</th>
+                            <th>Book Title</th>
+                            <th>Author</th>
+                            <th>Borrow Date</th>
+                            <th>Return Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% borrowings.forEach(borrowing => { %>
+                            <tr>
+                                <td>#<%= borrowing.book_instance_id %></td>
+                                <td><%= borrowing.book_title %></td>
+                                <td><%= borrowing.book_author %></td>
+                                <td><%= borrowing.borrow_date %></td>
+                                <td><%= borrowing.return_date || '-' %></td>
+                                <td>
+                                    <% if (!borrowing.return_date) { %>
+                                        <form action="/borrowings/<%= borrowing.id %>/return" method="POST">
+                                            <button type="submit" class="btn btn-primary">Return</button>
+                                        </form>
+                                    <% } %>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

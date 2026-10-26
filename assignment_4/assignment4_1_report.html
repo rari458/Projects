@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Assignment #4-1: DB Schema Design for Web Application</title>
+<style>
+  @font-face {
+    font-family: 'NotoSansKR';
+    src: url('file:///home/anstk/.local/share/fonts/NotoSansKR.ttf') format('truetype');
+    font-weight: 100 900;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 9.5mm 12.5mm 9.5mm 12.5mm;
+  }
+
+  body {
+    font-family: 'NotoSansKR', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1e293b;
+    line-height: 1.38;
+    font-size: 8.4pt;
+    background: #ffffff;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  /* Header / Title Banner */
+  .report-header {
+    border-bottom: 2.5px solid #1e3a8a;
+    padding-bottom: 6px;
+    margin-bottom: 7px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .report-header .title-block h1 {
+    font-size: 15pt;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.3px;
+    margin-bottom: 1px;
+  }
+
+  .report-header .title-block .subtitle {
+    font-size: 8.8pt;
+    font-weight: 600;
+    color: #2563eb;
+  }
+
+  .report-header .meta-block {
+    text-align: right;
+    font-size: 7.8pt;
+    color: #475569;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    padding: 3px 9px;
+    min-width: 210px;
+  }
+
+  .report-header .meta-block div {
+    margin: 1px 0;
+  }
+
+  /* Headings */
+  h2.sec-title {
+    font-size: 10.6pt;
+    font-weight: 700;
+    color: #1e3a8a;
+    background: linear-gradient(90deg, #eff6ff 0%, #ffffff 100%);
+    border-left: 4px solid #2563eb;
+    padding: 3px 8px;
+    margin: 6px 0 5px 0;
+    letter-spacing: -0.2px;
+  }
+
+  h3.sub-title {
+    font-size: 8.9pt;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 4px 0 3px 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  h3.sub-title .badge {
+    background: #1e40af;
+    color: #fff;
+    font-size: 7.2pt;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  h3.sub-title .badge.stat {
+    background: #047857;
+  }
+
+  h3.sub-title .badge.feat {
+    background: #6d28d9;
+  }
+
+  p {
+    margin-bottom: 4px;
+    text-align: justify;
+  }
+
+  /* Info / Callout Box */
+  .callout {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-left: 3.5px solid #0284c7;
+    border-radius: 5px;
+    padding: 5.5px 9px;
+    margin-bottom: 6px;
+    font-size: 8pt;
+    line-height: 1.36;
+  }
+
+  .callout strong {
+    color: #0f172a;
+  }
+
+  /* Tables */
+  table.spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2px 0 4px 0;
+    font-size: 7.5pt;
+    line-height: 1.25;
+  }
+
+  table.spec-table th,
+  table.spec-table td {
+    border: 1px solid #cbd5e1;
+    padding: 2.5px 5.5px;
+    vertical-align: middle;
+    text-align: left;
+  }
+
+  table.spec-table th {
+    background: #f1f5f9;
+    font-weight: 700;
+    color: #1e293b;
+  }
+
+  table.spec-table tr:nth-child(even) td {
+    background: #fcfdff;
+  }
+
+  /* Entity Cards Grid */
+  .entity-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4.5px;
+    margin-bottom: 2px;
+  }
+
+  .entity-card {
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    padding: 4.5px 8px;
+    background: #ffffff;
+    break-inside: avoid;
+  }
+
+  .entity-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 2px;
+    margin-bottom: 2.5px;
+  }
+
+  .entity-name {
+    font-weight: 700;
+    font-size: 8.8pt;
+    color: #1e3a8a;
+  }
+
+  .entity-tag {
+    font-size: 7pt;
+    font-weight: 600;
+    padding: 0.5px 5px;
+    border-radius: 3px;
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  .entity-tag.extra {
+    background: #ede9fe;
+    color: #5b21b6;
+  }
+
+  .entity-body {
+    font-size: 7.9pt;
+    line-height: 1.34;
+  }
+
+  .entity-body ul {
+    padding-left: 13px;
+    margin-top: 1px;
+  }
+
+  .entity-body li {
+    margin-bottom: 1px;
+  }
+
+  .attr-line {
+    margin-top: 2px;
+    padding: 2px 5px;
+    background: #f8fafc;
+    border-radius: 3px;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 7.3pt;
+    color: #334155;
+  }
+
+  .pk {
+    text-decoration: underline;
+    font-weight: 700;
+    color: #b91c1c;
+  }
+
+  .fk {
+    font-style: italic;
+    font-weight: 600;
+    color: #1d4ed8;
+  }
+
+  /* Diagram Containers */
+  .diagram-wrapper {
+    border: 1.5px solid #94a3b8;
+    border-radius: 7px;
+    background: #ffffff;
+    padding: 8px;
+    margin: 6px 0 8px 0;
+    text-align: center;
+    break-inside: avoid;
+  }
+
+  .diagram-caption {
+    font-size: 8.2pt;
+    color: #475569;
+    margin-top: 4px;
+    text-align: center;
+    font-weight: 600;
+  }
+
+  .sql-box {
+    background: #0f172a;
+    color: #e2e8f0;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 7.2pt;
+    padding: 4px 7px;
+    border-radius: 4px;
+    margin-top: 2.5px;
+    white-space: pre-wrap;
+    line-height: 1.28;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .legend-bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    font-size: 8pt;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 4px 10px;
+    margin-bottom: 6px;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== PAGE 1: OVERVIEW & ENTITY DESIGN ==================== -->
+<div class="report-header">
+  <div class="title-block">
+    <div class="subtitle">Assignment #4-1 &middot; Web Application Development</div>
+    <h1>도서관 관리 웹 애플리케이션 DB Schema 설계 보고서</h1>
+  </div>
+  <div class="meta-block">
+    <div><strong>학번 / 이름:</strong> 2022065250 문상철</div>
+    <div><strong>과제명:</strong> Assignment #4-1 (DB Schema 설계)</div>
+  </div>
+</div>
+
+<h2 class="sec-title">1. 설계 의도 및 핵심 아키텍처 개요</h2>
+<p>
+  본 설계는 도서관 관리 웹 애플리케이션의 모든 필수 요구사항과 추가 기능(비통계 2종 + 통계 2종)을 데이터 중복 및 이상 현상(Anomaly) 없이 지원하기 위해 <strong>제3정규형(3NF) / BCNF</strong>를 준수하여 설계되었습니다. 특히 명세서의 세부 제약 조건을 충족하기 위해 다음 네 가지 핵심 원칙을 적용하였습니다.
+</p>
+
+<div class="callout">
+  <strong>핵심 설계 의사결정 (Design Highlights)</strong><br>
+  <strong>① 서적 메타데이터(<code>Book</code>)와 실물 도서 복본(<code>BookCopy</code>)의 1:N 분리:</strong>
+  명세서에서는 <em>"도서관에 동일한 책이 여러 개 있을 수 있는데 차트 집계 시에는 종합해서 집계한다"</em>, <em>"동일한 책을 동시에 2권 이상 대출할 수 없다"</em>, 그리고 <em>"대출 기록에서는 동일한 책 중에서도 정확히 어떤 책을 대출했는지 확인할 수 있어야 한다"</em>고 규정하고 있습니다. 이를 해결하기 위해 책의 고유 서지 정보(제목, 저자, ISBN 등)를 담는 <strong><code>Book</code></strong> 엔티티와 개별 실물 자산(복본 고유번호, 청구기호, 상태)을 담는 <strong><code>BookCopy</code></strong> 엔티티를 1:N으로 분리하였습니다.<br>
+  <strong>② 다중 카테고리(M:N) 정규화:</strong>
+  <em>"책은 동시에 여러 카테고리에 속할 수 있다"</em>는 조건을 만족하기 위해 <strong><code>Book</code></strong>과 <strong><code>Category</code></strong> 사이에 교차 릴레이션(Associative Table)인 <strong><code>Book_Category</code></strong>를 두어 다대다(M:N) 관계를 해소하였습니다.<br>
+  <strong>③ 무결성 기반 대출·반납 및 연체(7일) 판별:</strong>
+  <strong><code>Loan</code></strong>에 <code>loan_date</code>, <code>due_date</code>(대출일+7일), <code>return_date</code>(미반납 시 <code>NULL</code>)를 기록하여, <em>현재 대출 중인 도서</em>(<code>return_date IS NULL</code>)와 <em>7일 이상 미반납 연체자</em>(<code>return_date IS NULL AND CURRENT_DATE &gt;= due_date</code>)를 판별합니다.<br>
+  <strong>④ 저자(<code>Author</code>) 엔티티 분리:</strong>
+  저자명 반복 저장에 따른 갱신 이상을 막기 위해 <strong><code>Author</code></strong>를 분리하고 <code>Book</code>이 <code>author_id</code>로 참조(N:1)합니다.
+</div>
+
+<h2 class="sec-title">2. 각 Entity의 역할 및 필요성</h2>
+<p>도서관 관리 시스템의 데이터 모델은 총 <strong>8개의 핵심 엔티티(Entity)</strong>(다대다 관계 해소용 교차 테이블 포함 시 9개 릴레이션)로 구성됩니다.</p>
+
+<div class="entity-grid">
+  <div class="entity-card">
+    <div class="entity-card-header">
+      <span class="entity-name">1) Users (회원 및 관리자 계정)</span>
+      <span class="entity-tag">필수 엔티티</span>
+    </div>
+    <div class="entity-body">
+      <ul>
+        <li><strong>역할:</strong> 도서관 웹 서비스에 가입한 일반 사용자(<code>user</code>)와 사서 관리자(<code>admin</code>)의 계정 식별 정보, 암호화된 비밀번호, 이름, 권한을 저장합니다.</li>
+        <li><strong>필요성:</strong> ID/비밀번호 로그인 인증, 회원가입 처리(관리자 가입 시 10자리 학번 추가 코드 <code>2022065250</code> 검증 후 <code>role='admin'</code> 부여), 관리자 전용 기능(서적/카테고리 관리, 전체 회원 목록 열람)의 접근 제어(RBAC), 그리고 사용자별 대출/예약/리뷰 이력을 식별하기 위해 필수적입니다.</li>
+      </ul>
+      <div class="attr-line"><span class="pk">user_id</span> (PK, VARCHAR) | password_hash (VARCHAR) | name (VARCHAR, Nullable) | email (VARCHAR, UQ, Nullable) | role ('user'/'admin') | created_at (TIMESTAMP)</div>
+    </div>
+  </div>
+
+  <div class="entity-card">
+    <div class="entity-card-header">
+      <span class="entity-name">2) Book (서적 메타데이터 / 서종) &amp; 3) Author (저자)</span>
+      <span class="entity-tag">필수 엔티티</span>
+    </div>
+    <div class="entity-body">
+      <ul>
+        <li><strong>역할:</strong> <code>Book</code>은 서종 단위 서지 정보(제목·출판사·ISBN·출간연도)를, <code>Author</code>는 저자명을 저장하고 <code>Book</code>이 <code>author_id</code>로 참조합니다.</li>
+        <li><strong>필요성:</strong> 동일한 책이 여러 권이거나 한 저자가 여러 책을 써도 서지·저자 데이터가 중복 저장되지 않도록 정규화합니다. 제목·저자 검색/정렬, 서적 추가 시 저자 선택·등록, 인기 서적/저자 차트 집계, <em>"동일한 책 동시 2권 대출 불가"</em> 규칙 검증의 기준 엔티티입니다.</li>
+      </ul>
+      <div class="attr-line"><strong>Book:</strong> <span class="pk">book_id</span> (PK, SERIAL) | isbn (UQ) | title (VARCHAR) | <span class="fk">author_id</span> (FK &rarr; Author) | publisher (VARCHAR) | published_year (INT) | created_at (TIMESTAMP) &nbsp;&Vert;&nbsp; <strong>Author:</strong> <span class="pk">author_id</span> (PK, SERIAL) | author_name (VARCHAR, UQ)</div>
+    </div>
+  </div>
+
+  <div class="entity-card">
+    <div class="entity-card-header">
+      <span class="entity-name">4) BookCopy (실물 개별 도서 / 복본)</span>
+      <span class="entity-tag">필수 엔티티</span>
+    </div>
+    <div class="entity-body">
+      <ul>
+        <li><strong>역할:</strong> 특정 서적(<code>Book</code>)에 속하는 실제 물리적 개별 책 한 권 한 권의 고유 번호(<code>copy_id</code>), 청구기호(<code>call_number</code>), 대여 상태(<code>status</code>)를 관리합니다.</li>
+        <li><strong>필요성:</strong> 명세서의 <em>"대출 기록에서는 동일한 책 중에서도 정확히 어떤 책을 대출했는지 확인할 수 있어야 한다"</em>는 요구사항을 충족하기 위해 필수적입니다. 또한 서적 목록 페이지에서 <em>전체 보유 수량</em>(<code>COUNT(copy_id)</code>)과 <em>대출 가능 수량 및 대출 가능 여부</em>(<code>status='available'</code> 존재 여부)를 산출합니다.</li>
+      </ul>
+      <div class="attr-line"><span class="pk">copy_id</span> (PK, SERIAL) | <span class="fk">book_id</span> (FK &rarr; Book.book_id) | call_number (VARCHAR, UQ) | status ('available'/'borrowed'/'maintenance') | acquired_date (DATE)</div>
+    </div>
+  </div>
+
+  <div class="entity-card">
+    <div class="entity-card-header">
+      <span class="entity-name">5) Category (도서 카테고리) &amp; Book_Category (서적-카테고리 매핑)</span>
+      <span class="entity-tag">필수 엔티티</span>
+    </div>
+    <div class="entity-body">
+      <ul>
+        <li><strong>역할:</strong> 도서 분류 체계(컴퓨터공학, 문학, 경제 등)의 고유 정보를 관리하며, <code>Book_Category</code>를 통해 각 서적과 다대다(M:N)로 연결합니다.</li>
+        <li><strong>필요성:</strong> 관리자가 카테고리를 독립적으로 추가/제거할 때 서적 데이터가 유실되는 삭제 이상(Deletion Anomaly)을 방지하고, 한 권의 책이 동시에 여러 카테고리에 속할 수 있도록 하며, 카테고리별 검색·정렬 및 카테고리별 인기 차트 집계를 수행하기 위해 필요합니다.</li>
+      </ul>
+      <div class="attr-line"><strong>Category:</strong> <span class="pk">category_id</span> (PK, SERIAL) | category_name (VARCHAR, UQ) | description (VARCHAR) &nbsp;&Vert;&nbsp; <strong>Book_Category:</strong> <span class="pk fk">book_id</span> (PK, FK) | <span class="pk fk">category_id</span> (PK, FK)</div>
+    </div>
+  </div>
+
+  <div class="entity-card">
+    <div class="entity-card-header">
+      <span class="entity-name">6) Loan (도서 대출 및 반납 기록)</span>
+      <span class="entity-tag">필수 엔티티</span>
+    </div>
+    <div class="entity-body">
+      <ul>
+        <li><strong>역할:</strong> 사용자(<code>Users</code>)가 특정 실물 복본(<code>BookCopy</code>)을 대출한 일시, 연체 기준일(대출일+7일), 실제 반납 일시를 기록하는 트랜잭션 이력 엔티티입니다.</li>
+        <li><strong>필요성:</strong> ① 현재 대출 중인 도서 확인, ② 1인당 동시 최대 3권 대출 제한 검증, ③ 7일 이상 미반납 연체자 판별 및 대출 차단, ④ 사용자별 과거·현재 대출 기록 조회(실물 복본 식별 포함), ⑤ 최근 3개월 대출 기록 기반 인기 서적/저자 차트 집계를 위해 핵심적으로 필요합니다.</li>
+      </ul>
+      <div class="attr-line"><span class="pk">loan_id</span> (PK, SERIAL) | <span class="fk">user_id</span> (FK &rarr; Users.user_id) | <span class="fk">copy_id</span> (FK &rarr; BookCopy.copy_id) | loan_date (DATE) | due_date (DATE) | return_date (DATE, Nullable)</div>
+    </div>
+  </div>
+
+  <div class="entity-card">
+    <div class="entity-card-header">
+      <span class="entity-name">7) Review (도서 리뷰 및 별점) &amp; 8) Reservation (도서 대출 예약)</span>
+      <span class="entity-tag extra">추가 기능 엔티티</span>
+    </div>
+    <div class="entity-body">
+      <ul>
+        <li><strong>Review 역할 및 필요성:</strong> 회원이 읽은 서적(<code>Book</code>)에 대해 1~5점 별점(<code>rating</code>)과 한줄 서평(<code>comment</code>)을 남기는 엔티티로, 도서 품질에 대한 이용자 피드백 공유 및 추가 통계 기능인 <em>서적·카테고리별 평점 통계</em>를 산출하기 위해 필요합니다.</li>
+        <li><strong>Reservation 역할 및 필요성:</strong> 특정 서적의 모든 복본(<code>BookCopy</code>)이 대출 중일 때 회원이 해당 서적(<code>Book</code>)에 대기열 예약을 걸어두는 엔티티로, 반납 시 선착순(<code>reserved_at</code>)으로 대출 우선권을 부여하여 도서관 이용 편의성을 높입니다.</li>
+      </ul>
+      <div class="attr-line"><strong>Review:</strong> <span class="pk">review_id</span> (PK) | <span class="fk">user_id</span> (FK) | <span class="fk">book_id</span> (FK) | rating (1~5) | comment | created_at &nbsp;&Vert;&nbsp; <strong>Reservation:</strong> <span class="pk">reservation_id</span> (PK) | <span class="fk">user_id</span> (FK) | <span class="fk">book_id</span> (FK) | status | reserved_at</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PAGE 2: RELATIONSHIPS & ADDITIONAL FEATURES ==================== -->
+<div class="page-break"></div>
+
+<h2 class="sec-title">3. Entity 간 Relation 분석 및 설계 의도</h2>
+<p>각 엔티티 사이의 관계(Relationship), 대응수(Cardinality), 참여 제약조건(Participation) 및 설계 목적은 아래 표와 같습니다.</p>
+
+<table class="spec-table">
+  <thead>
+    <tr>
+      <th style="width:16%;">Relation 명칭</th>
+      <th style="width:22%;">연결 Entity</th>
+      <th style="width:12%;">카디널리티</th>
+      <th style="width:50%;">관계의 의미 및 필요한 이유 (설계 의도)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Has_Copy</strong><br>(복본 보유)</td>
+      <td><code>Book</code> &mdash; <code>BookCopy</code></td>
+      <td><strong>1 : N</strong><br>(부분 : 전체)</td>
+      <td>하나의 서적 종류(<code>Book</code>)는 여러 권의 실물 복본(<code>BookCopy</code>)을 가질 수 있으며, 모든 <code>BookCopy</code>는 반드시 하나의 <code>Book</code>에 속합니다. 동일 도서의 다중 소장 관리, 보유 수량 파악, 차트 종합 집계를 동시에 달성하기 위해 필요합니다.</td>
+    </tr>
+    <tr>
+      <td><strong>Written_By</strong><br>(저자 집필)</td>
+      <td><code>Book</code> &mdash; <code>Author</code></td>
+      <td><strong>N : 1</strong><br>(전체 : 부분)</td>
+      <td>모든 서적은 한 명의 저자를 가지며 한 저자는 여러 서적을 집필할 수 있습니다. <code>Book</code>의 외래키 <code>author_id</code>로 저자명을 한 곳에만 저장하고, 인기 저자 차트의 집계 기준이 됩니다.</td>
+    </tr>
+    <tr>
+      <td><strong>Belongs_To</strong><br>(카테고리 소속)</td>
+      <td><code>Book</code> &mdash; <code>Category</code><br>(교차: <code>Book_Category</code>)</td>
+      <td><strong>M : N</strong><br>(부분 : 부분)</td>
+      <td>한 권의 책은 동시에 여러 카테고리에 속할 수 있고, 하나의 카테고리에는 여러 권의 책이 포함될 수 있습니다. 관계형 모델에서는 교차 테이블 <code>Book_Category(book_id, category_id)</code>를 통해 외래키 쌍을 복합 기본키로 구성하여 정규화합니다.</td>
+    </tr>
+    <tr>
+      <td><strong>Borrows /<br>Borrowed_In</strong></td>
+      <td><code>Users</code> &mdash; <code>Loan</code> &mdash; <code>BookCopy</code></td>
+      <td><strong>1 : N</strong> 및 <strong>1 : N</strong></td>
+      <td>한 명의 사용자(<code>Users</code>)는 여러 건의 대출 기록(<code>Loan</code>)을 생성할 수 있고(1:N), 하나의 실물 복본(<code>BookCopy</code>)도 시간차를 두고 여러 번 대출될 수 있습니다(1:N). <code>Loan</code>이 <code>Book</code>이 아닌 <code>BookCopy</code>와 관계를 맺음으로써 <em>동일한 책 중 정확히 어느 실물 복본을 빌렸는지</em> 완벽히 추적합니다.</td>
+    </tr>
+    <tr>
+      <td><strong>Writes /<br>Evaluates</strong></td>
+      <td><code>Users</code> &mdash; <code>Review</code> &mdash; <code>Book</code></td>
+      <td><strong>1 : N</strong> 및 <strong>1 : N</strong></td>
+      <td>사용자는 여러 서적에 리뷰를 작성할 수 있고, 하나의 서적(<code>Book</code>)은 여러 사용자로부터 리뷰를 받을 수 있습니다. 리뷰는 실물 복본 상태가 아니라 책의 내용 자체에 대한 평가이므로 <code>Book</code> 엔티티와 직접 관계를 맺으며, <code>(user_id, book_id)</code>에 UNIQUE 제약을 두어 중복 평점 조작을 방지합니다.</td>
+    </tr>
+    <tr>
+      <td><strong>Requests /<br>Targets</strong></td>
+      <td><code>Users</code> &mdash; <code>Reservation</code> &mdash; <code>Book</code></td>
+      <td><strong>1 : N</strong> 및 <strong>1 : N</strong></td>
+      <td>사용자는 모든 복본이 대출 중인 서적에 대해 예약을 걸 수 있습니다. 특정 복본이 아닌 '해당 서적 중 가장 먼저 반납되는 임의의 복본'을 배정받는 것이 도서관 업무 규칙에 부합하므로 <code>Reservation</code>은 <code>Book</code>과 1:N 관계를 형성합니다.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 class="sec-title">4. 추가 기능 설계 (총 4가지: 비통계 기능 2가지 + 통계 기능 정확히 2가지)</h2>
+<p>
+  과제 명세의 추가 기능 조건(<em>"명세 이외의 다른 기능 3가지 이상 추가, 그중 통계와 관련된 내용이 반드시 2가지(2가지보다 적거나 많을 수 없음) 포함"</em>)을 엄격히 준수하여, 실제 도서관 웹 서비스에 필수적이고 유용한 <strong>비통계 기능 2가지</strong>와 <strong>통계 기능 정확히 2가지</strong>를 설계하였습니다.
+</p>
+
+<div class="two-col">
+  <div class="entity-card">
+    <h3 class="sub-title"><span class="badge feat">비통계 1</span> 도서 리뷰 및 별점 시스템 (Review)</h3>
+    <p style="font-size:7.7pt; margin-bottom:1px;">
+      <strong>기능 설명:</strong> 해당 도서를 대출하여 읽은 이력이 있는 사용자가 1~5점의 별점과 서평을 작성·조회하는 기능입니다.<br>
+      <strong>필요성 및 기대효과:</strong> 단순 서지 정보만으로는 알기 어려운 책의 난이도와 유익함을 다른 이용자와 공유할 수 있으며, <code>Loan</code> 이력 검증을 통해 실제 독자만 리뷰를 남기도록 신뢰도를 보장합니다.
+    </p>
+  </div>
+
+  <div class="entity-card">
+    <h3 class="sub-title"><span class="badge feat">비통계 2</span> 대출 중 도서 예약 대기열 (Reservation)</h3>
+    <p style="font-size:7.7pt; margin-bottom:1px;">
+      <strong>기능 설명:</strong> 원하는 서적(<code>Book</code>)의 모든 복본(<code>BookCopy</code>)이 대출 중(<code>borrowed</code>)일 때, 사용자가 예약 대기열에 등록하고 반납 시 우선 대출권을 부여받는 기능입니다.<br>
+      <strong>필요성 및 기대효과:</strong> 인기 도서를 빌리기 위해 사용자가 무한정 새로고침하며 대기해야 하는 불편을 해소하는 실제 도서관의 핵심 필수 기능입니다.
+    </p>
+  </div>
+</div>
+
+<div class="entity-card" style="margin-top:3px;">
+  <h3 class="sub-title"><span class="badge stat">통계 기능 1 (필수 2개 중 1)</span> 서적 및 카테고리별 평점·리뷰 통계 분석</h3>
+  <p style="font-size:7.7pt; margin-bottom:1px;">
+    <strong>기능 및 설계 의도:</strong> 기본 명세의 '인기 서적 차트'는 최근 3개월간의 <em>대출 횟수(양적 지표)</em>만을 반영합니다. 이를 보완하기 위해 <code>Review</code>, <code>Book</code>, <code>Book_Category</code>, <code>Category</code> 릴레이션을 조인·집계하여 <strong>① 각 서적별 평균 별점(<code>AVG(rating)</code>) 및 리뷰 수(<code>COUNT(review_id)</code>)</strong>와 <strong>② 카테고리별 평균 만족도 평점 및 최고 평점 도서 현황</strong>을 제공하는 질적 통계를 설계하였습니다. 별도의 중복 통계 테이블 없이 정규화된 <code>Review</code> 테이블에서 실시간 집계하므로 데이터 정합성이 100% 유지됩니다.
+  </p>
+  <div class="sql-box">SELECT c.category_name, COUNT(DISTINCT b.book_id) AS book_cnt, COUNT(r.review_id) AS review_cnt, ROUND(AVG(r.rating), 2) AS avg_rating
+FROM Category c JOIN Book_Category bc ON c.category_id = bc.category_id JOIN Book b ON bc.book_id = b.book_id LEFT JOIN Review r ON b.book_id = r.book_id GROUP BY c.category_id, c.category_name ORDER BY avg_rating DESC NULLS LAST;</div>
+</div>
+
+<div class="entity-card" style="margin-top:3px;">
+  <h3 class="sub-title"><span class="badge stat">통계 기능 2 (필수 2개 중 2)</span> 월별 대출·연체율 추이 및 이용자 독서 통계 (다독/기한준수 분석)</h3>
+  <p style="font-size:7.7pt; margin-bottom:1px;">
+    <strong>기능 및 설계 의도:</strong> <code>Loan</code>과 <code>Users</code> 릴레이션의 날짜 데이터(<code>loan_date</code>, <code>due_date</code>, <code>return_date</code>)를 기반으로 <strong>① 월별 전체 대출 건수 및 연체 발생 비율(<code>return_date &gt;= due_date</code> 또는 미반납 기한 경과 비율) 추이 통계</strong>와 <strong>② 회원별 누적 독서량(다독 순위) 및 기한 내 반납 준수율 통계</strong>를 제공합니다. 관리자에게는 도서관 운영 지표를, 사용자에게는 자신의 독서 습관 통계를 제공하는 핵심 통계 기능입니다.
+  </p>
+  <div class="sql-box">SELECT to_char(loan_date, 'YYYY-MM') AS loan_month, COUNT(*) AS total_loans, COUNT(*) FILTER (WHERE COALESCE(return_date, CURRENT_DATE) &gt;= due_date) AS overdue_cnt,
+       ROUND(COUNT(*) FILTER (WHERE COALESCE(return_date, CURRENT_DATE) &gt;= due_date) * 100.0 / COUNT(*), 1) AS overdue_rate_pct FROM Loan GROUP BY loan_month ORDER BY loan_month DESC;</div>
+</div>
+
+<h3 class="sub-title" style="margin-top:4px;">※ 필수 비즈니스 제약조건의 SQL/스키마 검증 매핑 요약</h3>
+<table class="spec-table">
+  <thead>
+    <tr>
+      <th style="width:31%;">명세서 필수 규칙</th>
+      <th style="width:69%;">설계된 스키마에서의 검증 및 처리 방식</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>동시 최대 3권 대출 제한</strong></td>
+      <td><code>SELECT COUNT(*) FROM Loan WHERE user_id = $1 AND return_date IS NULL</code> 결과가 <code>&gt;= 3</code>이면 대출 거부</td>
+    </tr>
+    <tr>
+      <td><strong>동일 서적 동시 2권 이상 대출 불가</strong></td>
+      <td><code>Loan</code>과 <code>BookCopy</code>를 조인하여 해당 <code>user_id</code>의 미반납(<code>return_date IS NULL</code>) 대출 건 중 동일한 <code>book_id</code>가 존재하는지 확인 후 차단</td>
+    </tr>
+    <tr>
+      <td><strong>7일 이상 미반납(연체) 시 대출 불가</strong></td>
+      <td><code>SELECT EXISTS(SELECT 1 FROM Loan WHERE user_id = $1 AND return_date IS NULL AND CURRENT_DATE &gt;= due_date)</code>가 참이면 연체 상태로 판정하여 신규 대출 차단 (<code>due_date = loan_date + 7</code>)</td>
+    </tr>
+    <tr>
+      <td><strong>최근 3개월 인기 서적/저자 차트 (전체/카테고리별, 복본 합산)</strong></td>
+      <td><code>Loan(loan_date &gt;= CURRENT_DATE - INTERVAL '3 months')</code> &rarr; <code>BookCopy</code> &rarr; <code>Book</code>으로 조인 후 <code>Book.book_id</code>(저자 차트는 <code>Book.author_id</code>) 기준으로 <code>GROUP BY</code>하여 복본들의 대출 횟수를 통합 집계</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ==================== PAGE 3: ER DIAGRAM ==================== -->
+<div class="page-break"></div>
+
+<h2 class="sec-title">5. ER Diagram (Entity-Relationship Diagram)</h2>
+<p>
+  표준 <strong>Chen 표기법(Silberschatz 데이터베이스 교재 표준)</strong>에 따라 작도한 전체 시스템의 ER Diagram입니다. 직사각형은 <strong>Entity 집합</strong>, 마름모는 <strong>Relationship 집합</strong>, 타원은 <strong>Attribute</strong>(실선 밑줄은 기본키 PK)를 나타내며, 연결선 위의 숫자와 기호(<code>1</code>, <code>N</code>, <code>M</code>)는 <strong>Cardinality(대응수)</strong>를 의미합니다.
+</p>
+
+<div class="legend-bar">
+  <span><strong>[범례]</strong></span>
+  <span>&#9645; <strong>직사각형:</strong> Entity 집합</span>
+  <span>&#9671; <strong>마름모:</strong> Relationship 집합</span>
+  <span>&#9711; <strong>타원 (<u>밑줄</u>):</strong> Attribute (<u>Primary Key</u>)</span>
+  <span><strong>1, N, M:</strong> 관계 대응수 (Cardinality)</span>
+</div>
+
+<div class="diagram-wrapper">
+  <svg viewBox="0 0 1000 740" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" style="font-family: 'NotoSansKR', sans-serif;">
+    <defs>
+      <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+        <feDropShadow dx="1" dy="1.5" stdDeviation="1.5" flood-color="#94a3b8" flood-opacity="0.35"/>
+      </filter>
+    </defs>
+
+    <!-- Background -->
+    <rect x="0" y="0" width="1000" height="740" fill="#fcfdff"/>
+
+    <!-- ==================== ATTRIBUTE CONNECTING LINES ==================== -->
+    <g stroke="#475569" stroke-width="1.4" fill="none">
+      <!-- Users (150, 220) attributes -->
+      <line x1="150" y1="220" x2="62" y2="115"/>
+      <line x1="150" y1="220" x2="148" y2="100"/>
+      <line x1="150" y1="220" x2="232" y2="115"/>
+      <line x1="150" y1="220" x2="52" y2="172"/>
+      <line x1="150" y1="220" x2="52" y2="232"/>
+      <line x1="150" y1="220" x2="58" y2="290"/>
+
+      <!-- Loan (490, 125) attributes -->
+      <line x1="490" y1="125" x2="390" y2="45"/>
+      <line x1="490" y1="125" x2="490" y2="38"/>
+      <line x1="490" y1="125" x2="590" y2="45"/>
+      <line x1="490" y1="125" x2="660" y2="75"/>
+
+      <!-- BookCopy (830, 220) attributes -->
+      <line x1="830" y1="220" x2="755" y2="110"/>
+      <line x1="830" y1="220" x2="850" y2="100"/>
+      <line x1="830" y1="220" x2="940" y2="135"/>
+      <line x1="830" y1="220" x2="942" y2="205"/>
+
+      <!-- Book (595, 450) attributes -->
+      <line x1="595" y1="450" x2="515" y2="340"/>
+      <line x1="595" y1="450" x2="600" y2="325"/>
+      <line x1="595" y1="450" x2="640" y2="382"/>
+      <line x1="595" y1="450" x2="730" y2="510"/>
+      <line x1="595" y1="450" x2="665" y2="550"/>
+
+      <!-- Author (720, 290) attributes -->
+      <line x1="720" y1="290" x2="705" y2="222"/>
+      <line x1="720" y1="290" x2="600" y2="262"/>
+
+      <!-- Category (855, 635) attributes -->
+      <line x1="855" y1="635" x2="735" y2="695"/>
+      <line x1="855" y1="635" x2="855" y2="705"/>
+      <line x1="855" y1="635" x2="950" y2="685"/>
+
+      <!-- Review (315, 360) attributes -->
+      <line x1="315" y1="360" x2="235" y2="275"/>
+      <line x1="315" y1="360" x2="325" y2="265"/>
+      <line x1="315" y1="360" x2="415" y2="275"/>
+      <line x1="315" y1="360" x2="235" y2="430"/>
+
+      <!-- Reservation (315, 580) attributes -->
+      <line x1="315" y1="580" x2="205" y2="670"/>
+      <line x1="315" y1="580" x2="315" y2="680"/>
+      <line x1="315" y1="580" x2="420" y2="670"/>
+    </g>
+
+    <!-- ==================== ENTITY - RELATIONSHIP LINKS ==================== -->
+    <g stroke="#1e3a8a" stroke-width="2.2" fill="none">
+      <!-- Users (150,220) -> Borrows (320,125) -> Loan (490,125) -->
+      <line x1="150" y1="220" x2="320" y2="125"/>
+      <line x1="320" y1="125" x2="490" y2="125"/>
+
+      <!-- Loan (490,125) -> Borrowed_In (665,125) -> BookCopy (830,220) -->
+      <line x1="490" y1="125" x2="665" y2="125"/>
+      <line x1="665" y1="125" x2="830" y2="220"/>
+
+      <!-- BookCopy (830,220) -> Has_Copy (830,450) -> Book (595,450) -->
+      <line x1="830" y1="220" x2="830" y2="450"/>
+      <line x1="830" y1="450" x2="595" y2="450"/>
+
+      <!-- Book (595,450) -> Belongs_To (595,635) -> Category (855,635) -->
+      <line x1="595" y1="450" x2="595" y2="635"/>
+      <line x1="595" y1="635" x2="855" y2="635"/>
+
+      <!-- Book (595,450) -> Written_By (720,395) -> Author (720,290) -->
+      <line x1="595" y1="450" x2="720" y2="395"/>
+      <line x1="720" y1="395" x2="720" y2="290"/>
+
+      <!-- Users (150,220) -> Writes (185,360) -> Review (315,360) -> Evaluates (455,405) -> Book (595,450) -->
+      <line x1="150" y1="220" x2="185" y2="360"/>
+      <line x1="185" y1="360" x2="315" y2="360"/>
+      <line x1="315" y1="360" x2="455" y2="405"/>
+      <line x1="455" y1="405" x2="595" y2="450"/>
+
+      <!-- Users (150,220) -> Requests (150,580) -> Reservation (315,580) -> Targets (460,515) -> Book (595,450) -->
+      <line x1="150" y1="220" x2="150" y2="580"/>
+      <line x1="150" y1="580" x2="315" y2="580"/>
+      <line x1="315" y1="580" x2="460" y2="515"/>
+      <line x1="460" y1="515" x2="595" y2="450"/>
+    </g>
+
+    <!-- ==================== CARDINALITY LABELS ==================== -->
+    <g font-size="11.5" font-weight="800" fill="#dc2626" text-anchor="middle">
+      <!-- Users 1 --- N Loan -->
+      <text x="220" y="165">1</text>
+      <text x="405" y="116">N</text>
+      <!-- Loan N --- 1 BookCopy -->
+      <text x="578" y="116">N</text>
+      <text x="762" y="165">1</text>
+      <!-- Book 1 --- N BookCopy -->
+      <text x="845" y="320">N</text>
+      <text x="715" y="440">1</text>
+      <!-- Book M --- N Category -->
+      <text x="580" y="535">M</text>
+      <text x="725" y="625">N</text>
+      <!-- Book N --- 1 Author -->
+      <text x="628" y="425">N</text>
+      <text x="731" y="345">1</text>
+      <!-- Users 1 --- N Review N --- 1 Book -->
+      <text x="155" y="295">1</text>
+      <text x="245" y="352">N</text>
+      <text x="392" y="376">N</text>
+      <text x="518" y="416">1</text>
+      <!-- Users 1 --- N Reservation N --- 1 Book -->
+      <text x="136" y="425">1</text>
+      <text x="232" y="570">N</text>
+      <text x="395" y="562">N</text>
+      <text x="522" y="502">1</text>
+    </g>
+
+    <!-- ==================== ENTITIES (RECTANGLES) ==================== -->
+    <!-- Users -->
+    <g filter="url(#shadow)">
+      <rect x="95" y="196" width="110" height="48" rx="3" fill="#dbeafe" stroke="#1e3a8a" stroke-width="2.2"/>
+      <text x="150" y="218" text-anchor="middle" font-size="13" font-weight="800" fill="#0f172a">Users</text>
+      <text x="150" y="234" text-anchor="middle" font-size="9.5" fill="#334155">(회원/관리자)</text>
+    </g>
+
+    <!-- Loan -->
+    <g filter="url(#shadow)">
+      <rect x="435" y="101" width="110" height="48" rx="3" fill="#dbeafe" stroke="#1e3a8a" stroke-width="2.2"/>
+      <text x="490" y="123" text-anchor="middle" font-size="13" font-weight="800" fill="#0f172a">Loan</text>
+      <text x="490" y="139" text-anchor="middle" font-size="9.5" fill="#334155">(대출 기록)</text>
+    </g>
+
+    <!-- BookCopy -->
+    <g filter="url(#shadow)">
+      <rect x="770" y="196" width="120" height="48" rx="3" fill="#dbeafe" stroke="#1e3a8a" stroke-width="2.2"/>
+      <text x="830" y="218" text-anchor="middle" font-size="13" font-weight="800" fill="#0f172a">BookCopy</text>
+      <text x="830" y="234" text-anchor="middle" font-size="9.5" fill="#334155">(실물 개별 도서)</text>
+    </g>
+
+    <!-- Book -->
+    <g filter="url(#shadow)">
+      <rect x="535" y="426" width="120" height="48" rx="3" fill="#dbeafe" stroke="#1e3a8a" stroke-width="2.2"/>
+      <text x="595" y="448" text-anchor="middle" font-size="13" font-weight="800" fill="#0f172a">Book</text>
+      <text x="595" y="464" text-anchor="middle" font-size="9.5" fill="#334155">(서적 메타데이터)</text>
+    </g>
+
+    <!-- Author -->
+    <g filter="url(#shadow)">
+      <rect x="665" y="266" width="110" height="48" rx="3" fill="#dbeafe" stroke="#1e3a8a" stroke-width="2.2"/>
+      <text x="720" y="288" text-anchor="middle" font-size="13" font-weight="800" fill="#0f172a">Author</text>
+      <text x="720" y="304" text-anchor="middle" font-size="9.5" fill="#334155">(저자)</text>
+    </g>
+
+    <!-- Category -->
+    <g filter="url(#shadow)">
+      <rect x="795" y="611" width="120" height="48" rx="3" fill="#dbeafe" stroke="#1e3a8a" stroke-width="2.2"/>
+      <text x="855" y="633" text-anchor="middle" font-size="13" font-weight="800" fill="#0f172a">Category</text>
+      <text x="855" y="649" text-anchor="middle" font-size="9.5" fill="#334155">(카테고리)</text>
+    </g>
+
+    <!-- Review (Extra) -->
+    <g filter="url(#shadow)">
+      <rect x="260" y="336" width="110" height="48" rx="3" fill="#ede9fe" stroke="#5b21b6" stroke-width="2.2"/>
+      <text x="315" y="358" text-anchor="middle" font-size="12.5" font-weight="800" fill="#2e1065">Review</text>
+      <text x="315" y="374" text-anchor="middle" font-size="9" fill="#4c1d95">(도서 리뷰/별점)</text>
+    </g>
+
+    <!-- Reservation (Extra) -->
+    <g filter="url(#shadow)">
+      <rect x="255" y="556" width="120" height="48" rx="3" fill="#ede9fe" stroke="#5b21b6" stroke-width="2.2"/>
+      <text x="315" y="578" text-anchor="middle" font-size="12.5" font-weight="800" fill="#2e1065">Reservation</text>
+      <text x="315" y="594" text-anchor="middle" font-size="9" fill="#4c1d95">(도서 대출 예약)</text>
+    </g>
+
+    <!-- ==================== RELATIONSHIPS (DIAMONDS) ==================== -->
+    <!-- Borrows (320, 125) -->
+    <polygon points="320,97 368,125 320,153 272,125" fill="#fef3c7" stroke="#b45309" stroke-width="2"/>
+    <text x="320" y="129" text-anchor="middle" font-size="10.2" font-weight="700" fill="#78350f">Borrows</text>
+
+    <!-- Borrowed_In (665, 125) -->
+    <polygon points="665,95 720,125 665,155 610,125" fill="#fef3c7" stroke="#b45309" stroke-width="2"/>
+    <text x="665" y="129" text-anchor="middle" font-size="9.6" font-weight="700" fill="#78350f">Borrowed_In</text>
+
+    <!-- Has_Copy (830, 450) -->
+    <polygon points="830,420 885,450 830,480 775,450" fill="#fef3c7" stroke="#b45309" stroke-width="2"/>
+    <text x="830" y="454" text-anchor="middle" font-size="10.2" font-weight="700" fill="#78350f">Has_Copy</text>
+
+    <!-- Belongs_To (595, 635) -->
+    <polygon points="595,605 653,635 595,665 537,635" fill="#fef3c7" stroke="#b45309" stroke-width="2"/>
+    <text x="595" y="639" text-anchor="middle" font-size="9.8" font-weight="700" fill="#78350f">Belongs_To</text>
+
+    <!-- Written_By (720, 395) -->
+    <polygon points="720,368 772,395 720,422 668,395" fill="#fef3c7" stroke="#b45309" stroke-width="2"/>
+    <text x="720" y="399" text-anchor="middle" font-size="9.6" font-weight="700" fill="#78350f">Written_By</text>
+
+    <!-- Writes (185, 360) -->
+    <polygon points="185,335 227,360 185,385 143,360" fill="#fae8ff" stroke="#86198f" stroke-width="1.8"/>
+    <text x="185" y="364" text-anchor="middle" font-size="9.5" font-weight="700" fill="#701a75">Writes</text>
+
+    <!-- Evaluates (455, 405) -->
+    <polygon points="455,380 499,405 455,430 411,405" fill="#fae8ff" stroke="#86198f" stroke-width="1.8"/>
+    <text x="455" y="409" text-anchor="middle" font-size="9.3" font-weight="700" fill="#701a75">Evaluates</text>
+
+    <!-- Requests (150, 580) -->
+    <polygon points="150,553 196,580 150,607 104,580" fill="#fae8ff" stroke="#86198f" stroke-width="1.8"/>
+    <text x="150" y="584" text-anchor="middle" font-size="9.5" font-weight="700" fill="#701a75">Requests</text>
+
+    <!-- Targets (460, 515) -->
+    <polygon points="460,490 503,515 460,540 417,515" fill="#fae8ff" stroke="#86198f" stroke-width="1.8"/>
+    <text x="460" y="519" text-anchor="middle" font-size="9.5" font-weight="700" fill="#701a75">Targets</text>
+
+    <!-- ==================== ATTRIBUTES (OVALS) ==================== -->
+    <!-- Users Attributes -->
+    <g fill="#ffffff" stroke="#334155" stroke-width="1.5">
+      <ellipse cx="62" cy="115" rx="44" ry="17" fill="#fef2f2" stroke="#b91c1c"/>
+      <ellipse cx="148" cy="100" rx="44" ry="17"/>
+      <ellipse cx="232" cy="115" rx="36" ry="17"/>
+      <ellipse cx="52" cy="172" rx="38" ry="17"/>
+      <ellipse cx="52" cy="232" rx="38" ry="17"/>
+      <ellipse cx="58" cy="290" rx="44" ry="17"/>
+    </g>
+    <g font-size="9.3" text-anchor="middle" fill="#0f172a">
+      <text x="62" y="119" font-weight="700" text-decoration="underline" fill="#b91c1c">user_id</text>
+      <text x="148" y="104">password_hash</text>
+      <text x="232" y="119">name</text>
+      <text x="52" y="176">email</text>
+      <text x="52" y="236">role</text>
+      <text x="58" y="294">created_at</text>
+    </g>
+
+    <!-- Loan Attributes -->
+    <g fill="#ffffff" stroke="#334155" stroke-width="1.5">
+      <ellipse cx="390" cy="45" rx="43" ry="17" fill="#fef2f2" stroke="#b91c1c"/>
+      <ellipse cx="490" cy="38" rx="43" ry="17"/>
+      <ellipse cx="590" cy="45" rx="43" ry="17"/>
+      <ellipse cx="660" cy="75" rx="46" ry="17"/>
+    </g>
+    <g font-size="9.3" text-anchor="middle" fill="#0f172a">
+      <text x="390" y="49" font-weight="700" text-decoration="underline" fill="#b91c1c">loan_id</text>
+      <text x="490" y="42">loan_date</text>
+      <text x="590" y="49">due_date</text>
+      <text x="660" y="79">return_date</text>
+    </g>
+
+    <!-- BookCopy Attributes -->
+    <g fill="#ffffff" stroke="#334155" stroke-width="1.5">
+      <ellipse cx="755" cy="110" rx="43" ry="17" fill="#fef2f2" stroke="#b91c1c"/>
+      <ellipse cx="850" cy="100" rx="48" ry="17"/>
+      <ellipse cx="940" cy="135" rx="38" ry="17"/>
+      <ellipse cx="942" cy="205" rx="48" ry="17"/>
+    </g>
+    <g font-size="9.3" text-anchor="middle" fill="#0f172a">
+      <text x="755" y="114" font-weight="700" text-decoration="underline" fill="#b91c1c">copy_id</text>
+      <text x="850" y="104">call_number</text>
+      <text x="940" y="139">status</text>
+      <text x="942" y="209">acquired_date</text>
+    </g>
+
+    <!-- Book Attributes -->
+    <g fill="#ffffff" stroke="#334155" stroke-width="1.5">
+      <ellipse cx="515" cy="340" rx="42" ry="17" fill="#fef2f2" stroke="#b91c1c"/>
+      <ellipse cx="600" cy="325" rx="35" ry="17"/>
+      <ellipse cx="640" cy="382" rx="32" ry="17"/>
+      <ellipse cx="730" cy="510" rx="43" ry="17"/>
+      <ellipse cx="665" cy="550" rx="52" ry="17"/>
+    </g>
+    <g font-size="9.3" text-anchor="middle" fill="#0f172a">
+      <text x="515" y="344" font-weight="700" text-decoration="underline" fill="#b91c1c">book_id</text>
+      <text x="600" y="329">isbn</text>
+      <text x="640" y="386">title</text>
+      <text x="730" y="514">publisher</text>
+      <text x="665" y="554">published_year</text>
+    </g>
+
+    <!-- Author Attributes -->
+    <g fill="#ffffff" stroke="#334155" stroke-width="1.5">
+      <ellipse cx="705" cy="222" rx="45" ry="17" fill="#fef2f2" stroke="#b91c1c"/>
+      <ellipse cx="600" cy="262" rx="50" ry="17"/>
+    </g>
+    <g font-size="9.3" text-anchor="middle" fill="#0f172a">
+      <text x="705" y="226" font-weight="700" text-decoration="underline" fill="#b91c1c">author_id</text>
+      <text x="600" y="266">author_name</text>
+    </g>
+
+    <!-- Category Attributes -->
+    <g fill="#ffffff" stroke="#334155" stroke-width="1.5">
+      <ellipse cx="735" cy="695" rx="48" ry="17" fill="#fef2f2" stroke="#b91c1c"/>
+      <ellipse cx="855" cy="705" rx="54" ry="17"/>
+      <ellipse cx="950" cy="685" rx="43" ry="17"/>
+    </g>
+    <g font-size="9.3" text-anchor="middle" fill="#0f172a">
+      <text x="735" y="699" font-weight="700" text-decoration="underline" fill="#b91c1c">category_id</text>
+      <text x="855" y="709">category_name</text>
+      <text x="950" y="689">description</text>
+    </g>
+
+    <!-- Review Attributes -->
+    <g fill="#ffffff" stroke="#334155" stroke-width="1.5">
+      <ellipse cx="235" cy="275" rx="43" ry="16.5" fill="#fef2f2" stroke="#b91c1c"/>
+      <ellipse cx="325" cy="265" rx="36" ry="16.5"/>
+      <ellipse cx="415" cy="275" rx="40" ry="16.5"/>
+      <ellipse cx="235" cy="430" rx="43" ry="16.5"/>
+    </g>
+    <g font-size="9" text-anchor="middle" fill="#0f172a">
+      <text x="235" y="279" font-weight="700" text-decoration="underline" fill="#b91c1c">review_id</text>
+      <text x="325" y="269">rating</text>
+      <text x="415" y="279">comment</text>
+      <text x="235" y="434">created_at</text>
+    </g>
+
+    <!-- Reservation Attributes -->
+    <g fill="#ffffff" stroke="#334155" stroke-width="1.5">
+      <ellipse cx="205" cy="670" rx="50" ry="16.5" fill="#fef2f2" stroke="#b91c1c"/>
+      <ellipse cx="315" cy="680" rx="36" ry="16.5"/>
+      <ellipse cx="420" cy="670" rx="46" ry="16.5"/>
+    </g>
+    <g font-size="9" text-anchor="middle" fill="#0f172a">
+      <text x="205" y="674" font-weight="700" text-decoration="underline" fill="#b91c1c">reservation_id</text>
+      <text x="315" y="684">status</text>
+      <text x="420" y="674">reserved_at</text>
+    </g>
+  </svg>
+  <div class="diagram-caption">[그림 1] 도서관 관리 웹 애플리케이션 전체 ER Diagram (Chen 표기법)</div>
+</div>
+
+<div class="callout" style="margin-top:6px;">
+  <strong>ER Diagram 핵심 구조 요약:</strong><br>
+  &bull; <strong>필수 영역 (청색 엔티티):</strong> <code>Users</code>, <code>Loan</code>, <code>BookCopy</code>, <code>Book</code>, <code>Author</code>, <code>Category</code>로 구성되며, <code>Book</code>(1) &mdash; <code>Has_Copy</code> &mdash; <code>BookCopy</code>(N) 분리를 통해 개별 복본 대출 이력과 도서 종류별 인기 차트 집계를 동시에 지원하고, <code>Book</code>(N) &mdash; <code>Written_By</code> &mdash; <code>Author</code>(1) 관계로 저자 정보를 정규화하여 인기 저자 차트를 집계합니다.<br>
+  &bull; <strong>추가 기능 영역 (보라색 엔티티):</strong> <code>Review</code>(도서 평점/리뷰)와 <code>Reservation</code>(도서 예약 대기열)이 <code>Users</code> 및 <code>Book</code>과 각각 1:N 관계를 형성하며, 이 데이터와 <code>Loan</code> 기록을 기반으로 2가지 필수 통계(평점 통계, 월별 대출/연체율 통계)가 산출됩니다.
+</div>
+
+<!-- ==================== PAGE 4: RELATION SCHEMA DIAGRAM & TABLE SPECS ==================== -->
+<div class="page-break"></div>
+
+<h2 class="sec-title">6. Relation Schema Diagram (관계 스키마 다이어그램)</h2>
+<p>
+  ER Diagram을 관계형 데이터베이스 모델(Relational Model)로 변환한 <strong>Relation Schema 그림</strong>입니다. 다대다(M:N) 관계인 <code>Belongs_To</code>는 교차 릴레이션 <strong><code>Book_Category</code></strong>로, N:1 관계인 <code>Written_By</code>는 <code>Book</code>의 외래키 <code>author_id</code>로 변환되었으며, 각 릴레이션의 <strong>기본키(PK)는 실선 밑줄</strong>로, <strong>외래키(FK)는 참조하는 기본키(PK)를 향하는 실선 화살표(&rarr;)</strong>로 명확히 표현하였습니다.
+</p>
+
+<div class="diagram-wrapper" style="padding: 6px;">
+  <svg viewBox="0 0 1000 515" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" style="font-family: 'NotoSansKR', sans-serif;">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+        <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+      </marker>
+    </defs>
+
+    <rect x="0" y="0" width="1000" height="515" fill="#fcfdff"/>
+
+    <!-- ==================== 1.Users ==================== -->
+    <g transform="translate(25, 14)">
+      <rect x="0" y="0" width="835" height="40" rx="4" fill="#ffffff" stroke="#1e293b" stroke-width="1.8"/>
+      <rect x="0" y="0" width="125" height="40" rx="4" fill="#1e3a8a"/>
+      <text x="62" y="25" text-anchor="middle" font-size="11.2" font-weight="800" fill="#ffffff">Users</text>
+      <!-- Columns -->
+      <line x1="235" y1="0" x2="235" y2="40" stroke="#cbd5e1"/>
+      <line x1="370" y1="0" x2="370" y2="40" stroke="#cbd5e1"/>
+      <line x1="475" y1="0" x2="475" y2="40" stroke="#cbd5e1"/>
+      <line x1="600" y1="0" x2="600" y2="40" stroke="#cbd5e1"/>
+      <line x1="715" y1="0" x2="715" y2="40" stroke="#cbd5e1"/>
+
+      <text x="180" y="25" text-anchor="middle" font-size="10.2" font-weight="700" text-decoration="underline" fill="#b91c1c">user_id (PK)</text>
+      <text x="302" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">password_hash</text>
+      <text x="422" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">name</text>
+      <text x="537" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">email (UQ)</text>
+      <text x="657" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">role</text>
+      <text x="775" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">created_at</text>
+    </g>
+
+    <!-- ==================== 2.Author ==================== -->
+    <g transform="translate(25, 70)">
+      <rect x="0" y="0" width="400" height="40" rx="4" fill="#ffffff" stroke="#1e293b" stroke-width="1.8"/>
+      <rect x="0" y="0" width="125" height="40" rx="4" fill="#1e3a8a"/>
+      <text x="62" y="25" text-anchor="middle" font-size="11.2" font-weight="800" fill="#ffffff">Author</text>
+
+      <line x1="235" y1="0" x2="235" y2="40" stroke="#cbd5e1"/>
+
+      <text x="180" y="25" text-anchor="middle" font-size="10.2" font-weight="700" text-decoration="underline" fill="#b91c1c">author_id (PK)</text>
+      <text x="317" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">author_name (UQ)</text>
+    </g>
+
+    <!-- ==================== 3.Book ==================== -->
+    <g transform="translate(25, 126)">
+      <rect x="0" y="0" width="950" height="40" rx="4" fill="#ffffff" stroke="#1e293b" stroke-width="1.8"/>
+      <rect x="0" y="0" width="125" height="40" rx="4" fill="#1e3a8a"/>
+      <text x="62" y="25" text-anchor="middle" font-size="11.2" font-weight="800" fill="#ffffff">Book</text>
+
+      <line x1="235" y1="0" x2="235" y2="40" stroke="#cbd5e1"/>
+      <line x1="355" y1="0" x2="355" y2="40" stroke="#cbd5e1"/>
+      <line x1="485" y1="0" x2="485" y2="40" stroke="#cbd5e1"/>
+      <line x1="600" y1="0" x2="600" y2="40" stroke="#cbd5e1"/>
+      <line x1="715" y1="0" x2="715" y2="40" stroke="#cbd5e1"/>
+      <line x1="835" y1="0" x2="835" y2="40" stroke="#cbd5e1"/>
+
+      <text x="180" y="25" text-anchor="middle" font-size="10.2" font-weight="700" text-decoration="underline" fill="#b91c1c">book_id (PK)</text>
+      <text x="295" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">isbn (UQ)</text>
+      <text x="420" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">title</text>
+      <text x="542" y="25" text-anchor="middle" font-size="10" font-weight="700" fill="#1d4ed8">author_id (FK)</text>
+      <text x="657" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">publisher</text>
+      <text x="775" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">published_year</text>
+      <text x="892" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">created_at</text>
+    </g>
+
+    <!-- ==================== 4.BookCopy ==================== -->
+    <g transform="translate(25, 182)">
+      <rect x="0" y="0" width="760" height="40" rx="4" fill="#ffffff" stroke="#1e293b" stroke-width="1.8"/>
+      <rect x="0" y="0" width="125" height="40" rx="4" fill="#1e3a8a"/>
+      <text x="62" y="25" text-anchor="middle" font-size="11.2" font-weight="800" fill="#ffffff">BookCopy</text>
+
+      <line x1="235" y1="0" x2="235" y2="40" stroke="#cbd5e1"/>
+      <line x1="365" y1="0" x2="365" y2="40" stroke="#cbd5e1"/>
+      <line x1="505" y1="0" x2="505" y2="40" stroke="#cbd5e1"/>
+      <line x1="630" y1="0" x2="630" y2="40" stroke="#cbd5e1"/>
+
+      <text x="180" y="25" text-anchor="middle" font-size="10.2" font-weight="700" text-decoration="underline" fill="#b91c1c">copy_id (PK)</text>
+      <text x="300" y="25" text-anchor="middle" font-size="10" font-weight="700" fill="#1d4ed8">book_id (FK)</text>
+      <text x="435" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">call_number (UQ)</text>
+      <text x="567" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">status</text>
+      <text x="695" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">acquired_date</text>
+    </g>
+
+    <!-- ==================== 5.Category ==================== -->
+    <g transform="translate(25, 238)">
+      <rect x="0" y="0" width="560" height="40" rx="4" fill="#ffffff" stroke="#1e293b" stroke-width="1.8"/>
+      <rect x="0" y="0" width="125" height="40" rx="4" fill="#1e3a8a"/>
+      <text x="62" y="25" text-anchor="middle" font-size="11.2" font-weight="800" fill="#ffffff">Category</text>
+
+      <line x1="255" y1="0" x2="255" y2="40" stroke="#cbd5e1"/>
+      <line x1="415" y1="0" x2="415" y2="40" stroke="#cbd5e1"/>
+
+      <text x="190" y="25" text-anchor="middle" font-size="10.2" font-weight="700" text-decoration="underline" fill="#b91c1c">category_id (PK)</text>
+      <text x="335" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">category_name (UQ)</text>
+      <text x="487" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">description</text>
+    </g>
+
+    <!-- ==================== 6.Book_Category ==================== -->
+    <g transform="translate(25, 294)">
+      <rect x="0" y="0" width="445" height="40" rx="4" fill="#ffffff" stroke="#1e293b" stroke-width="1.8"/>
+      <rect x="0" y="0" width="125" height="40" rx="4" fill="#0f766e"/>
+      <text x="62" y="25" text-anchor="middle" font-size="10.6" font-weight="800" fill="#ffffff">Book_Category</text>
+
+      <line x1="280" y1="0" x2="280" y2="40" stroke="#cbd5e1"/>
+
+      <text x="202" y="25" text-anchor="middle" font-size="10" font-weight="700" text-decoration="underline" fill="#1d4ed8">book_id (PK, FK)</text>
+      <text x="362" y="25" text-anchor="middle" font-size="10" font-weight="700" text-decoration="underline" fill="#1d4ed8">category_id (PK, FK)</text>
+    </g>
+
+    <!-- ==================== 7.Loan ==================== -->
+    <g transform="translate(25, 350)">
+      <rect x="0" y="0" width="845" height="40" rx="4" fill="#ffffff" stroke="#1e293b" stroke-width="1.8"/>
+      <rect x="0" y="0" width="125" height="40" rx="4" fill="#1e3a8a"/>
+      <text x="62" y="25" text-anchor="middle" font-size="11.2" font-weight="800" fill="#ffffff">Loan</text>
+
+      <line x1="235" y1="0" x2="235" y2="40" stroke="#cbd5e1"/>
+      <line x1="360" y1="0" x2="360" y2="40" stroke="#cbd5e1"/>
+      <line x1="485" y1="0" x2="485" y2="40" stroke="#cbd5e1"/>
+      <line x1="605" y1="0" x2="605" y2="40" stroke="#cbd5e1"/>
+      <line x1="725" y1="0" x2="725" y2="40" stroke="#cbd5e1"/>
+
+      <text x="180" y="25" text-anchor="middle" font-size="10.2" font-weight="700" text-decoration="underline" fill="#b91c1c">loan_id (PK)</text>
+      <text x="297" y="25" text-anchor="middle" font-size="10" font-weight="700" fill="#1d4ed8">user_id (FK)</text>
+      <text x="422" y="25" text-anchor="middle" font-size="10" font-weight="700" fill="#1d4ed8">copy_id (FK)</text>
+      <text x="545" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">loan_date</text>
+      <text x="665" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">due_date</text>
+      <text x="785" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">return_date</text>
+    </g>
+
+    <!-- ==================== 8.Review ==================== -->
+    <g transform="translate(25, 406)">
+      <rect x="0" y="0" width="845" height="40" rx="4" fill="#ffffff" stroke="#1e293b" stroke-width="1.8"/>
+      <rect x="0" y="0" width="125" height="40" rx="4" fill="#5b21b6"/>
+      <text x="62" y="25" text-anchor="middle" font-size="11.2" font-weight="800" fill="#ffffff">Review</text>
+
+      <line x1="235" y1="0" x2="235" y2="40" stroke="#cbd5e1"/>
+      <line x1="360" y1="0" x2="360" y2="40" stroke="#cbd5e1"/>
+      <line x1="485" y1="0" x2="485" y2="40" stroke="#cbd5e1"/>
+      <line x1="595" y1="0" x2="595" y2="40" stroke="#cbd5e1"/>
+      <line x1="725" y1="0" x2="725" y2="40" stroke="#cbd5e1"/>
+
+      <text x="180" y="25" text-anchor="middle" font-size="10.2" font-weight="700" text-decoration="underline" fill="#b91c1c">review_id (PK)</text>
+      <text x="297" y="25" text-anchor="middle" font-size="10" font-weight="700" fill="#1d4ed8">user_id (FK)</text>
+      <text x="422" y="25" text-anchor="middle" font-size="10" font-weight="700" fill="#1d4ed8">book_id (FK)</text>
+      <text x="540" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">rating (1..5)</text>
+      <text x="660" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">comment</text>
+      <text x="785" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">created_at</text>
+    </g>
+
+    <!-- ==================== 9.Reservation ==================== -->
+    <g transform="translate(25, 462)">
+      <rect x="0" y="0" width="725" height="40" rx="4" fill="#ffffff" stroke="#1e293b" stroke-width="1.8"/>
+      <rect x="0" y="0" width="125" height="40" rx="4" fill="#5b21b6"/>
+      <text x="62" y="25" text-anchor="middle" font-size="11" font-weight="800" fill="#ffffff">Reservation</text>
+
+      <line x1="255" y1="0" x2="255" y2="40" stroke="#cbd5e1"/>
+      <line x1="375" y1="0" x2="375" y2="40" stroke="#cbd5e1"/>
+      <line x1="495" y1="0" x2="495" y2="40" stroke="#cbd5e1"/>
+      <line x1="605" y1="0" x2="605" y2="40" stroke="#cbd5e1"/>
+
+      <text x="190" y="25" text-anchor="middle" font-size="10" font-weight="700" text-decoration="underline" fill="#b91c1c">reservation_id (PK)</text>
+      <text x="315" y="25" text-anchor="middle" font-size="10" font-weight="700" fill="#1d4ed8">user_id (FK)</text>
+      <text x="435" y="25" text-anchor="middle" font-size="10" font-weight="700" fill="#1d4ed8">book_id (FK)</text>
+      <text x="550" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">status</text>
+      <text x="665" y="25" text-anchor="middle" font-size="9.8" fill="#0f172a">reserved_at</text>
+    </g>
+
+    <!-- ==================== FOREIGN KEY REFERENCE ARROWS ==================== -->
+    <g stroke="#2563eb" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+      <!-- 1. Book.author_id (567, 126) -> Author.author_id (205, 110) -->
+      <path d="M 567,126 L 567,118 L 205,118 L 205,112"/>
+
+      <!-- 2. BookCopy.book_id (325, 182) -> Book.book_id (205, 166) -->
+      <path d="M 325,182 L 325,174 L 205,174 L 205,168"/>
+
+      <!-- 3. Book_Category.category_id (387, 294) -> Category.category_id (215, 278) -->
+      <path d="M 387,294 L 387,286 L 215,286 L 215,280"/>
+
+      <!-- 4. Book_Category.book_id (227, 294) -> Book.book_id -->
+      <path d="M 227,294 L 227,288 L 960,288 L 960,175 L 220,175 L 220,168"/>
+
+      <!-- 5. Loan.copy_id (447, 350) -> BookCopy.copy_id (205, 222) -->
+      <path d="M 447,350 L 447,343 L 930,343 L 930,231 L 205,231 L 205,224"/>
+
+      <!-- 6. Loan.user_id (322, 350) -> Users.user_id (195, 54) -->
+      <path d="M 322,350 L 322,338 L 985,338 L 985,62 L 195,62 L 195,56"/>
+
+      <!-- 7. Review.user_id (322, 406) -> Users.user_id -->
+      <path d="M 322,406 L 322,396 L 985,396 L 985,62 L 210,62 L 210,56"/>
+
+      <!-- 8. Review.book_id (447, 406) -> Book.book_id -->
+      <path d="M 447,406 L 447,400 L 945,400 L 945,175 L 235,175 L 235,168"/>
+
+      <!-- 9. Reservation.user_id (340, 462) -> Users.user_id -->
+      <path d="M 340,462 L 340,452 L 985,452 L 985,62 L 180,62 L 180,56"/>
+
+      <!-- 10. Reservation.book_id (460, 462) -> Book.book_id -->
+      <path d="M 460,462 L 460,456 L 945,456 L 945,175 L 190,175 L 190,168"/>
+    </g>
+  </svg>
+  <div class="diagram-caption">[그림 2] 도서관 관리 웹 애플리케이션 전체 Relation Schema Diagram (PK 밑줄 및 FK 참조 화살표 표기)</div>
+</div>
+
+<h3 class="sub-title" style="margin-top:4px;">6.1 각 Relation 스키마 및 외래키(FK) 참조 무결성 제약조건 명세</h3>
+<table class="spec-table" style="font-size:7.8pt; line-height:1.3;">
+  <thead>
+    <tr>
+      <th style="width:16%;">Relation 이름</th>
+      <th style="width:48%;">Relation Schema 표기 (<u>PK</u>, <em>FK</em>)</th>
+      <th style="width:36%;">참조 무결성 (Foreign Key) 및 주요 제약조건</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Users</strong></td>
+      <td><code>Users(<u>user_id</u>, password_hash, name, email, role, created_at)</code></td>
+      <td>&bull; <code>email UNIQUE</code>(NULL 허용), <code>role IN ('user', 'admin')</code></td>
+    </tr>
+    <tr>
+      <td><strong>Book</strong></td>
+      <td><code>Book(<u>book_id</u>, isbn, title, <em>author_id</em>, publisher, published_year, created_at)</code></td>
+      <td>&bull; <code><em>author_id</em> &rarr; Author(author_id) ON DELETE RESTRICT</code><br>&bull; <code>isbn UNIQUE</code> &bull; 제목 검색·정렬 인덱스</td>
+    </tr>
+    <tr>
+      <td><strong>Author</strong></td>
+      <td><code>Author(<u>author_id</u>, author_name)</code></td>
+      <td>&bull; <code>author_name UNIQUE NOT NULL</code></td>
+    </tr>
+    <tr>
+      <td><strong>BookCopy</strong></td>
+      <td><code>BookCopy(<u>copy_id</u>, <em>book_id</em>, call_number, status, acquired_date)</code></td>
+      <td>&bull; <code><em>book_id</em> &rarr; Book(book_id) ON DELETE CASCADE</code><br>&bull; <code>call_number UNIQUE</code>, <code>status IN ('available', 'borrowed', 'maintenance')</code></td>
+    </tr>
+    <tr>
+      <td><strong>Category</strong></td>
+      <td><code>Category(<u>category_id</u>, category_name, description)</code></td>
+      <td>&bull; <code>category_name UNIQUE NOT NULL</code></td>
+    </tr>
+    <tr>
+      <td><strong>Book_Category</strong></td>
+      <td><code>Book_Category(<u><em>book_id</em></u>, <u><em>category_id</em></u>)</code></td>
+      <td>&bull; <code><em>book_id</em> &rarr; Book(book_id) ON DELETE CASCADE</code><br>&bull; <code><em>category_id</em> &rarr; Category(category_id) ON DELETE CASCADE</code></td>
+    </tr>
+    <tr>
+      <td><strong>Loan</strong></td>
+      <td><code>Loan(<u>loan_id</u>, <em>user_id</em>, <em>copy_id</em>, loan_date, due_date, return_date)</code></td>
+      <td>&bull; <code><em>user_id</em> &rarr; Users(user_id) ON DELETE RESTRICT</code><br>&bull; <code><em>copy_id</em> &rarr; BookCopy(copy_id) ON DELETE CASCADE</code> (대출 중인 복본은 제거 차단)</td>
+    </tr>
+    <tr>
+      <td><strong>Review</strong></td>
+      <td><code>Review(<u>review_id</u>, <em>user_id</em>, <em>book_id</em>, rating, comment, created_at)</code></td>
+      <td>&bull; <code><em>user_id</em> &rarr; Users(user_id)</code>, <code><em>book_id</em> &rarr; Book(book_id) ON DELETE CASCADE</code><br>&bull; <code>UNIQUE(user_id, book_id)</code>, <code>CHECK (rating BETWEEN 1 AND 5)</code></td>
+    </tr>
+    <tr>
+      <td><strong>Reservation</strong></td>
+      <td><code>Reservation(<u>reservation_id</u>, <em>user_id</em>, <em>book_id</em>, status, reserved_at)</code></td>
+      <td>&bull; <code><em>user_id</em> &rarr; Users(user_id)</code>, <code><em>book_id</em> &rarr; Book(book_id) ON DELETE CASCADE</code><br>&bull; <code>status IN ('waiting', 'fulfilled', 'cancelled')</code></td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

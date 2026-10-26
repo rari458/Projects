@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <%- include('../components/header') %>
+        <main>
+            <div class="card" style="width: 400px; margin: auto;">
+                <h2 class="mb-3"><%= title %></h2>
+                <form action="/register" method="POST">
+                    <div class="form-group">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" id="username" name="username" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" id="password" name="password" class="form-control" required>
+                    </div>
+                    <div class="d-flex flex-row gap-2">
+                        <div class="form-group">
+                            <label for="role" class="form-label">Role</label>
+                            <select id="role" name="role" class="form-select">
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div id="admin-code-group" class="d-flex flex-column form-group flex-grow-1" style="display: none;">
+                            <label for="admin_code" class="form-label">Admin Code</label>
+                            <input type="admin_code" id="admin_code" name="admin_code" class="form-control">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Register</button>
+                </form>
+            </div>
+        </main>
+    </div>
+    <script>
+        const roleSelector = document.getElementById('role');
+        const adminCodeGroup = document.getElementById('admin-code-group');
+
+        roleSelector.addEventListener('change', function() {
+            if (this.value === 'admin') {
+                adminCodeGroup.style.display = 'block';
+            } else {
+                adminCodeGroup.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

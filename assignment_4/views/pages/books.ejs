@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .action-btn {
+            width: 4rem;
+        }
+
+        .instance-table th,
+        .instance-table td {
+            padding: 0.2rem 0.4rem; /* Reduce vertical and horizontal padding */
+            font-size: 0.85rem;   /* Slightly smaller font */
+            vertical-align: middle;
+        }
+        .instance-table .btn {
+            padding: 0.1rem 0.3rem; /* Smaller button padding */
+            font-size: 0.75rem;   /* Smaller button font */
+        }
+        .instance-table .badge {
+            font-size: 0.75rem; /* Smaller badge font */
+        }
+        .instances-container {
+            background-color: #f8f9fa;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <%- include('../components/header') %>
+        <main>
+            <div class="card">
+                <h2 class="mb-3"><%= title %></h2>
+                <div class="mb-3">
+                    <form action="/books" method="GET" class="d-flex gap-2">
+                        <select name="searchBy" class="form-select">
+                            <option value="title" <%= typeof searchBy !== 'undefined' && searchBy === 'title' ? 'selected' : '' %>>Title</option>
+                            <option value="author" <%= typeof searchBy !== 'undefined' && searchBy === 'author' ? 'selected' : '' %>>Author</option>
+                            <option value="category" <%= typeof searchBy !== 'undefined' && searchBy === 'category' ? 'selected' : '' %>>Category</option>
+                        </select>
+                        <input type="text" name="query" placeholder="Search..." value="<%= typeof query !== 'undefined' ? query : '' %>" class="form-control">
+                        <button type="submit" class="btn btn-primary">Search</button>
+                        <% if (locals.session && session.role === 'admin') { %>
+                            <a href="/books/add" class="btn btn-primary">Add Book</a>
+                        <% } %>
+                    </form>
+                </div>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th><a href="/books?sortBy=title&sortOrder=<%= sortBy === 'title' && sortOrder === 'asc' ? 'desc' : 'asc' %>&query=<%= query %>&searchBy=<%= searchBy %>">Title <%= sortBy === 'title' ? (sortOrder === 'asc' ? '▼' : '▲') : '' %></a></th>
+                            <th><a href="/books?sortBy=author&sortOrder=<%= sortBy === 'author' && sortOrder === 'asc' ? 'desc' : 'asc' %>&query=<%= query %>&searchBy=<%= searchBy %>">Author <%= sortBy === 'author' ? (sortOrder === 'asc' ? '▼' : '▲') : '' %></a></th>
+                            <th><a href="/books?sortBy=categories&sortOrder=<%= sortBy === 'categories' && sortOrder === 'asc' ? 'desc' : 'asc' %>&query=<%= query %>&searchBy=<%= searchBy %>">Categories <%= sortBy === 'categories' ? (sortOrder === 'asc' ? '▼' : '▲') : '' %></a></th>
+                            <th>Total</th>
+                            <th>Available</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% books.forEach(book => { %>
+                            <tr class="book-row">
+                                <td><%= book.title %></td>
+                                <td><%= book.author %></td>
+                                <td><%= book.categories %></td>
+                                <td><%= book.total_quantity %></td>
+                                <td><%= book.available_quantity %></td>
+                                <td>
+                                    <button class="btn btn-normal btn-sm toggle-instances" data-book-id="<%= book.id %>" data-loaded="false">Show Instances</button>
+                                </td>
+                            </tr>
+                            <tr class="book-instances-row" id="instances-for-<%= book.id %>" style="display: none;">
+                                <td colspan="6" class="p-0">
+                                    <div class="instances-container"></div>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tableBody = document.querySelector('.table tbody');
+
+            tableBody.addEventListener('click', async (event) => {
+                if (!event.target.classList.contains('toggle-instances')) return;
+
+                const button = event.target;
+                const bookId = button.dataset.bookId;
+                const instancesRow = document.getElementById(`instances-for-${bookId}`);
+                const instancesContainer = instancesRow.querySelector('.instances-container');
+                const isLoaded = button.dataset.loaded === 'true';
+
+                const isVisible = instancesRow.style.display === 'table-row';
+                if (isVisible) {
+                    instancesRow.style.display = 'none';
+                    button.textContent = 'Show Instances';
+                    return;
+                }
+
+                button.textContent = 'Loading...';
+                button.disabled = true;
+
+                const currentUserId = '<%= locals.session ? session.userId : null %>';
+                if (!currentUserId) {
+                    instancesContainer.innerHTML = '<div class="p-3 text-danger">You can see the instances only after you log in.</div>';
+                } else if (!isLoaded) {
+                    try {
+                        const response = await fetch(`/api/books/${bookId}/instances`);
+                        if (!response.ok) throw new Error('Failed to fetch instances');
+                        const instances = await response.json();
+
+                        instancesContainer.innerHTML = createInstancesTable(instances, bookId);
+                        button.dataset.loaded = 'true';
+                    } catch (error) {
+                        console.error(error);
+                        instancesContainer.innerHTML = '<div class="p-3 text-danger">Error loading instances.</div>';
+                    }
+                }
+
+                instancesRow.style.display = 'table-row';
+                button.textContent = 'Hide Instances';
+                button.disabled = false;
+            });
+
+            function createInstancesTable(instances, bookId) {
+                if (instances.length === 0) {
+                    return '<div class="p-3 text-muted">No instances found for this book.</div>';
+                }
+
+                const isAdmin = '<%= locals.session && session.role === "admin" %>' === 'true';
+                const currentUserId = '<%= locals.session ? session.userId : null %>';
+
+                let tableHtml = `
+                    <table class="table table-bordered table-sm mb-0 instance-table">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Instance ID</th>
+                                <th>Borrowed By</th>
+                                <th>Borrowed Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                instances.forEach(inst => {
+                    const borrowedBy = inst.borrowed_by || '-';
+                    const borrowDate = inst.borrow_date || '-';
+                    tableHtml += `
+                        <tr>
+                            <td>${inst.id}</td>
+                            <td>${borrowedBy}</td>
+                            <td>${borrowDate}</td>
+                            <td>
+                                <div class="d-flex gap-1 justify-content-center">
+                    `;
+
+                    if (inst.status === 'available') {
+                        tableHtml += `
+                            <form action="/books/instances/${inst.id}/borrow" method="POST" style="display:inline;">
+                                <button type="submit" class="btn btn-primary btn-sm action-btn">Borrow</button>
+                            </form>
+                        `;
+                    } else if (inst.borrowing_id) {
+                        if (inst.borrowed_by_id == currentUserId) {
+                            tableHtml += `
+                                <form action="/borrowings/${inst.borrowing_id}/return" method="POST" style="display:inline;">
+                                    <button type="submit" class="btn btn-secondary btn-sm action-btn">Return</button>
+                                </form>
+                            `;
+                        } else {
+                            tableHtml += `
+                                <form style="display:inline;">
+                                    <button type="submit" class="btn btn-primary btn-sm action-btn" disabled>Borrowed</button>
+                                </form>
+                            `;
+                        }
+                    }
+
+                    if (isAdmin) {
+                        // Note: Deleting a single instance might be a new feature to implement.
+                        // This is a placeholder for that functionality.
+                        tableHtml += `
+                            <form action="/books/instances/${inst.id}/delete" method="POST" style="display:inline;">
+                                <button type="submit" class="btn btn-danger btn-sm action-btn">Delete</button>
+                            </form>
+                        `;
+                    }
+
+                    tableHtml += `
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                tableHtml += '</tbody></table>';
+                return tableHtml;
+            }
+        });
+    </script>
+</body></html>

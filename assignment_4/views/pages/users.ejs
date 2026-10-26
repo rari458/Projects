@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <%- include('../components/header') %>
+        <main>
+            <div class="card w-100">
+                <h2 class="mb-3"><%= title %></h2>
+                <div class="mb-3">
+                    <form action="/users" method="GET" class="d-flex gap-2">
+                        <select name="searchBy" class="form-select">
+                            <option value="username" <%= typeof searchBy !== 'undefined' && searchBy === 'username' ? 'selected' : '' %>>Username</option>
+                            <option value="role" <%= typeof searchBy !== 'undefined' && searchBy === 'role' ? 'selected' : '' %>>Role</option>
+                        </select>
+                        <input type="text" name="query" placeholder="Search..." value="<%= typeof query !== 'undefined' ? query : '' %>" class="form-control">
+                        <button type="submit" class="btn btn-primary">Search</button>
+                    </form>
+                </div>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Role</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% users.forEach(user => { %>
+                            <tr>
+                                <td><%= user.id %></td>
+                                <td><%= user.username %></td>
+                                <td><%= user.role %></td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

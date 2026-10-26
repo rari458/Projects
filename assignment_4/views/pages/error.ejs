@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .error-container {
+            text-align: center;
+            margin-top: 5rem;
+        }
+        .error-code {
+            font-size: 6rem;
+            font-weight: bold;
+            color: var(--danger-color);
+        }
+        .error-message {
+            font-size: 1.5rem;
+            color: var(--text-color-muted);
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <%- include('../components/header') %>
+        <main>
+            <div class="error-container">
+                <div class="error-code">ERROR</div>
+                <h1 class="mb-3"><%= locals.message || 'An unexpected error occurred' %></h1>
+                <a href="/" class="btn btn-primary">Go to Homepage</a>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
