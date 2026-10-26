@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working rule
 
-Never edit, write, or create code files (`.js`, `.ejs`, `.css`, `.sql`, `package.json`, …). Generate the code in the reply, naming the target file and location, and the user applies it by hand. Markdown files (`.md`) may be edited directly.
+Never edit, write, or create code files (`.js`, `.ejs`, `.css`, `.sql`, `package.json`, …). Generate the code in the reply, naming the target file and location, and the user applies it by hand. Markdown (`.md`) and HTML (`.html`) files, such as the reports, may be edited directly. `.ejs` views are code and stay show-don't-edit.
 
 `ROADMAP.md` holds the phased plan, the design decisions and the checklists. Read it to see what's next, and tick off items there as they're completed.
 
@@ -15,7 +15,7 @@ DBMS class Assignment #4-2: a library management web app (login, book search/sor
 - This folder (`~/Projects/assignment_4/`) is one flat tree. It holds the app (the instructor's skeleton), the specs, the 4-1 report, `ROADMAP.md` and this file.
 - `~/projects/` (lowercase) is the stale workspace this tree was flattened from. Nothing there is current, so never edit it.
 - Git: this folder has no `.git` of its own. The `~/Projects` repo tracks it as plain files and pushes to github.com/rari458/Projects, which is **public**, so run git from `~/Projects`. That repo's `.gitignore` keeps out the instructor's spec PDFs (`assignment_4/Assignment4_*.pdf`), and this folder's own `.gitignore` keeps out `node_modules/` and `.env`. The instructor's skeleton history (4 commits, `origin` = github.com/hongjun9904/assignment_4) is kept in `~/assignment_4.git.bak`. Don't run git unless the user asks.
-- The specs are `Assignment4_1.pdf` (the full feature list) and `Assignment4_2.pdf` (the submission rules). The student's 4-1 schema report has its source in `assignment4_1_report.html` and is submitted as `assignment4_1_2022065250_문상철.pdf`, both in this folder. The report is the source of truth for the schema and planned extra features. The PDF is printed from the HTML with headless Chrome, run from this folder: `~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome --headless --no-sandbox --no-pdf-header-footer --print-to-pdf=assignment4_1_2022065250_문상철.pdf file://$PWD/assignment4_1_report.html`. Keep it at exactly 4 pages, one per `page-break`, and check the page count with `pdfinfo` after any edit.
+- The specs are `Assignment4_1.pdf` (the full feature list) and `Assignment4_2.pdf` (the submission rules). The student's 4-1 schema report has its source in `assignment4_1_report.html` and is submitted as `assignment4_1_2022065250_문상철.pdf`, both in this folder. The report is the source of truth for the schema and planned extra features. The PDF is printed from the HTML with headless Chrome, run from this folder: `~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome --headless --no-sandbox --no-pdf-header-footer --print-to-pdf=assignment4_1_2022065250_문상철.pdf file://$PWD/assignment4_1_report.html`. There's no page limit (12 pages as of 2026-10-26); only §4 (ER diagram) and §5 (relation schema) force a page break. Both diagrams are inline SVG drawn to match §2–§5, so a schema change means editing the SVG too. After any edit, re-export and look at the rendered pages, not just the page count.
 - Submission: `assignment4_2022065250_문상철.zip` containing the source, the DB init script, an env example file (`.env` is gitignored, so use e.g. `.env.example`), and a report PDF. The report covers the tech stack, each feature with screenshots, local run instructions, the extra features, and a demo video URL. Because the spec PDFs, the 4-1 report files, `CLAUDE.md` and `ROADMAP.md` sit beside the source, build the zip from an explicit file list rather than zipping the whole folder, and always leave out `node_modules/` and `.env`.
 - Extra features: the 4-1 spec requires **≥3 extra features, of which exactly 2 are statistics**. The README's "최소 1개" is looser, so follow the spec. The 4-1 report committed to: Review (1–5 rating plus comment, only for users who borrowed the book), Reservation (a queue for when every copy is borrowed), per-book/per-category rating stats, and monthly loan/overdue-rate stats. None of these have routes or views in the skeleton yet.
 
@@ -70,18 +70,20 @@ Queries must return these field names. Alias them in SQL, because the 4-1 schema
 
 `pg` returns DATE/TIMESTAMP columns as JS `Date` objects, and the views print values as-is. Format them with `to_char(...)` in SQL or in JS. This matters most in the instances JSON, where a `Date` serializes as a UTC ISO string, and a KST date then shows as the previous day.
 
-## Schema (4-1 report, revised 2026-10-24)
+## Schema (4-1 report, redesigned 2026-10-26)
 
-`init_db.js` must match this exactly. 8 entities, 9 relations, all ids `SERIAL` except `user_id`:
+`init_db.js` must match this exactly; the report's §2 has every type and default and §5.2–5.3 every constraint. 8 entities, 9 relations, all ids `SERIAL` except `user_id`. Every FK is `NOT NULL`, and every `created_at`/`reserved_at` defaults to `now()`:
 
-- `Users(user_id PK VARCHAR, password_hash, name NULL, email UQ NULL, role CHECK IN ('user','admin'), created_at TIMESTAMP)`. `user_id` is the login ID. The admin code is checked at registration and never stored.
+- `Users(user_id VARCHAR(20) PK CHECK (user_id ~ '^[A-Za-z0-9_]{3,20}$'), password_hash NOT NULL, name NULL, email UQ NULL, role NOT NULL DEFAULT 'user' CHECK IN ('user','admin'), created_at)`. `user_id` is the login ID, and the CHECK is what keeps it safe to print unescaped in `books.ejs`. The admin code is checked at registration and never stored.
 - `Author(author_id PK, author_name UQ NOT NULL)`
-- `Book(book_id PK, isbn UQ, title, author_id FK→Author ON DELETE RESTRICT, publisher, published_year, created_at)`: one row per title, one author per book.
-- `BookCopy(copy_id PK, book_id FK→Book ON DELETE CASCADE, call_number UQ, status CHECK IN ('available','borrowed','maintenance'), acquired_date)`: one row per physical copy. The skeleton calls these "book instances".
-- `Category(category_id PK, category_name UQ NOT NULL, description)`, `Book_Category(book_id, category_id)` composite PK, both FKs `ON DELETE CASCADE`
-- `Loan(loan_id PK, user_id FK ON DELETE RESTRICT, copy_id FK→BookCopy ON DELETE CASCADE, loan_date, due_date = loan_date + 7, return_date NULL while borrowed)`. Loans reference the **copy**, which is how the history records exactly which copy was borrowed.
-- `Review(review_id PK, user_id FK, book_id FK ON DELETE CASCADE, rating CHECK 1–5, comment, created_at, UNIQUE(user_id, book_id))`
-- `Reservation(reservation_id PK, user_id FK, book_id FK ON DELETE CASCADE, status CHECK IN ('waiting','fulfilled','cancelled'), reserved_at)`
+- `Book(book_id PK, isbn UQ NULL, title NOT NULL, author_id FK→Author ON DELETE RESTRICT, publisher NULL, published_year SMALLINT NULL, created_at)`: one row per title, one author per book. The add-book form only sends title, author, categories and quantity.
+- `BookCopy(copy_id PK, book_id FK→Book ON DELETE CASCADE, call_number UQ NULL, status NOT NULL DEFAULT 'available' CHECK IN ('available','borrowed','maintenance'), acquired_date NOT NULL DEFAULT CURRENT_DATE)`: one row per physical copy. The skeleton calls these "book instances".
+- `Category(category_id PK, category_name UQ NOT NULL, description NULL)`, `Book_Category(book_id, category_id)` composite PK, both FKs `ON DELETE CASCADE`
+- `Loan(loan_id PK, user_id FK ON DELETE RESTRICT, copy_id FK→BookCopy ON DELETE CASCADE, loan_date NOT NULL DEFAULT CURRENT_DATE, due_date NOT NULL CHECK (due_date > loan_date), return_date NULL CHECK (return_date >= loan_date))`, plus `CREATE UNIQUE INDEX ... ON Loan(copy_id) WHERE return_date IS NULL`. The app inserts `due_date = loan_date + 7`; the CHECK is deliberately not an equality (report §8.1). Loans reference the **copy**, which is how the history records exactly which copy was borrowed.
+- `Review(review_id PK, user_id FK ON DELETE RESTRICT, book_id FK ON DELETE CASCADE, rating SMALLINT NOT NULL CHECK 1–5, comment TEXT NULL, created_at, UNIQUE(user_id, book_id))`
+- `Reservation(reservation_id PK, user_id FK ON DELETE RESTRICT, book_id FK ON DELETE CASCADE, status NOT NULL DEFAULT 'waiting' CHECK IN ('waiting','fulfilled','cancelled'), reserved_at)`, plus `CREATE UNIQUE INDEX ... ON Reservation(user_id, book_id) WHERE status = 'waiting'`
+
+Seed `user_id`s must satisfy the CHECK (letters, digits, underscore, 3–20 chars).
 
 The stored values are already lowercase, matching the views and middleware. Only the names need aliasing (`id`, `username`, `name`, `author`). There's no password-hashing dependency, but Node's built-in `crypto.scrypt` is enough.
 

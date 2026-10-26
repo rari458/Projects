@@ -35,7 +35,8 @@ All decided on 2026-10-24 using the **bold** recommendations. The schema-level i
   - Borrowing marks that user's reservation `fulfilled`, and users can cancel their own reservations.
 - [x] **Review rules.** Only users with at least one loan of the book can review it. Keep `UNIQUE(user_id, book_id)`, `rating` 1–5, and let users edit or delete their own review.
 - [x] **Extra features: keep exactly 2 statistics** (rating stats and loan/overdue stats). Don't add any other counts, averages or rankings to other pages, because they could be read as a third statistic. The popular book and author charts are *required* features, not extras.
-- [ ] Review the revised report, re-export `assignment4_1_2022065250_문상철.pdf` from the HTML, and **submit 4-1 by Oct 29**.
+- [x] Report redesigned from scratch on 2026-10-26 (12 pages, Chen ER diagram with participation, schema diagram, constraint tables) and re-exported to `assignment4_1_2022065250_문상철.pdf`.
+- [ ] Read the new PDF once and **submit 4-1 to the LMS by Oct 29 23:59**.
 
 ## Phase 1: Environment
 
@@ -52,7 +53,7 @@ PostgreSQL 18 is already installed and running in WSL.
 - [ ] Shared password helper, e.g. a new `utils/password.js` using built-in `crypto.scrypt` with a random salt. The seed script and `authController` both use it.
 - [ ] `DROP TABLE IF EXISTS ... CASCADE` in dependency order, then `CREATE TABLE` for all 9 tables:
   - Users, Author, Book, BookCopy, Category, Book_Category, Loan, Review, Reservation
-  - include the PKs/FKs, `ON DELETE` rules, CHECKs and UNIQUEs from Phase 0
+  - include the PKs/FKs, `ON DELETE` rules, CHECKs, UNIQUEs and the two partial unique indexes exactly as listed in CLAUDE.md's Schema section (from 4-1 report §2 and §5)
   - use `SERIAL` (int4) ids so `pg` returns numbers
 - [ ] Seed data that makes every feature demonstrable:
   - 1–2 admins and 4–5 users with known passwords, written down in the README
@@ -124,7 +125,7 @@ PostgreSQL 18 is already installed and running in WSL.
 | E1 | Reviews | a `/books/:id` detail page listing reviews; a form shown only to users with a loan of the book; edit and delete your own review |
 | E2 | Reservations | a Reserve button on the detail page or in the instances panel when nothing is available; `/reservations` (my queue, cancel); the borrow rule from Phase 0 |
 | S1 | Rating statistics | `/stats/ratings`: average rating and review count per book; average, count and top-rated book per category |
-| S2 | Loan statistics | `/stats/loans`: monthly loans and overdue rate (admin); personal totals and on-time return rate (any user) |
+| S2 | Loan statistics | `/stats/loans`: monthly loans and overdue rate (admin); member ranking by total loans, 다독 순위 (admin only, as promised in the 4-1 report); personal totals and on-time return rate (any user) |
 
 - [ ] Each feature needs a controller (e.g. `reviewController`, `reservationController`, `statsController`), routes with the right middleware, views, and header nav links.
 - **Check:** each feature works end to end with seed data. Reservation hand-off: user A holds the last copy, B reserves, A returns, C is refused, B can borrow.
