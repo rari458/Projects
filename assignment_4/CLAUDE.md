@@ -40,14 +40,14 @@ Express 5 + EJS + `pg` + `express-session`, CommonJS.
 - `routes/routes.js`: the full route table. Access control is per route through `isAuthenticated` / `isAdmin` in `middleware/authMiddleware.js`. `isAuthenticated` redirects to `/login`, even for the JSON instances API, and `isAdmin` raises a 403. `/charts` and `/books` are public. A `router.param('id')` at the top turns any `:id` that isn't 1–9 digits into a 404 before the controller runs, so controllers can `Number(req.params.id)` safely.
 - `utils/search.js`: `containsPattern(text)` builds an ILIKE "contains" pattern with `%`, `_` and `\` escaped. Use it for every user-typed search (books now, users in Phase 6).
 - Borrow and return are both handled in `bookController` (`postBorrowBook`, `postReturnBook`), even though the return route is `/borrowings/:id/return`. `borrowingController` only renders the history page.
-- `config/db.js`: exports `query(text, params)` and the `pool`. Use `pool.connect()` + `BEGIN`/`COMMIT` for multi-statement operations (borrowing, adding a book with copies/authors/categories, deletes).
-- Controllers report rule violations with `err = new Error(msg); err.status = 400; return next(err);`, which renders the error page.
+- `config/db.js`: exports `query(text, params)`, the `pool` and `transaction(fn)`, which runs `fn(client)` between `BEGIN` and `COMMIT` on one connection and rolls back if `fn` throws. Use it for multi-statement operations (borrow and return already do; adding a book with copies/authors/categories and the deletes should too).
+- Controllers report rule violations with `err = new Error(msg); err.status = 400; return next(err);`, which renders the error page. Inside `db.transaction`, `throw` the error instead, so the rollback runs. `bookController` has an `httpError(status, message)` helper for this. A successful borrow redirects to `/borrowings`.
 - Session keys: `userId`, `username`, `role`. The header and `isAdmin` compare against lowercase `'admin'`, and the register form posts `role` as `user`/`admin`.
 - `views/pages/*.ejs` are each a full HTML document that includes `components/header.ejs`. `views/index.ejs` is unused (it includes a nonexistent `partials/header`).
 
 ## Skeleton state
 
-Search for `TODO` to find the work. The book list and the instances API query the DB (Phase 4). The other controllers still render hard-coded `dummy*` arrays. Replace them with queries and delete the dummies.
+Search for `TODO` to find the work. The book list and the instances API (Phase 4), and borrow, return and the borrowings page (Phase 5), query the DB. The other controllers still render hard-coded `dummy*` arrays. Replace them with queries and delete the dummies.
 
 - `postLogin` logs everyone in as admin `userId = 1`. `postRegister` does nothing.
 - `adminCode` in `authController.js` must be the student ID `2022065250`.

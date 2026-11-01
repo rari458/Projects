@@ -85,7 +85,7 @@ PostgreSQL 18 is already installed and running in WSL.
 
 ## Phase 5: Borrow and return (`postBorrowBook`, `postReturnBook`, `borrowingController`)
 
-- [ ] Borrow is a single transaction:
+- [x] Borrow is a single transaction:
   1. `SELECT ... FOR UPDATE` the copy and require `available`
   2. the user holds fewer than 3 unreturned loans
   3. the user has no unreturned loan of the same `book_id`
@@ -94,9 +94,9 @@ PostgreSQL 18 is already installed and running in WSL.
   6. INSERT the loan with `due_date = CURRENT_DATE + 7`, set the copy to `borrowed`, and mark any reservation fulfilled
 
   Each failure gets a specific 400 message.
-- [ ] Return: `UPDATE loan SET return_date = CURRENT_DATE WHERE loan_id = $1 AND user_id = $2 AND return_date IS NULL`. Zero rows updated means 400 or 403. Set the copy back to `available` in the same transaction.
-- [ ] Borrowings page: all of the user's loans with the copy id, title, author and formatted dates, newest first.
-- **Check:** a 4th book is refused. A 2nd copy of the same title is refused. The overdue seed user is refused. A crafted POST to another user's loan is refused. Returning twice is refused. The history shows the exact copy id.
+- [x] Return: `UPDATE loan SET return_date = CURRENT_DATE WHERE loan_id = $1 AND user_id = $2 AND return_date IS NULL`. Zero rows updated means 400 or 403. Set the copy back to `available` in the same transaction.
+- [x] Borrowings page: all of the user's loans with the copy id, title, author and formatted dates, newest first.
+- **Check:** a 4th book is refused. A 2nd copy of the same title is refused. The overdue seed user is refused. A crafted POST to another user's loan is refused. Returning twice is refused. The history shows the exact copy id. Only the first waiting reserver can borrow a returned copy. Passed 2026-11-01.
 
 ## Phase 6: Admin features
 

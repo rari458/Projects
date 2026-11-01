@@ -1,6 +1,13 @@
 const db = require('../config/db');
 const { containsPattern } = require('../utils/search');
 
+// an Error that the generic handler renders with this HTTP status
+const httpError = (status, message) => {
+    const err = new Error(message);
+    err.status = status;
+    return err;
+};
+
 // One row per book. Categories and copy counts come from separate subqueries,
 // so they can't multiply each other's rows the way a double join would.
 const BOOK_LIST_SQL = `
@@ -126,17 +133,59 @@ const postBorrowBook = async (req, res, next) => {
     }
 
     try {
-        /*
-            TODO: 특정 책을 대여하는 작업을 수행하는 코드를 작성하세요.
-            명세에 있는 조건들을 어기는 작업일 경우에는 다음과 같이 에러페이지로 유도하면 됩니다.
+        await db.transaction(async (client) => {
+            // lock the user first, so two borrows by the same user wait for each other
+            // instead of both passing the limit checks below
+            const user = await client.query('SELECT 1 FROM Users WHERE user_id = $1 FOR UPDATE', [userId]);
+            if (user.rowCount === 0) {
+                throw httpError(401, 'Your account no longer exists. Please log in again.');
+            }
 
-            ```
-                const err = new Error('You have reached the maximum borrowing limit (3 books).');
-                err.status = 400;
-                return next(err);
-            ```
-        */
-        res.redirect('/books');
+            // then the copy, so nobody else can take it before this commits
+            const copy = await client.query('SELECT book_id, status FROM BookCopy WHERE copy_id = $1 FOR UPDATE', [bookInstanceId]);
+            if (copy.rowCount === 0) throw httpError(404, 'Book copy not found.');
+            const { book_id: bookId, status } = copy.rows[0];
+            if (status !== 'available') throw httpError(400, 'This copy is not available.');
+
+            // the user's unreturned loans: how many, how many of this book, how many overdue
+            const { rows: [loans] } = await client.query(
+                `SELECT COUNT(*)::int AS open_count,
+                        COUNT(*) FILTER (WHERE cp.book_id = $2)::int AS same_book,
+                        COUNT(*) FILTER (WHERE CURRENT_DATE >= l.due_date)::int AS overdue
+                FROM Loan l
+                JOIN BookCopy cp ON cp.copy_id = l.copy_id
+                WHERE l.user_id = $1 AND l.return_date IS NULL`,
+                [userId, bookId]
+            );
+            if (loans.open_count >= 3) throw httpError(400, 'You have reached the maximum borrowing limit (3 books).');
+            if (loans.same_book > 0) throw httpError(400, 'You are already borrowing a copy of this book.');
+            if (loans.overdue > 0) throw httpError(400, 'You have an overdue book. Return it before borrowing another.');
+
+            // while the book has a queue, only the earliest waiting reserver may borrow it
+            const queue = await client.query(
+                `SELECT user_id FROM Reservation
+                 WHERE book_id = $1 AND status = 'waiting'
+                 ORDER BY reserved_at, reservation_id
+                 LIMIT 1`,
+                [bookId]
+            );
+            if (queue.rowCount > 0 && queue.rows[0].user_id !== userId) {
+                throw httpError(400, 'This book is reserved for another user.');
+            }
+
+            await client.query(
+                `INSERT INTO Loan (user_id, copy_id, loan_date, due_date)
+                 VALUES ($1, $2, CURRENT_DATE, CURRENT_DATE + 7)`,
+                [userId, bookInstanceId]
+            );
+            await client.query(`UPDATE BookCopy SET status = 'borrowed' WHERE copy_id = $1`, [bookInstanceId]);
+            await client.query(
+                `UPDATE Reservation SET status = 'fulfilled'
+                 WHERE user_id = $1 AND book_id = $2 AND status = 'waiting'`,
+                [userId, bookId]
+            );
+        });
+        res.redirect('/borrowings');
     } catch (err) {
         next(err);
     }
@@ -152,10 +201,19 @@ const postReturnBook = async (req, res, next) => {
     }
 
     try {
-        /*
-            TODO: 자신이 책을 빌린 기록을 반납 처리하는 코드를 작성해주세요.
-            다른 사람이 빌린 책은 반납할 수 없어야 합니다.
-        */
+        await db.transaction(async (client) => {
+            // matching user_id as well means a crafted POST can't return someone else's loan
+            const { rows } = await client.query(
+                `UPDATE Loan SET return_date = CURRENT_DATE
+                WHERE loan_id = $1 AND user_id = $2 AND return_date IS NULL
+                RETURNING copy_id`,
+                [borrowingId, userId]
+            );
+            if (rows.length === 0) {
+                throw httpError(400, 'This loan is not yours or has already been returned.');
+            }
+            await client.query(`UPDATE BookCopy SET status = 'available' WHERE copy_id = $1`, [rows[0].copy_id]);
+        });
         res.redirect('/borrowings');
     } catch (err) {
         next(err);
