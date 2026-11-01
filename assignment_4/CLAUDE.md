@@ -37,7 +37,8 @@ There is no test suite or linter, and `npm test` exits 1 on purpose. To verify a
 Express 5 + EJS + `pg` + `express-session`, CommonJS.
 
 - `index.js`: app setup. It serves `public/`, serves `node_modules` at `/modules` (add-book loads Choices.js this way), and exposes the session to every view through `res.locals.session`. Only `express.urlencoded` is mounted, with no `express.json()`, so new POST endpoints should take HTML form posts. `/` redirects to `/charts`. A generic error handler renders `pages/error`. The page shows only `err.message`, and `err.status` sets just the HTTP status, so a message has to make sense on its own.
-- `routes/routes.js`: the full route table. Access control is per route through `isAuthenticated` / `isAdmin` in `middleware/authMiddleware.js`. `isAuthenticated` redirects to `/login`, even for the JSON instances API, and `isAdmin` raises a 403. `/charts` and `/books` are public.
+- `routes/routes.js`: the full route table. Access control is per route through `isAuthenticated` / `isAdmin` in `middleware/authMiddleware.js`. `isAuthenticated` redirects to `/login`, even for the JSON instances API, and `isAdmin` raises a 403. `/charts` and `/books` are public. A `router.param('id')` at the top turns any `:id` that isn't 1–9 digits into a 404 before the controller runs, so controllers can `Number(req.params.id)` safely.
+- `utils/search.js`: `containsPattern(text)` builds an ILIKE "contains" pattern with `%`, `_` and `\` escaped. Use it for every user-typed search (books now, users in Phase 6).
 - Borrow and return are both handled in `bookController` (`postBorrowBook`, `postReturnBook`), even though the return route is `/borrowings/:id/return`. `borrowingController` only renders the history page.
 - `config/db.js`: exports `query(text, params)` and the `pool`. Use `pool.connect()` + `BEGIN`/`COMMIT` for multi-statement operations (borrowing, adding a book with copies/authors/categories, deletes).
 - Controllers report rule violations with `err = new Error(msg); err.status = 400; return next(err);`, which renders the error page.
@@ -46,7 +47,7 @@ Express 5 + EJS + `pg` + `express-session`, CommonJS.
 
 ## Skeleton state
 
-Search for `TODO` to find the work. Every controller currently renders hard-coded `dummy*` arrays. Replace them with queries and delete the dummies.
+Search for `TODO` to find the work. The book list and the instances API query the DB (Phase 4). The other controllers still render hard-coded `dummy*` arrays. Replace them with queries and delete the dummies.
 
 - `postLogin` logs everyone in as admin `userId = 1`. `postRegister` does nothing.
 - `adminCode` in `authController.js` must be the student ID `2022065250`.

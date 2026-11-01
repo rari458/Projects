@@ -1,51 +1,64 @@
 const db = require('../config/db');
+const { containsPattern } = require('../utils/search');
+
+// One row per book. Categories and copy counts come from separate subqueries,
+// so they can't multiply each other's rows the way a double join would.
+const BOOK_LIST_SQL = `
+    SELECT b.book_id AS id,
+           b.title,
+           a.author_name AS author,
+           COALESCE((SELECT string_agg(c.category_name, ', ' ORDER BY c.category_name)
+                     FROM Book_Category bc
+                     JOIN Category c ON c.category_id = bc.category_id
+                     WHERE bc.book_id = b.book_id), '') AS categories,
+           (SELECT COUNT(*)::int FROM BookCopy cp
+            WHERE cp.book_id = b.book_id) AS total_quantity,
+           (SELECT COUNT(*)::int FROM BookCopy cp
+            WHERE cp.book_id = b.book_id AND cp.status = 'available') AS available_quantity
+    FROM Book b
+    JOIN Author a ON a.author_id = b.author_id  
+`;
+
+// searchBy -> WHERE clause; a category match still lists all of the book's categories
+const SEARCH_CONDITIONS = {
+    title: 'b.title ILIKE $1',
+    author: 'a.author_name ILIKE $1',
+    category: `EXISTS (SELECT 1 FROM Book_Category bc
+                       JOIN Category c ON c.category_id = bc.category_id
+                       WHERE bc.book_id = b.book_id AND c.category_name ILIKE $1)`,
+};
+// sortBy values are output column names of BOOK_LIST_SQL
+const SORT_COLUMNS = ['title', 'author', 'categories'];
 
 const getBooksPage = async (req, res, next) => {
-    const { query: searchQuery, searchBy, sortedBy, sortOrder } = req.query;
-    const sortedByWithDefault = req.query.sortBy || 'title';
-    const sortOrderWithDefault = req.query.sortOrder || 'asc';
-
-    const dummyBooks = [ // 이 변수는 더미데이터입니다. 구현을 다하면 제거해주세요.
-        {
-            id: 1, title: 'The Hobbit', author: 'J.R.R Tolkien', categories: 'Fantasy', total_quantity: 4, available_quantity: 4
-        },
-        {
-            id: 2, title: 'The Lord of the Rings', author: 'J.R.R Tolkien', categories: 'Fantasy', total_quantity: 3, available_quantity: 2
-        },
-        {
-            id: 3, title: 'The Silmarillion', author: 'J.R.R Tolkien', categories: 'Fantasy', total_quantity: 2, available_quantity: 1
-        },
-        {
-            id: 4, title: 'The Children of Húrin', author: 'J.R.R Tolkien', categories: 'Fantasy', total_quantity: 1, available_quantity: 0
-        },
-        {
-            id: 5, title: 'Foundation', author: 'Isaac Asimov', categories: 'Science Fiction', total_quantity: 5, available_quantity: 5
-        },
-        {
-            id: 6, title: 'And Then There Were None', author: 'Agatha Christie', categories: 'Mystery', total_quantity: 3, available_quantity: 1
-        },
-        {
-            id: 7, title: 'Dune', author: 'Frank Herbert', categories: 'Science Fiction, Fantasy', total_quantity: 4, available_quantity: 4
-        },
-    ];
+    const searchQuery = typeof req.query.query === 'string' ? req.query.query.trim() : '';
+    const searchBy = Object.hasOwn(SEARCH_CONDITIONS, req.query.searchBy) ? req.query.searchBy : 'title';
+    const sortBy = SORT_COLUMNS.includes(req.query.sortBy) ? req.query.sortBy : 'title';
+    const sortOrder = req.query.sortOrder === 'desc' ? 'desc' : 'asc';
 
     try {
-        /*
-            TODO: 검색어, 정렬 기준에 맞춰 책 목록을 출력하는 페이지를 렌더링하는 코드를 작성하세요.
-        */
-        res.render('pages/books', {
-            title: 'All Books',
-            books: dummyBooks, // 정렬된 검색 결과 리스트가 전달되어야 합니다.
-            sortBy: sortedByWithDefault,
-            sortOrder: sortOrderWithDefault,
-            query: searchQuery,
-            searchBy: searchBy
-        });
+        const where = searchQuery ? `WHERE ${SEARCH_CONDITIONS[searchBy]}` : '';
+        const params = searchQuery ? [containsPattern(searchQuery)] : [];
+        // ORDER BY can't take a bind parameter; sortBy and sortOrder are whitelisted above
+        const { rows } = await db.query(
+            `${BOOK_LIST_SQL} ${where} ORDER BY ${sortBy} ${sortOrder}, title, id`, params
+        );
+
+        res.render(
+            'pages/books',
+            {
+                title: 'All Books',
+                books: rows,
+                sortBy,
+                sortOrder,
+                query: searchQuery,
+                searchBy,
+            }
+        );
     } catch (err) {
         next(err);
     }
 };
-
 
 const getAddBookPage = async (req, res, next) => {
     const dummyCategories = [
@@ -149,20 +162,25 @@ const postReturnBook = async (req, res, next) => {
     }
 };
 
-
 const getBookInstances = async (req, res, next) => {
     const bookId = Number(req.params.id);
-    const dummyInstances = [
-        { id: 1, book_id: 1, borrowing_id: null, borrowed_by: null, borrow_date: null, status: 'available' },
-        { id: 2, book_id: 1, borrowing_id: 1, borrowed_by: 'user1', borrow_date: '2025.10.01',status: 'borrowed' },
-        { id: 3, book_id: 1, borrowing_id: null, borrowed_by: null, borrow_date: null,status: 'available' },
-    ];
 
     try {
-        /*
-            TODO: 특정 동일한 책의 개별 리스트를 불러오는 코드를 작성해주세요.
-        */
-        res.json(dummyInstances);
+        // one row per copy; the partial unique index allows at most one open loan per copy
+        const { rows } = await db.query(
+            `SELECT cp.copy_id AS id,
+                    cp.status,
+                    l.loan_id AS borrowing_id,
+                    l.user_id AS borrowed_by,
+                    l.user_id AS borrowed_by_id,
+                    to_char(l.loan_date, 'YYYY.MM.DD') AS borrow_date
+            FROM BookCopy cp
+            LEFT JOIN Loan l ON l.copy_id = cp.copy_id AND l.return_date IS NULL
+            WHERE cp.book_id = $1
+            ORDER BY cp.copy_id`,
+            [bookId]
+        );
+        res.json(rows);
     } catch (err) {
         next(err);
     }

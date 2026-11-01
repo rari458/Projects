@@ -52,9 +52,9 @@
                 <table class="table table-striped">
                     <thead>
                         <tr>
-                            <th><a href="/books?sortBy=title&sortOrder=<%= sortBy === 'title' && sortOrder === 'asc' ? 'desc' : 'asc' %>&query=<%= query %>&searchBy=<%= searchBy %>">Title <%= sortBy === 'title' ? (sortOrder === 'asc' ? '▼' : '▲') : '' %></a></th>
-                            <th><a href="/books?sortBy=author&sortOrder=<%= sortBy === 'author' && sortOrder === 'asc' ? 'desc' : 'asc' %>&query=<%= query %>&searchBy=<%= searchBy %>">Author <%= sortBy === 'author' ? (sortOrder === 'asc' ? '▼' : '▲') : '' %></a></th>
-                            <th><a href="/books?sortBy=categories&sortOrder=<%= sortBy === 'categories' && sortOrder === 'asc' ? 'desc' : 'asc' %>&query=<%= query %>&searchBy=<%= searchBy %>">Categories <%= sortBy === 'categories' ? (sortOrder === 'asc' ? '▼' : '▲') : '' %></a></th>
+                            <th><a href="/books?sortBy=title&sortOrder=<%= sortBy === 'title' && sortOrder === 'asc' ? 'desc' : 'asc' %>&query=<%= encodeURIComponent(query) %>&searchBy=<%= searchBy %>">Title <%= sortBy === 'title' ? (sortOrder === 'asc' ? '▼' : '▲') : '' %></a></th>
+                            <th><a href="/books?sortBy=author&sortOrder=<%= sortBy === 'author' && sortOrder === 'asc' ? 'desc' : 'asc' %>&query=<%= encodeURIComponent(query) %>&searchBy=<%= searchBy %>">Author <%= sortBy === 'author' ? (sortOrder === 'asc' ? '▼' : '▲') : '' %></a></th>
+                            <th><a href="/books?sortBy=categories&sortOrder=<%= sortBy === 'categories' && sortOrder === 'asc' ? 'desc' : 'asc' %>&query=<%= encodeURIComponent(query) %>&searchBy=<%= searchBy %>">Categories <%= sortBy === 'categories' ? (sortOrder === 'asc' ? '▼' : '▲') : '' %></a></th>
                             <th>Total</th>
                             <th>Available</th>
                             <th>Actions</th>

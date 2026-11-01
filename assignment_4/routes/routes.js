@@ -8,6 +8,14 @@ const categoryController = require('../controllers/categoryController');
 const userController = require('../controllers/userController');
 const { isAuthenticated, isAdmin } = require('../middleware/authMiddleware');
 
+// every :id in these routes is a SERIAL key; anything else is a 404 before any query runs
+router.param('id', (req, res, next, id) => {
+    if (/^\d{1,9}$/.test(id)) return next();
+    const err = new Error('Not found.');
+    err.status = 404;
+    next(err);
+});
+
 // Login Page (no need login)
 router.get('/login', authController.getLoginPage);
 router.post('/login', authController.postLogin);

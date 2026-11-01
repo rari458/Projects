@@ -77,11 +77,11 @@ PostgreSQL 18 is already installed and running in WSL.
 
 ## Phase 4: Book list (`bookController.getBooksPage`, `getBookInstances`)
 
-- [ ] One query per book row with title, author name, categories joined by `string_agg(... ORDER BY ...)`, total copies and available copies.
-- [ ] Search with `ILIKE '%' || $1 || '%'` on the column picked by `searchBy` (title, author or category). A category search must still show *all* of the book's categories.
-- [ ] Sort through a whitelist map (`title`/`author`/`categories` → SQL expression, `asc`/`desc`), falling back to `title asc`.
-- [ ] Instances API: return every copy with `status`, `borrowing_id`, `borrowed_by`, `borrowed_by_id` and a formatted `borrow_date`.
-- **Check:** each sortable column works in both directions. A search containing `%` or `'` doesn't break. `sortBy=foo` falls back to title. The instances panel shows who borrowed what.
+- [x] One query per book row with title, author name, categories joined by `string_agg(... ORDER BY ...)`, total copies and available copies.
+- [x] Search with `ILIKE $1` on the column picked by `searchBy` (title, author or category). The pattern comes from `containsPattern` in `utils/search.js`, which escapes `%`, `_` and `\`. A category search must still show *all* of the book's categories.
+- [x] Sort through a whitelist map (`title`/`author`/`categories` → SQL expression, `asc`/`desc`), falling back to `title asc`.
+- [x] Instances API: return every copy with `status`, `borrowing_id`, `borrowed_by`, `borrowed_by_id` and a formatted `borrow_date`.
+- **Check:** each sortable column works in both directions. A search containing `%` or `'` doesn't break. `sortBy=foo` falls back to title. The instances panel shows who borrowed what. Passed 2026-11-01.
 
 ## Phase 5: Borrow and return (`postBorrowBook`, `postReturnBook`, `borrowingController`)
 
