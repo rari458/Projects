@@ -47,7 +47,7 @@ Express 5 + EJS + `pg` + `express-session`, CommonJS.
 
 ## Skeleton state
 
-Search for `TODO` to find the work. The book list and the instances API (Phase 4), and borrow, return and the borrowings page (Phase 5), query the DB. The other controllers still render hard-coded `dummy*` arrays. Replace them with queries and delete the dummies.
+Search for `TODO` to find the work. The book list and the instances API (Phase 4), borrow, return and the borrowings page (Phase 5), and add-book and delete-copy (Phase 6a) query the DB. The other controllers still render hard-coded `dummy*` arrays. Replace them with queries and delete the dummies.
 
 - `postLogin` logs everyone in as admin `userId = 1`. `postRegister` does nothing.
 - `adminCode` in `authController.js` must be the student ID `2022065250`.

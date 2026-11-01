@@ -100,12 +100,14 @@ PostgreSQL 18 is already installed and running in WSL.
 
 ## Phase 6: Admin features
 
-- [ ] `getAddBookPage`: real author and category lists.
-- [ ] `postAddBook` in one transaction:
+- [x] `getAddBookPage`: real author and category lists.
+- [x] `postAddBook` in one transaction:
   - normalize `categories` from missing, a string or an array
   - parse `id:<n>` as an existing row; treat anything else as a new name and `INSERT ... ON CONFLICT (name) DO UPDATE ... RETURNING id`
   - insert the book, N copies, and the `Book_Category` rows
-- [ ] `postDeleteBookInstance`: refuse if the copy is borrowed, delete it, and delete the book when no copies remain.
+
+  As built (`resolveNamedRow`): a typed name reuses an existing author or category in any letter case. A title that already exists for the same author gets the new copies and categories instead of a second `Book` row. Quantity is 1–100. After adding, the list opens filtered to that title.
+- [x] `postDeleteBookInstance`: refuse if the copy is borrowed, delete it, and delete the book when no copies remain. Locks the copy, then the book, so two admins deleting the last two copies at once still remove the book. Passed 2026-11-01.
 - [ ] **Add category**, which the skeleton is missing: a new `POST /categories/add` route with `isAuthenticated, isAdmin`, a form in `categories.ejs`, and a duplicate-name check.
 - [ ] `postDeleteCategory`: delete the category. `Book_Category` rows cascade, and books keep their other categories.
 - [ ] `getUsersPage`: list users, with search by username or role through a whitelist plus `ILIKE`.

@@ -68,41 +68,110 @@ const getBooksPage = async (req, res, next) => {
 };
 
 const getAddBookPage = async (req, res, next) => {
-    const dummyCategories = [
-        { id: 1, name: 'Fantasy' },
-        { id: 2, name: 'Science Fiction' },
-        { id: 3, name: 'Mystery' },
-    ];
-    const dummyAuthors = [
-        { id: 1, name: 'J.R.R Tolkien' },
-        { id: 2, name: 'Isaac Asimov' },
-        { id: 3, name: 'Agatha Christie' },
-    ];
     try {
-        /*
-            TODO: 책을 추가하는 페이지를 렌더링 하는 코드를 작성하세요.
-            책 추가 시 작가와 카테고리를 선택해야하므로 현재 카테고리 목록과 작가 목록을 불러와야 합니다.
-        */
+        const [authors, categories] = await Promise.all([
+            db.query('SELECT author_id AS id, author_name AS name FROM Author ORDER BY author_name'),
+            db.query('SELECT category_id AS id, category_name AS name FROM Category ORDER BY category_name'),
+        ]);
         res.render('pages/add-book', {
             title: 'Add New Book',
-            categories: dummyCategories, // 카테고리 리스트가 전달되어야 합니다.
-            authors: dummyAuthors, // 저자 리스트가 전달되어야 합니다.
+            categories: categories.rows,
+            authors: authors.rows,
         });
     } catch (err) {
         next(err);
     }
 };
 
+// The two kinds of row add-book can pick or create. Table and column names come
+// from here, never from the request, so interpolating them into SQL is safe.
+const NAMED_ROWS = {
+    author: { table: 'Author', id: 'author_id', name: 'author_name', maxLength: 100 },
+    category: { table: 'Category', id: 'category_id', name: 'category_name', maxLength: 50},
+};
+const MAX_NEW_COPIES = 100;
+
+// Turns one add-book value into a row id. 'id:<n>' is a row picked from the list and must
+// still exist. Anything else is a typed name: reuse a row with that name in any letter
+// case, or insert a new one.
+const resolveNamedRow = async (client, kind, value) => {
+    const { table, id, name, maxLength } = NAMED_ROWS[kind];
+
+    const picked = /^id:(\d{1,9})$/.exec(value);
+    if (picked) {
+        const { rows } = await client.query(`SELECT ${id} AS id FROM ${table} WHERE ${id} = $1`, [Number(picked[1])]);
+        if (rows.length === 0) throw httpError(400, `The selected ${kind} no longer exists.`);
+        return rows[0].id;
+    }
+
+    const typed = value.trim();
+    if (!typed || typed.length > maxLength) {
+        throw httpError(400, `A new ${kind} name must be 1-${maxLength} characters.`);
+    }
+    const existing = await client.query(`SELECT ${id} AS id FROM ${table} WHERE lower(${name}) = lower($1) ORDER BY ${id} LIMIT 1`, [typed]);
+    if (existing.rows.length > 0) return existing.rows[0].id;
+    // ON CONFLICT returns the other row if another admin inserts the same name at the same moment
+    const { rows } = await client.query(
+        `INSERT INTO ${table} (${name}) VALUES ($1)
+         ON CONFLICT (${name}) DO UPDATE SET ${name} = EXCLUDED.${name}
+         RETURNING ${id} AS id`,
+        [typed]
+    );
+    return rows[0].id;
+};
 
 const postAddBook = async (req, res, next) => {
     const { title, authors, quantity, categories } = req.body;
 
     try {
-        /*
-            TODO: 책을 DB에 추가하는 작업을 수행하는 코드를 작성하세요.
-            기존에 없는 카테고리와 저자 또한 추가해줘야 합니다.
-        */
-        res.redirect('/books');
+        const bookTitle = typeof title === 'string' ? title.trim() : '';
+        if (!bookTitle || bookTitle.length > 200) {
+            throw httpError(400, 'Title must be 1-200 characters.');
+        }
+        if (typeof authors !== 'string' || !authors.trim()) {
+            throw httpError(400, 'Choose or type an author.');
+        }
+        const copies = Number(quantity);
+        if (!Number.isInteger(copies) || copies < 1 || copies > MAX_NEW_COPIES) {
+            throw httpError(400, `Quantity must be a whole number from 1 to ${MAX_NEW_COPIES}.`);
+        }
+        // categories is missing when none is picked, a string for one, and an array for several
+        const categoryValues = categories === undefined ? [] : [].concat(categories);
+        if (!categoryValues.every((value) => typeof value === 'string')) {
+            throw httpError(400, "Invalid categories.");
+        }
+
+        await db.transaction(async (client) => {
+            const authorId = await resolveNamedRow(client, 'author', authors);
+            const categoryIds = [];
+            for (const value of categoryValues) {
+                categoryIds.push(await resolveNamedRow(client, 'category', value));
+            }
+
+            // the same title by the same author gets the new copies instead of a second Book row
+            const existing = await client.query(
+                'SELECT book_id FROM Book WHERE author_id = $1 AND lower(title) = lower($2) ORDER BY book_id LIMIT 1',
+                [authorId, bookTitle]
+            );
+            let bookId;
+            if (existing.rows.length > 0) bookId = existing.rows[0].book_id;
+            else
+            {
+                const inserted = await client.query('INSERT INTO Book (title, author_id) VALUES ($1, $2) RETURNING book_id', [bookTitle, authorId]);
+                bookId = inserted.rows[0].book_id;
+            }
+
+            await client.query('INSERT INTO BookCopy (book_id) SELECT $1::int FROM generate_series(1, $2::int)', [bookId, copies]);
+            // DO NOTHING skips links the book already has and a category picked twice
+            await client.query(
+                `INSERT INTO Book_Category (book_id, category_id)
+                 SELECT $1::int, unnest($2::int[])
+                 ON CONFLICT DO NOTHING`,
+                [bookId, categoryIds]
+            );
+        });
+        // land on the list filtered to this title, so the new copies are visible right away
+        res.redirect(`/books?query=${encodeURIComponent(bookTitle)}`);
     } catch (err) {
         next(err);
     }
@@ -113,10 +182,25 @@ const postDeleteBookInstance = async (req, res, next) => {
     const bookInstanceId = Number(req.params.id);
 
     try {
-        /*
-            TODO: 책 한 권을 제거하는 작업을 수행하는 코드를 작성하세요.
-            동일한 책을 모두 제거하면 해당 책에 대한 정보도 지워지도록 구현해주세요.
-        */
+        await db.transaction(async (client) => {
+            // lock the copy so a borrow can't slip in between the check and the delete
+            const copy = await client.query('SELECT book_id, status FROM BookCopy WHERE copy_id = $1 FOR UPDATE', [bookInstanceId]);
+            if (copy.rowCount === 0) throw httpError(404, 'Book copy not found.');
+            const { book_id: bookId, status } = copy.rows[0];
+            if (status === 'borrowed') {
+                throw httpError(400, 'This copy is borrowed. Delete it after it is returned.');
+            }
+            // and the book, so two admins deleting its last two copies at once still remove it
+            await client.query('SELECT 1 FROM Book WHERE book_id = $1 FOR UPDATE', [bookId]);
+
+            // the copy's past loans go with it (ON DELETE CASCADE)
+            await client.query('DELETE FROM BookCopy WHERE copy_id = $1', [bookInstanceId]);
+            // after the last copy the book goes too, and with it its categories, reviews and reservations
+            await client.query(
+                'DELETE FROM Book WHERE book_id = $1 AND NOT EXISTS (SELECT 1 FROM BookCopy WHERE book_id = $1)',
+                [bookId]
+            );
+        });
         res.redirect('/books');
     } catch (err) {
         next(err);
