@@ -14,7 +14,7 @@ app.use(session({
     secret: '32e97126-8be4-433d-ba34-338f12df99a6',
     resave: false,
     saveUninitialized: true,
-    cookie: { secure: false }
+    cookie: { secure: false, sameSite: 'lax' }
 }));
 
 // Middleware to make session available in EJS templates
@@ -31,7 +31,8 @@ app.use((err, req, res, next) => {
     console.error(err.stack);
 
     const status = err.status || 500;
-    const message = err.message || 'Internal Server Error';
+    // a 500 is a bug, not a rule the user broke: the stack is logged above, the visitor gets no internals
+    const message = status < 500 ? err.message : 'Internal Server Error';
 
     res.status(status);
     res.render('pages/error', {

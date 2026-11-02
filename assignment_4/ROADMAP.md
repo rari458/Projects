@@ -200,9 +200,32 @@ Split into three rounds of typing, each checked and committed on its own:
 
 ## Phase 9: Full test pass
 
-- [ ] Run every **Check** above again on a fresh `npm run db:init`.
-- [ ] Security: every query uses `$n` parameters, and ORDER BY and search columns come only from whitelists. Every admin route has `isAdmin`. Usernames are restricted to a safe character set, because `books.ejs` builds the instances table with unescaped template literals.
-- [ ] No `dummy*` variables or `TODO`s remain (`grep -rn "dummy\|TODO" controllers scripts`).
+- [x] Run every **Check** above again on a fresh `npm run db:init`. Passed 2026-11-03.
+  - Phase 2: `db:init` runs twice in a row with the seed counts, and all 13 constraint probes are rejected. These cover:
+    - the CHECKs, both partial unique indexes and `UNIQUE(user_id, book_id)`
+    - both `RESTRICT` deletes, and `NOT NULL` on a foreign key
+    - the Book delete cascade
+  - Phases 3–7: one harness wired like `index.js`, with a real `express-session` and real logins: **83/83 passed, no 500s**. It covers:
+    - registration rules, the admin code, hashing, one login error message, session-ID rotation and logout
+    - search and sort and their whitelists, the instances API
+    - each borrow and return rule
+    - add-book, delete-copy, categories, users, and 403 or `/login` on every admin route
+    - the charts, recomputed from raw loans
+    - every nav link for each role
+  - Phase 8: the 8a, 8b and 8c suites all pass again on fresh seeds.
+- [x] Security: every query uses `$n` parameters, and ORDER BY and search columns come only from whitelists. Every admin route has `isAdmin`. Usernames are restricted to a safe character set, because `books.ejs` builds the instances table with unescaped template literals.
+  - All confirmed.
+    - The only interpolated SQL pieces are `SEARCH_CONDITIONS[searchBy]` (behind `Object.hasOwn`), the `sortBy`/`sortOrder` whitelists, `NAMED_ROWS[kind]` with literal kinds, and constants.
+    - Every admin route has `isAuthenticated, isAdmin`.
+    - The only `<%-` besides the header include is in the unused skeleton file `views/index.ejs`.
+  - Found and fixed (2026-11-03). Verified through the real `index.js`: crafted arrays give 401/400, normal login and register still work, a forced 500 shows only `Internal Server Error`, 404 messages still show, the cookie carries `SameSite=Lax`, and the 83-check pass still passes.
+    - `postLogin` and `postRegister` crashed with a 500 and showed the JS error when a field was sent twice (an array). They now accept only strings, like the other controllers.
+    - The error handler showed raw 500 messages (SQL text). It now shows `Internal Server Error` for 5xx and still logs the stack.
+    - The session cookie now sets `sameSite: 'lax'` explicitly.
+  - Known and left as is, for the report:
+    - no CSRF tokens (SameSite=Lax covers cross-site form posts)
+    - the skeleton's session secret is hard-coded in `index.js` in a public repo (sessions are server-side and their IDs random, so knowing the secret doesn't let anyone forge a valid session)
+- [x] No `dummy*` variables or `TODO`s remain. Checked over all source folders, not just `controllers scripts`.
 
 ## Phase 10: Deliverables
 

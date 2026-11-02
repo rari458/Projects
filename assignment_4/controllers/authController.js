@@ -29,9 +29,10 @@ const logoutAndGetHomePage = (req, res, next) => {
 };
 
 const postLogin = async (req, res, next) => {
-    const { username, password } = req.body;
+    const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
     try {
-        const { rows } = await db.query('SELECT user_id, password_hash, role FROM Users WHERE user_id = $1', [(username || '').trim()]);
+        const { rows } = await db.query('SELECT user_id, password_hash, role FROM Users WHERE user_id = $1', [username]);
         const user = rows[0];
         if (!user || !password || !(await verifyPassword(password, user.password_hash)))
         {
@@ -52,10 +53,12 @@ const postLogin = async (req, res, next) => {
 };
 
 const postRegister = async (req, res, next) => {
-    const { username, password, role, admin_code } = req.body;
+    const { role, admin_code } = req.body;
+    // a crafted form can send a field twice, which arrives as an array; only plain strings count
+    const userId = typeof req.body.username === 'string' ? req.body.username.trim() : '';
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
 
     try {
-        const userId = (username || '').trim();
         if (!USERNAME_PATTERN.test(userId)) return fail(next, 400, 'Username must be 3-20 letters, digits or underscores.');
         if (!password) return fail(next, 400, 'Password is required.');
         if (role === 'admin' && admin_code !== adminCode) return fail(next, 403, 'Invalid admin code.');
