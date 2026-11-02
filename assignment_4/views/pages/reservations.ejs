@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <%- include('../components/header') %>
+        <main>
+            <div class="card">
+                <h2 class="mb-3"><%= title %></h2>
+                <p class="mb-3">When a copy comes back, only the member at #1 can borrow it, and borrowing it fulfills the reservation.</p>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Book Title</th>
+                            <th>Author</th>
+                            <th>Reserved At</th>
+                            <th>Status</th>
+                            <th>Queue</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% reservations.forEach(reservation => { %>
+                            <tr>
+                                <td><a href="/books/<%= reservation.book_id %>"><%= reservation.book_title %></a></td>
+                                <td><%= reservation.book_author %></td>
+                                <td><%= reservation.reserved_date %></td>
+                                <td><%= reservation.status %></td>
+                                <td><%= reservation.queue_position > 0 ? '#' + reservation.queue_position : '-' %></td>
+                                <td>
+                                    <% if (reservation.status === 'waiting') { %>
+                                        <form action="/reservations/<%= reservation.id %>/cancel" method="POST">
+                                            <button type="submit" class="btn btn-danger">Cancel</button>
+                                        </form>
+                                    <% } %>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

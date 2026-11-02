@@ -169,7 +169,21 @@ Split into three rounds of typing, each checked and committed on its own:
     - `POST /books/:id/review` writes or replaces your review, in one `INSERT ... SELECT ... WHERE EXISTS (a loan of the book) ON CONFLICT (user_id, book_id) DO UPDATE`
     - `POST /books/:id/review/delete` deletes your own review
   - The form appears only for users with a loan of the book, and is prefilled when you already have a review.
-- [ ] **8b: E2.** A Reserve button on the detail page, `/reservations` (my queue with positions, cancel), and a header link.
+- [x] **8b: E2.** A Reserve button on the detail page, `/reservations` (my queue with positions, cancel), and a header link.
+
+  As built (`reservationController`):
+  - Reserving runs in a transaction that locks the book's copies `FOR SHARE`. It refuses when a copy is available, when the user is borrowing a copy, and (through `ON CONFLICT ... WHERE status = 'waiting' DO NOTHING` on the partial unique index) when the user is already waiting.
+  - Cancel updates only the user's own waiting reservation.
+  - The queue position counts waiting rows with `(reserved_at, reservation_id) <=` the user's own, the same order the borrow check uses.
+  - Trade-off for the report: if #1 can't borrow (at the limit or overdue), the returned copy waits until they cancel, because there's no expiry.
+
+  Passed 2026-11-03, on a fresh seed:
+  - The seed queue shows erin #1 and frank #2. bob reserves as #3, and a second try is refused.
+  - Holding a copy, a book with a copy available, and a missing book are all refused.
+  - Cancelling someone else's reservation, or one that's no longer waiting, is refused.
+  - The ROADMAP hand-off works: alice returns, frank and admin are refused, erin borrows, frank becomes #1, then borrows after dave returns.
+  - Logged out goes to `/login`.
+  - The 8a checks still pass.
 - [ ] **8c: S1 and S2.** `/stats/ratings` and `/stats/loans`, with header links.
 - **Check:** each feature works end to end with seed data. Reservation hand-off: user A holds the last copy, B reserves, A returns, C is refused, B can borrow.
 

@@ -47,7 +47,12 @@ Express 5 + EJS + `pg` + `express-session`, CommonJS.
 
 ## Skeleton state
 
-Search for `TODO` to find the work. Login and registration (Phase 3), the book list and the instances API (Phase 4), borrow, return and the borrowings page (Phase 5), all admin pages (Phase 6) and the charts (Phase 7) query the DB. No `dummy*` arrays are left. Of the Phase 8 extra features, E1 Reviews is done: `GET /books/:id` (`bookController.getBookDetailPage`, `pages/book-detail.ejs`, linked from the book titles) plus `reviewController`. E2 Reservations (8b) and the S1/S2 statistics pages (8c) remain.
+Search for `TODO` to find the work. Login and registration (Phase 3), the book list and the instances API (Phase 4), borrow, return and the borrowings page (Phase 5), all admin pages (Phase 6) and the charts (Phase 7) query the DB. No `dummy*` arrays are left. Of the Phase 8 extra features, E1 Reviews and E2 Reservations are done:
+- `GET /books/:id` (`bookController.getBookDetailPage`, `pages/book-detail.ejs`, linked from the book titles)
+- `reviewController`
+- `reservationController` (`POST /books/:id/reserve`, `/reservations`, `POST /reservations/:id/cancel`, plus a My Reservations header link)
+
+Only the S1/S2 statistics pages (8c) remain.
 
 - `adminCode` in `authController.js` is the student ID `2022065250`.
 - `scripts/init_db.js` is done (Phase 2). It seeds `admin`/`admin1234` and `alice`, `bob`, `carol`, `dave`, `erin`, `frank` (all `user1234`), 10 books with 20 copies, 43 loans, 14 reviews and 4 reservations. Loan dates count back from the day of the init, which sets up the demo cases: bob holds 3 books, carol is overdue, both Orient Express copies are out with erin then frank queued, and some loans are older than 3 months. bob turns overdue too about 3 days after an init, so re-run `npm run db:init` right before recording the demo.
@@ -65,7 +70,8 @@ Queries must return these field names. Alias them in SQL, because the 4-1 schema
 | `POST /books/add` body | `title`, `quantity`, `authors` (one value), `categories` (missing, a string, or an array). Each value is `id:<n>` for an existing row or raw text for a name newly typed into Choices.js, so normalize and insert the new names. |
 | `pages/borrowings` | `id` (the loan id, used by the Return form), `book_instance_id, book_title, book_author, borrow_date, return_date`. Return shows while `return_date` is falsy. |
 | `pages/charts` | `popularBooks[]` and `popularBooksByCategory` (object keyed by category name, one table per key) with rows of `title, author, categories, borrow_count`. Also `categories[]` with `id, name`, and `selectedCategoryId`. The view compares `selectedCategoryId === category.id`, so ids must be JS numbers (`SERIAL`/int4; `BIGSERIAL` and `COUNT(*)` come back from `pg` as strings). When no `categoryId` is given, default to the first category so the table matches the dropdown. The view prints one table per key with no heading, so put only the selected category in the object. `popularAuthors[]` has `author, borrow_count`. |
-| `pages/book-detail` | `book` (one `BOOK_LIST_SQL` row), `reviewSummary` (`count`, `average`), `reviews[]` (`username, rating, comment, review_date`), `canReview` (the user has a loan of the book), `myReview` (the user's row from `reviews`, or null) |
+| `pages/book-detail` | `book` (one `BOOK_LIST_SQL` row), `reviewSummary` (`count`, `average`), `reviews[]` (`username, rating, comment, review_date`), `canReview` (the user has a loan of the book), `myReview` (the user's row from `reviews`, or null), `queuePosition` (0 when not waiting), `canReserve` |
+| `pages/reservations` | `reservations[]`: `id, book_id, book_title, book_author, reserved_date, status, queue_position` (0 unless waiting) |
 | `pages/categories` | `categories[]`: `id, name` |
 | `pages/users` | `users[]`: `id, username, role` (`id` and `username` are both `user_id`), plus `searchBy` (`username`/`role`) and `query` |
 

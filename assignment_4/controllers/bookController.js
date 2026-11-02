@@ -322,13 +322,13 @@ const getBookInstances = async (req, res, next) => {
     }
 };
 
-// GET /books/:id - the book, its reviews, and whether the session user may write one
+// GET /books/:id - the book, its reviews, and whether the session user may review or reserve it
 const getBookDetailPage = async (req, res, next) => {
     const bookId = Number(req.params.id);
     const userId = req.session.userId || null;
 
     try {
-        const [book, summary, reviews, borrowed] = await Promise.all([
+        const [book, summary, reviews, member] = await Promise.all([
             db.query(`${BOOK_LIST_SQL} WHERE b.book_id = $1`, [bookId]),
             db.query('SELECT COUNT(*)::int AS count, ROUND(AVG(rating), 1) AS average FROM Review WHERE book_id = $1', [bookId]),
             db.query(
@@ -338,11 +338,20 @@ const getBookDetailPage = async (req, res, next) => {
                  ORDER BY created_at DESC, review_id DESC`,
                 [bookId]
             ),
-            //only a user who has borrowed some copy of the book may review it
+            // the session user and this book: ever borrowed (may review), borrowing now,
+            // and their place in the reservation queue (0 = not waiting)
             db.query(
                 `SELECT EXISTS (SELECT 1 FROM Loan l
                                 JOIN BookCopy cp ON cp.copy_id = l.copy_id
-                                WHERE l.user_id = $1 AND cp.book_id = $2) AS has_borrowed`,
+                                WHERE l.user_id = $1 AND cp.book_id = $2) AS has_borrowed,
+                        EXISTS (SELECT 1 FROM Loan l
+                                JOIN BookCopy cp ON cp.copy_id = l.copy_id
+                                WHERE l.user_id = $1 AND cp.book_id = $2 AND l.return_date IS NULL) AS is_borrowing,
+                        (SELECT COUNT(*)::int
+                         FROM Reservation mine
+                         JOIN Reservation q ON q.book_id = mine.book_id AND q.status = 'waiting'
+                                           AND (q.reserved_at, q.reservation_id) <= (mine.reserved_at, mine.reservation_id)
+                         WHERE mine.user_id = $1 AND mine.book_id = $2 AND mine.status = 'waiting') AS queue_position`,
                 [userId, bookId]
             ),
         ]);
@@ -353,7 +362,11 @@ const getBookDetailPage = async (req, res, next) => {
             book: book.rows[0],
             reviewSummary: summary.rows[0],
             reviews: reviews.rows,
-            canReview: borrowed.rows[0].has_borrowed,
+            canReview: member.rows[0].has_borrowed,
+            queuePosition: member.rows[0].queue_position,
+            // only a logged-in user may reserve, and only when every copy is out, they hold none and aren't queued yet
+            canReserve: userId !== null && book.rows[0].available_quantity === 0 
+                && !member.rows[0].is_borrowing && member.rows[0].queue_position === 0,
             myReview: reviews.rows.find((review) => review.username === userId) || null,
         });
     } catch (err) {

@@ -6,6 +6,7 @@
             <a href="/books" class="nav-link">Books</a>
             <% if (locals.session && session.userId) { %>
                 <a href="/borrowings" class="nav-link">My Borrows</a>
+                <a href="/reservations" class="nav-link">My Reservations</a>
                 <% if (session.role === 'admin') { %>
                     <a href="/categories" class="nav-link">Categories</a>
                     <a href="/users" class="nav-link">Users</a>
