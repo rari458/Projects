@@ -38,21 +38,20 @@ Express 5 + EJS + `pg` + `express-session`, CommonJS.
 
 - `index.js`: app setup. It serves `public/`, serves `node_modules` at `/modules` (add-book loads Choices.js this way), and exposes the session to every view through `res.locals.session`. Only `express.urlencoded` is mounted, with no `express.json()`, so new POST endpoints should take HTML form posts. `/` redirects to `/charts`. A generic error handler renders `pages/error`. The page shows only `err.message`, and `err.status` sets just the HTTP status, so a message has to make sense on its own.
 - `routes/routes.js`: the full route table. Access control is per route through `isAuthenticated` / `isAdmin` in `middleware/authMiddleware.js`. `isAuthenticated` redirects to `/login`, even for the JSON instances API, and `isAdmin` raises a 403. `/charts` and `/books` are public. A `router.param('id')` at the top turns any `:id` that isn't 1–9 digits into a 404 before the controller runs, so controllers can `Number(req.params.id)` safely.
-- `utils/search.js`: `containsPattern(text)` builds an ILIKE "contains" pattern with `%`, `_` and `\` escaped. Use it for every user-typed search (books now, users in Phase 6).
+- `utils/search.js`: `containsPattern(text)` builds an ILIKE "contains" pattern with `%`, `_` and `\` escaped. Use it for every user-typed search (books and users).
 - Borrow and return are both handled in `bookController` (`postBorrowBook`, `postReturnBook`), even though the return route is `/borrowings/:id/return`. `borrowingController` only renders the history page.
 - `config/db.js`: exports `query(text, params)`, the `pool` and `transaction(fn)`, which runs `fn(client)` between `BEGIN` and `COMMIT` on one connection and rolls back if `fn` throws. Use it for multi-statement operations (borrow and return already do; adding a book with copies/authors/categories and the deletes should too).
-- Controllers report rule violations with `err = new Error(msg); err.status = 400; return next(err);`, which renders the error page. Inside `db.transaction`, `throw` the error instead, so the rollback runs. `bookController` has an `httpError(status, message)` helper for this. A successful borrow redirects to `/borrowings`.
+- Controllers report rule violations with `err = new Error(msg); err.status = 400; return next(err);`, which renders the error page. Inside `db.transaction`, `throw` the error instead, so the rollback runs. `utils/httpError.js` exports an `httpError(status, message)` helper for this, used by `bookController` and `categoryController`. A successful borrow redirects to `/borrowings`.
 - Session keys: `userId`, `username`, `role`. The header and `isAdmin` compare against lowercase `'admin'`, and the register form posts `role` as `user`/`admin`.
 - `views/pages/*.ejs` are each a full HTML document that includes `components/header.ejs`. `views/index.ejs` is unused (it includes a nonexistent `partials/header`).
 
 ## Skeleton state
 
-Search for `TODO` to find the work. The book list and the instances API (Phase 4), borrow, return and the borrowings page (Phase 5), and add-book and delete-copy (Phase 6a) query the DB. The other controllers still render hard-coded `dummy*` arrays. Replace them with queries and delete the dummies.
+Search for `TODO` to find the work. Login and registration (Phase 3), the book list and the instances API (Phase 4), borrow, return and the borrowings page (Phase 5), and all admin pages (Phase 6) query the DB. Only `chartController` still renders hard-coded `dummy*` arrays (Phase 7). Replace them with queries and delete the dummies.
 
-- `postLogin` logs everyone in as admin `userId = 1`. `postRegister` does nothing.
-- `adminCode` in `authController.js` must be the student ID `2022065250`.
+- `adminCode` in `authController.js` is the student ID `2022065250`.
 - `scripts/init_db.js` is done (Phase 2). It seeds `admin`/`admin1234` and `alice`, `bob`, `carol`, `dave`, `erin`, `frank` (all `user1234`), 10 books with 20 copies, 43 loans, 14 reviews and 4 reservations. Loan dates count back from the day of the init, which sets up the demo cases: bob holds 3 books, carol is overdue, both Orient Express copies are out with erin then frank queued, and some loans are older than 3 months. bob turns overdue too about 3 days after an init, so re-run `npm run db:init` right before recording the demo.
-- The spec says admins can **add** categories, but the skeleton only has a delete route and button. Categories can currently be created only as a side effect of add-book.
+- The skeleton had no way to **add** a category, which the spec requires. Phase 6 added `POST /categories/add` and its form in `categories.ejs`. Add-book still creates categories as a side effect too.
 - The README asks for a popular **author** chart too, but `charts.ejs` has only the two book tables.
 
 ## Data contract the views expect

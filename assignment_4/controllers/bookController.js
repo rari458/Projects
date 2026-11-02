@@ -1,12 +1,6 @@
 const db = require('../config/db');
 const { containsPattern } = require('../utils/search');
-
-// an Error that the generic handler renders with this HTTP status
-const httpError = (status, message) => {
-    const err = new Error(message);
-    err.status = status;
-    return err;
-};
+const { httpError } = require('../utils/httpError');
 
 // One row per book. Categories and copy counts come from separate subqueries,
 // so they can't multiply each other's rows the way a double join would.

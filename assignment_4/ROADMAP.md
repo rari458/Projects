@@ -108,10 +108,21 @@ PostgreSQL 18 is already installed and running in WSL.
 
   As built (`resolveNamedRow`): a typed name reuses an existing author or category in any letter case. A title that already exists for the same author gets the new copies and categories instead of a second `Book` row. Quantity is 1–100. After adding, the list opens filtered to that title.
 - [x] `postDeleteBookInstance`: refuse if the copy is borrowed, delete it, and delete the book when no copies remain. Locks the copy, then the book, so two admins deleting the last two copies at once still remove the book. Passed 2026-11-01.
-- [ ] **Add category**, which the skeleton is missing: a new `POST /categories/add` route with `isAuthenticated, isAdmin`, a form in `categories.ejs`, and a duplicate-name check.
-- [ ] `postDeleteCategory`: delete the category. `Book_Category` rows cascade, and books keep their other categories.
-- [ ] `getUsersPage`: list users, with search by username or role through a whitelist plus `ILIKE`.
-- **Check:** a book added with a new author and two new categories shows up correctly. Deleting copies one by one removes the book at the end. Deleting a category leaves its books in their other categories.
+- [x] **Add category**, which the skeleton is missing: a new `POST /categories/add` route with `isAuthenticated, isAdmin`, a form in `categories.ejs`, and a duplicate-name check.
+
+  As built: the name is trimmed and must be 1–50 characters. A single `INSERT ... SELECT ... WHERE NOT EXISTS (lower(name) match) ON CONFLICT DO NOTHING` refuses a duplicate in any letter case, and `rowCount === 0` gives the duplicate message. New categories list last (`ORDER BY category_id`).
+- [x] `postDeleteCategory`: delete the category. `Book_Category` rows cascade, and books keep their other categories. An unknown id is a 404.
+- [x] `getUsersPage`: list users, with search by username or role through a whitelist plus `ILIKE`. `id` and `username` are both `user_id`, the default `searchBy` is `username`, and the search goes through `containsPattern`, so `_` and `%` match literally.
+- `httpError` moved from `bookController` to `utils/httpError.js`, shared with `categoryController`.
+- **Check:** a book added with a new author and two new categories shows up correctly. Deleting copies one by one removes the book at the end. Deleting a category leaves its books in their other categories. Passed 2026-11-01 (6a) and 2026-11-02 (6b).
+
+  6b was checked on a fresh throwaway DB through the real routes, controllers and views:
+  - adding `Poetry`, then refusing `poetry`, padded `  POETRY  `, blank, 51-character, missing and doubled names
+  - HTML in a name is escaped
+  - deleting Fantasy and History keeps the other categories of those books
+  - a missing or non-numeric id is a 404
+  - users list 7 rows; username `a` finds 5, role `admin`/`user` finds 1/6, and `_` or `%` finds none
+  - a regular user gets 403 and a logged-out visitor goes to `/login` on all four routes
 
 ## Phase 7: Charts (`chartController`, `charts.ejs`)
 

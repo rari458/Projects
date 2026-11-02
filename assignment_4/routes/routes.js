@@ -55,6 +55,7 @@ router.get('/categories', isAuthenticated, isAdmin, categoryController.getCatego
 
 // Category Management (need login as admin)
 router.post('/categories/:id/delete', isAuthenticated, isAdmin, categoryController.postDeleteCategory);
+router.post('/categories/add', isAuthenticated, isAdmin, categoryController.postAddCategory);
 
 
 // Users Page (need login as admin)

@@ -1,23 +1,26 @@
 const db = require('../config/db');
+const { containsPattern } = require('../utils/search');
+
+// searchBy -> WHERE clause; user_id is both the id and the username
+const SEARCH_CONDITIONS = {
+    username: 'user_id ILIKE $1',
+    role: 'role ILIKE $1',
+};
 
 const getUsersPage = async (req, res, next) => {
-    const { searchBy, query } = req.query;
-
-    const dummyUsers = [ // 이 변수는 더미데이터입니다. 구현을 다하면 제거해주세요.
-        { id: 1, username: 'admin', role: 'admin' },
-        { id: 2, username: 'user1', role: 'user' },
-        { id: 3, username: 'user2', role: 'user' },
-    ];
+    const searchQuery = typeof req.query.query === 'string' ? req.query.query.trim() : '';
+    const searchBy = Object.hasOwn(SEARCH_CONDITIONS, req.query.searchBy) ? req.query.searchBy : 'username';
 
     try {
-        /*
-            TODO: 검색어에 맞춰 유저 목록을 출력하는 페이지를 렌더링하는 코드를 작성하세요.
-        */
-        res.render('pages/users', {
+        const where = searchQuery ? `WHERE ${SEARCH_CONDITIONS[searchBy]}` : '';
+        const params = searchQuery ? [containsPattern(searchQuery)] : [];
+        const { rows } = await db.query(`SELECT user_id AS id, user_id AS username, role FROM Users ${where} ORDER BY user_id`, params);
+
+        res.render('pages/users',{
             title: 'User Management',
-            users: dummyUsers,
+            users: rows,
             searchBy,
-            query
+            query: searchQuery,
         });
     } catch (err) {
         next(err);

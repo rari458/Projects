@@ -1,19 +1,33 @@
 const db = require('../config/db');
+const { httpError } = require('../utils/httpError');
 
-const getCategoriesPage = async (req, res, next) => {
-    const dummyCategories = [ // 이 변수는 더미데이터입니다. 구현을 다하면 제거해주세요.
-        { id: 1, name: 'Fantasy' },
-        { id: 2, name: 'Science Fiction' },
-        { id: 3, name: 'Mystery' },
-    ];
+const getCategoriesPage = async (req, res,next) => {
     try {
-        /*
-            TODO: 모든 카테고리를 출력하는 페이지를 렌더링하는 코드를 작성하세요.
-        */
+        const { rows } = await db.query('SELECT category_id AS id, category_name AS name FROM Category ORDER BY category_id');
         res.render('pages/categories', {
             title: 'Category Management',
-            categories: dummyCategories // 카테고리 리스트가 전달되어야 합니다.
+            categories: rows,
         });
+    } catch (err) {
+        next(err);
+    }
+};
+
+const postAddCategory = async (req, res, next) => {
+    const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+
+    try {
+        if (!name || name.length > 50) throw httpError(400, 'A category name must be 1-50 characters.');
+        // skip the insert if the name exists in any letter case; ON CONFLICT covers two admins adding it at once
+        const { rowCount } = await db.query(
+            `INSERT INTO Category (category_name)
+             SELECT $1::text
+             WHERE NOT EXISTS (SELECT 1 FROM Category WHERE lower(category_name) = lower($1::text))
+             ON CONFLICT (category_name) DO NOTHING`,
+            [name]
+        );
+        if (rowCount === 0) throw httpError(400, `The category "${name}" already exists.`);
+        res.redirect('/categories');
     } catch (err) {
         next(err);
     }
@@ -22,10 +36,9 @@ const getCategoriesPage = async (req, res, next) => {
 const postDeleteCategory = async (req, res, next) => {
     const categoryId = Number(req.params.id);
     try {
-        /*
-            TODO: 카테고리를 제거하는 코드를 작성하세요.
-            만약 해당 카테고리에 포함된 책이 있다면 책에서 해당 카테고리만 지우고 나머지 카테고리는 유지하면 됩니다.
-        */
+        // its Book_Category links cascade, so books lose only this category and keep the rest
+        const { rowCount } = await db.query('DELETE FROM Category WHERE category_id = $1', [categoryId]);
+        if (rowCount === 0) throw httpError(404, 'Category not found.');
         res.redirect('/categories');
     } catch (err) {
         next(err);
@@ -34,5 +47,6 @@ const postDeleteCategory = async (req, res, next) => {
 
 module.exports = {
     getCategoriesPage,
+    postAddCategory,
     postDeleteCategory
 };
