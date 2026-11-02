@@ -6,6 +6,7 @@ const bookController = require('../controllers/bookController');
 const borrowingController = require('../controllers/borrowingController');
 const categoryController = require('../controllers/categoryController');
 const userController = require('../controllers/userController');
+const reviewController = require('../controllers/reviewController');
 const { isAuthenticated, isAdmin } = require('../middleware/authMiddleware');
 
 // every :id in these routes is a SERIAL key; anything else is a 404 before any query runs
@@ -42,6 +43,11 @@ router.post('/books/instances/:id/delete', isAuthenticated, isAdmin, bookControl
 // Borrow & Return (need login only)
 router.post('/books/instances/:id/borrow', isAuthenticated, bookController.postBorrowBook);
 router.post('/borrowings/:id/return', isAuthenticated, bookController.postReturnBook);
+
+// Book Detail & Reviews (the page needs no login; writing or deleting a review needs login)
+router.get('/books/:id', bookController.getBookDetailPage);
+router.post('/books/:id/review', isAuthenticated, reviewController.postSaveReview);
+router.post('/books/:id/review/delete', isAuthenticated, reviewController.postDeleteReview);
 
 // API route to get book instances
 router.get('/api/books/:id/instances', isAuthenticated, bookController.getBookInstances);

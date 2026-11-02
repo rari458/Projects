@@ -322,6 +322,45 @@ const getBookInstances = async (req, res, next) => {
     }
 };
 
+// GET /books/:id - the book, its reviews, and whether the session user may write one
+const getBookDetailPage = async (req, res, next) => {
+    const bookId = Number(req.params.id);
+    const userId = req.session.userId || null;
+
+    try {
+        const [book, summary, reviews, borrowed] = await Promise.all([
+            db.query(`${BOOK_LIST_SQL} WHERE b.book_id = $1`, [bookId]),
+            db.query('SELECT COUNT(*)::int AS count, ROUND(AVG(rating), 1) AS average FROM Review WHERE book_id = $1', [bookId]),
+            db.query(
+                `SELECT user_id AS username, rating, comment, to_char(created_at, 'YYYY.MM.DD') AS review_date
+                 FROM Review
+                 WHERE book_id = $1
+                 ORDER BY created_at DESC, review_id DESC`,
+                [bookId]
+            ),
+            //only a user who has borrowed some copy of the book may review it
+            db.query(
+                `SELECT EXISTS (SELECT 1 FROM Loan l
+                                JOIN BookCopy cp ON cp.copy_id = l.copy_id
+                                WHERE l.user_id = $1 AND cp.book_id = $2) AS has_borrowed`,
+                [userId, bookId]
+            ),
+        ]);
+        if (book.rows.length === 0) throw httpError(404, 'Book not found.');
+
+        res.render('pages/book-detail', {
+            title: book.rows[0].title,
+            book: book.rows[0],
+            reviewSummary: summary.rows[0],
+            reviews: reviews.rows,
+            canReview: borrowed.rows[0].has_borrowed,
+            myReview: reviews.rows.find((review) => review.username === userId) || null,
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = {
     getBooksPage,
     getAddBookPage,
@@ -329,5 +368,6 @@ module.exports = {
     postDeleteBookInstance,
     postBorrowBook,
     postReturnBook,
-    getBookInstances
+    getBookInstances,
+    getBookDetailPage
 };

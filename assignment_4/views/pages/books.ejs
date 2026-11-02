@@ -63,7 +63,7 @@
                     <tbody>
                         <% books.forEach(book => { %>
                             <tr class="book-row">
-                                <td><%= book.title %></td>
+                                <td><a href="/books/<%= book.id %>"><%= book.title %></a></td>
                                 <td><%= book.author %></td>
                                 <td><%= book.categories %></td>
                                 <td><%= book.total_quantity %></td>

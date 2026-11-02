@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <%- include('../components/header') %>
+        <main>
+            <div class="card mb-3">
+                <h2 class="mb-3"><%= book.title %></h2>
+                <table class = "table">
+                    <tbody>
+                        <tr>
+                            <th>Author</th>
+                            <td><%= book.author %></td>
+                        </tr>
+                        <tr>
+                            <th>Categories</th>
+                            <td><%= book.categories || '-' %></td>
+                        </tr>
+                        <tr>
+                            <th>Available</th>
+                            <td><%= book.available_quantity %> of <%= book.total_quantity %> copies</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2 class="mb-3">Reviews</h2>
+                <p class="mb-3">
+                    <% if (reviewSummary.count > 0) { %>
+                        Average rating <%= reviewSummary.average %> / 5 from <%= reviewSummary.count %> review(s)
+                    <% } else { %>
+                        No reviews yet.
+                    <% } %>
+                </p>
+
+                <% if (!locals.session || !session.userId) { %>
+                    <p class="mb-3"><a href="/login">Log in</a> to write a review.</p>
+                <% } else if (canReview) { %>
+                    <form action="/books/<%= book.id %>/review" method="POST" class="mb-3">
+                        <div class="form-group">
+                            <label for="rating" class="form-label"><%= myReview ? 'Edit your review' : 'Write a review' %></label>
+                            <select name="rating" id="rating" class="form-select">
+                                <% [5, 4, 3, 2, 1].forEach(score => { %>
+                                    <option value="<%= score %>" <%= myReview && myReview.rating === score ? 'selected' : '' %>><%= score %> / 5</option>
+                                <% }); %>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <textarea name="comment" rows="3" maxlength="1000" placeholder="Comment (optional)" class="form-control"><%= myReview && myReview.comment ? myReview.comment : '' %></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><%= myReview ? 'Update' : 'Submit' %></button>
+                    </form>
+                    <% if (myReview) { %>
+                        <form action="/books/<%= book.id %>/review/delete" method="POST" class="mb-3">
+                            <button type="submit" class="btn btn-danger">Delete my review</button>
+                        </form>
+                    <% } %>
+                <% } else { %>
+                    <p class="mb-3">Only members who have borrowed this book can review it.</p>
+                <% } %>
+
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Rating</th>
+                            <th>Comment</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% reviews.forEach(review => { %>
+                            <tr>
+                                <td><%= review.username %></td>
+                                <td><%= review.rating %> / 5</td>
+                                <td><%= review.comment || '' %></td>
+                                <td><%= review.review_date %></td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

@@ -155,6 +155,22 @@ PostgreSQL 18 is already installed and running in WSL.
 | S2 | Loan statistics | `/stats/loans`: monthly loans and overdue rate (admin); member ranking by total loans, 다독 순위 (admin only, as promised in the 4-1 report); personal totals and on-time return rate (any user) |
 
 - [ ] Each feature needs a controller (e.g. `reviewController`, `reservationController`, `statsController`), routes with the right middleware, views, and header nav links.
+
+Split into three rounds of typing, each checked and committed on its own:
+
+- [x] **8a: book detail page and E1.** Passed 2026-11-02, on a fresh seed:
+  - Hobbit shows 4.7 from 3 reviews.
+  - alice gets her review prefilled, frank can review I, Robot but not Dune, and a crafted POST on Dune is a 403.
+  - Writing, editing (the count stays 1) and deleting work; deleting again is a 404.
+  - Bad ratings and a 1001-character comment are 400s, and HTML in a comment is escaped.
+  - Logged-out POSTs go to `/login`, `/books/999999` is a 404, and `/books/add` still routes.
+  - `GET /books/:id` (public, `bookController.getBookDetailPage`), with titles in the book list linking to it. It shows the book, the average rating and review count (as promised in the 4-1 report's E1), and every review.
+  - `reviewController`:
+    - `POST /books/:id/review` writes or replaces your review, in one `INSERT ... SELECT ... WHERE EXISTS (a loan of the book) ON CONFLICT (user_id, book_id) DO UPDATE`
+    - `POST /books/:id/review/delete` deletes your own review
+  - The form appears only for users with a loan of the book, and is prefilled when you already have a review.
+- [ ] **8b: E2.** A Reserve button on the detail page, `/reservations` (my queue with positions, cancel), and a header link.
+- [ ] **8c: S1 and S2.** `/stats/ratings` and `/stats/loans`, with header links.
 - **Check:** each feature works end to end with seed data. Reservation hand-off: user A holds the last copy, B reserves, A returns, C is refused, B can borrow.
 
 ## Phase 9: Full test pass
