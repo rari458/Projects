@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>도서관 관리 웹 애플리케이션 구현 보고서</title>
+<style>
+  :root {
+    --ink: #1b2129;
+    --muted: #5d6673;
+    --rule: #d6dbe2;
+    --soft: #f4f6f9;
+    --core: #1f3a5f;
+    --core-tint: #e6edf6;
+    --ext: #5b3a8e;
+    --ext-tint: #efe9f7;
+    --stat: #2d6a4f;
+    --stat-tint: #e8f3ee;
+    --warn: #8a5a00;
+    --warn-tint: #fdf3e0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page {
+    size: A4 portrait;
+    margin: 15mm 15mm 16mm 15mm;
+    @bottom-center { content: counter(page) " / " counter(pages); font: 7.5pt 'Noto Sans KR', sans-serif; color: #8a929c; }
+  }
+  body {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 9pt;
+    line-height: 1.62;
+    color: var(--ink);
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page-break { break-before: page; }
+
+  /* ---------- title block ---------- */
+  .doc-head { border-bottom: 2px solid var(--core); padding-bottom: 5mm; margin-bottom: 6mm; }
+  .doc-head .kicker { font-size: 8pt; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; }
+  .doc-head h1 { font-family: 'Noto Serif KR', serif; font-size: 20pt; font-weight: 700; line-height: 1.3; margin: 2mm 0 1mm; color: var(--core); }
+  .doc-head .subtitle { font-size: 10pt; color: var(--muted); }
+  .doc-head dl { display: flex; flex-wrap: wrap; gap: 3mm 9mm; margin-top: 4mm; font-size: 8.6pt; }
+  .doc-head dt { color: var(--muted); font-size: 7.6pt; }
+  .doc-head dd { font-weight: 600; }
+
+  /* ---------- headings and text ---------- */
+  h2 { font-family: 'Noto Serif KR', serif; font-size: 13.5pt; font-weight: 700; color: var(--core);
+       margin: 7mm 0 3mm; padding-bottom: 1.2mm; border-bottom: 1px solid var(--rule); break-after: avoid; }
+  h2 .no { color: var(--muted); font-weight: 400; margin-right: 2mm; }
+  h3 { font-size: 10pt; font-weight: 700; margin: 4.5mm 0 1.8mm; break-after: avoid; }
+  p { margin-bottom: 2mm; }
+  ul.plain, ol.plain { margin: 0 0 2mm 4.5mm; }
+  ul.plain li, ol.plain li { margin-bottom: 0.8mm; }
+  strong { font-weight: 700; }
+  code { font-family: 'JetBrains Mono', 'Noto Sans KR', monospace; font-size: 0.86em; background: var(--soft);
+         padding: 0 0.35em; border-radius: 2px; }
+  .muted { color: var(--muted); }
+
+  /* ---------- tables ---------- */
+  table.t { width: 100%; border-collapse: collapse; font-size: 8.2pt; line-height: 1.5; margin: 1.5mm 0 3mm; }
+  table.t th { background: var(--soft); font-weight: 700; text-align: left; padding: 1.4mm 2mm;
+               border-top: 1.5px solid var(--ink); border-bottom: 1px solid var(--ink); }
+  table.t td { padding: 1.3mm 2mm; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  table.t tr { break-inside: avoid; }
+  table.t td.nowrap, table.t th.nowrap { white-space: nowrap; }
+
+  /* ---------- code, notes, figures ---------- */
+  pre.sql { font-family: 'JetBrains Mono', 'Noto Sans KR', monospace; font-size: 7.3pt; line-height: 1.5;
+            background: #f7f8fa; border: 1px solid var(--rule); border-left: 3px solid var(--muted);
+            padding: 2mm 3mm; margin: 1.5mm 0 3mm; white-space: pre-wrap; break-inside: avoid; }
+  pre.sql .c { color: #7a828c; }
+  code, pre { font-variant-ligatures: none; font-feature-settings: "calt" 0, "liga" 0; }
+  .note { background: var(--soft); border-radius: 2px; padding: 2mm 3mm; font-size: 8.3pt; margin: 2mm 0 3mm; break-inside: avoid; }
+  .note strong:first-child { color: var(--core); }
+  .note.warn { background: var(--warn-tint); }
+  .note.warn strong:first-child { color: var(--warn); }
+  figure { margin: 2.5mm auto 3.5mm; break-inside: avoid; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 2px; }
+  figure.w85 { width: 85%; } figure.w80 { width: 80%; } figure.w75 { width: 75%; } figure.w70 { width: 70%; } figure.w65 { width: 65%; }
+  figcaption { text-align: center; font-size: 8pt; color: var(--muted); margin-top: 1.6mm; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; align-items: start; break-inside: avoid; margin: 2.5mm 0 3.5mm; }
+  .pair figure { margin: 0; }
+  .stack { width: 72%; margin: 2.5mm auto 3.5mm; break-inside: avoid; }
+  .stack img { display: block; width: 100%; border: 1px solid var(--rule); border-radius: 2px; margin-bottom: 1.5mm; }
+
+  /* ---------- feature cards ---------- */
+  .feature { border: 1px solid var(--rule); border-radius: 3px; margin: 0 0 4mm; }
+  .feature header { display: flex; align-items: baseline; gap: 2.5mm; padding: 1.8mm 3mm; border-bottom: 1px solid var(--rule); background: var(--ext-tint); break-after: avoid; }
+  .feature header .tag { font-family: 'JetBrains Mono', monospace; font-size: 8pt; font-weight: 700; color: #fff; background: var(--ext); padding: 0 1.8mm; border-radius: 2px; }
+  .feature header .kind { margin-left: auto; font-size: 7.6pt; color: var(--muted); }
+  .feature.stat header { background: var(--stat-tint); }
+  .feature.stat header .tag { background: var(--stat); }
+  .feature header h3 { margin: 0; font-size: 9.8pt; }
+  .feature .body { padding: 2mm 3mm 0.5mm; font-size: 8.5pt; }
+  .feature .body dl { display: grid; grid-template-columns: 15mm 1fr; gap: 1mm 2mm; margin-bottom: 1.5mm; }
+  .feature .body dt { font-weight: 700; color: var(--muted); }
+
+  .video { border: 1.5px solid var(--core); border-radius: 3px; padding: 3mm 4mm; margin: 2mm 0 3mm; background: var(--core-tint); }
+  .video .url { font-family: 'JetBrains Mono', monospace; font-size: 10pt; font-weight: 700; color: var(--core); word-break: break-all; }
+</style>
+</head>
+<body>
+
+<header class="doc-head">
+  <div class="kicker">Database Systems · Assignment #4-2 · Web Application Development</div>
+  <h1>도서관 관리 웹 애플리케이션<br>구현 보고서</h1>
+  <div class="subtitle">Assignment #4-1 스키마 기반 도서 대출·반납 시스템의 구현, 실행 방법, 추가 기능과 시연</div>
+  <dl>
+    <div><dt>학번</dt><dd>2022065250</dd></div>
+    <div><dt>이름</dt><dd>문상철</dd></div>
+    <div><dt>기술 스택</dt><dd>Node.js · Express 5 · EJS · PostgreSQL 18</dd></div>
+    <div><dt>추가 기능</dt><dd>리뷰 · 예약 · 평점 통계 · 대출 통계</dd></div>
+  </dl>
+</header>
+
+<h2><span class="no">1</span>개요와 기술 스택</h2>
+
+<h3>1.1 개요</h3>
+<p>Assignment #4-1에서 설계한 PostgreSQL 스키마(릴레이션 9개)를 그대로 사용해, 과제 저장소의 Node.js + EJS 스켈레톤 코드 위에 도서관 대출·반납 웹 애플리케이션을 구현했다. 스켈레톤에서 더미 데이터를 반환하던 모든 컨트롤러를 실제 SQL 질의로 바꾸었고, 스켈레톤에 없던 카테고리 추가와 인기 저자 차트, 그리고 4-1 보고서에서 설계한 추가 기능 4가지(리뷰, 예약, 평점 통계, 대출 통계)를 새로 만들었다. 4-1에서 제출한 스키마는 구현 과정에서 바꾸지 않았다.</p>
+
+<h3>1.2 기술 스택</h3>
+<table class="t">
+  <thead><tr><th style="width:20%">구분</th><th style="width:30%">사용 기술 (버전)</th><th>용도</th></tr></thead>
+  <tbody>
+    <tr><td>런타임</td><td>Node.js 22</td><td>서버 실행 (Express 5는 Node.js 18 이상 필요)</td></tr>
+    <tr><td>웹 프레임워크</td><td>Express 5.1.0</td><td>라우팅, 폼 파싱(<code>express.urlencoded</code>), 정적 파일</td></tr>
+    <tr><td>템플릿 엔진</td><td>EJS 3.1.10</td><td>서버 측 HTML 렌더링. <code>&lt;%= %&gt;</code>로 출력값을 HTML 이스케이프</td></tr>
+    <tr><td>데이터베이스</td><td>PostgreSQL 18</td><td>스키마, 제약조건, 집계 질의</td></tr>
+    <tr><td>DB 드라이버</td><td>node-postgres <code>pg</code> 8.16.3</td><td>연결 풀, <code>$n</code> 바인드 파라미터, 트랜잭션</td></tr>
+    <tr><td>세션</td><td>express-session 1.18.2</td><td>로그인 상태 (메모리 저장소, HttpOnly·SameSite=Lax 쿠키)</td></tr>
+    <tr><td>설정</td><td>dotenv 17.2.1</td><td><code>.env</code>의 <code>DATABASE_URL</code> 로드</td></tr>
+    <tr><td>UI 보조</td><td>Choices.js 11.1.0</td><td>도서 추가 화면의 저자·카테고리 선택과 새 이름 입력</td></tr>
+    <tr><td>비밀번호</td><td>Node 내장 <code>crypto.scrypt</code></td><td>16바이트 무작위 솔트 + scrypt 해시, <code>timingSafeEqual</code> 비교</td></tr>
+  </tbody>
+</table>
+
+<h3>1.3 구조와 구현 원칙</h3>
+<p>요청은 <code>routes/routes.js</code> → 접근 제어 미들웨어(<code>isAuthenticated</code>, <code>isAdmin</code>) → 컨트롤러 → <code>pg</code> → EJS 뷰 순서로 처리된다. 모든 기능에 다음 원칙을 공통으로 적용했다.</p>
+<table class="t">
+  <thead><tr><th style="width:25%">원칙</th><th>구현</th></tr></thead>
+  <tbody>
+    <tr><td>SQL 인젝션 방지</td><td>사용자 입력은 모두 <code>$1</code>, <code>$2</code> 바인드 파라미터로 전달한다. 바인드할 수 없는 ORDER BY 컬럼·방향과 검색 대상 컬럼은 코드에 정한 화이트리스트에서만 고른다.</td></tr>
+    <tr><td>여러 문장이 필요한 작업은 트랜잭션</td><td><code>config/db.js</code>의 <code>transaction(fn)</code>이 한 연결에서 BEGIN·COMMIT을 실행하고, 도중에 오류가 나면 ROLLBACK한다. 대출·반납·도서 추가·복본 삭제·예약이 이를 사용한다.</td></tr>
+    <tr><td>동시 요청 대비</td><td>대출, 복본 삭제, 예약처럼 검사한 뒤 변경하는 작업은 대상 행을 <code>SELECT ... FOR UPDATE</code>(예약은 <code>FOR SHARE</code>)로 잠근 뒤 검사한다. 회원가입, 카테고리 추가, 새 저자·카테고리 생성처럼 한 행을 넣는 작업은 <code>ON CONFLICT</code>로 동시 삽입을 처리한다. 그래도 놓치는 경우는 4-1에서 설계한 유일 제약과 부분 유일 인덱스가 최종적으로 막는다.</td></tr>
+    <tr><td>규칙 위반 응답</td><td>규칙 위반은 상태 코드(400/403/404)와 함께 사용자가 이해할 수 있는 메시지를 오류 페이지에 보여 준다. 예상하지 못한 500 오류는 내부 메시지를 숨기고 <code>Internal Server Error</code>만 보여 준다.</td></tr>
+    <tr><td>날짜 표기</td><td>날짜는 SQL의 <code>to_char(..., 'YYYY.MM.DD')</code>로 문자열로 만들어 보낸다. JS <code>Date</code>를 JSON으로 보내면 UTC로 바뀌어 하루 전 날짜로 보이는 문제를 피했다.</td></tr>
+    <tr><td>경로의 id</td><td><code>router.param('id')</code>가 1~9자리 숫자가 아닌 <code>:id</code>를 질의 전에 404로 처리한다.</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="no">2</span>요구 기능별 구현 내용과 실행 화면</h2>
+
+<h3>2.1 회원가입과 로그인</h3>
+<ul class="plain">
+  <li><strong>회원가입</strong> (<code>/register</code>): ID는 영문·숫자·밑줄 3~20자만 허용한다. 같은 규칙이 <code>Users.user_id</code>의 CHECK 제약으로도 걸려 있어, 화면의 복본 표에 ID를 그대로 출력해도 안전하다. 중복 ID는 <code>INSERT ... ON CONFLICT (user_id) DO NOTHING</code>의 영향 행 수로 판단하므로 두 사람이 동시에 같은 ID로 가입해도 하나만 성공한다.</li>
+  <li><strong>관리자 가입</strong>: 역할을 Admin으로 고르면 관리자 코드 입력 칸이 나타나고, 코드가 학번 <code>2022065250</code>과 정확히 같아야 한다. 코드는 검사에만 쓰고 저장하지 않는다. 그 밖의 역할 값은 모두 일반 사용자로 저장된다.</li>
+  <li><strong>비밀번호</strong>: 평문을 저장하지 않고 <code>솔트:해시</code> 형식(scrypt)으로 저장한다.</li>
+  <li><strong>로그인</strong> (<code>/login</code>): ID가 없을 때와 비밀번호가 틀렸을 때 같은 메시지(<em>Invalid username or password.</em>)를 보여 주어 ID 존재 여부가 드러나지 않게 했다. 로그인에 성공하면 <code>session.regenerate</code>로 세션 ID를 새로 발급해 세션 고정 공격을 막는다.</li>
+  <li><strong>권한 구분</strong>: 세션의 <code>role</code>이 <code>admin</code>이면 상단 메뉴에 Categories, Users가 추가된다. 관리자 경로는 모두 <code>isAuthenticated, isAdmin</code>을 거치므로 일반 사용자가 주소를 직접 입력해도 403이 된다.</li>
+</ul>
+<div class="pair">
+  <figure><img src="assignment4_2_img/01-register.png" alt=""><figcaption>그림 1. 관리자 가입 (Admin 선택 시 코드 입력 칸)</figcaption></figure>
+  <figure><img src="assignment4_2_img/02-login.png" alt=""><figcaption>그림 2. 로그인</figcaption></figure>
+</div>
+
+<h3>2.2 서적 목록: 정보, 검색, 정렬</h3>
+<p><code>/books</code>는 책마다 한 행으로 제목, 저자, 카테고리, 전체 복본 수, 대출 가능 복본 수를 보여 준다. 카테고리 문자열과 두 개수는 각각 상관 서브쿼리로 구했다. 카테고리와 복본을 한 번에 JOIN하면 행이 곱해져 개수가 틀어지기 때문이다.</p>
+<pre class="sql">SELECT b.book_id AS id, b.title, a.author_name AS author,
+       COALESCE((SELECT string_agg(c.category_name, ', ' ORDER BY c.category_name)
+                 FROM Book_Category bc JOIN Category c ON c.category_id = bc.category_id
+                 WHERE bc.book_id = b.book_id), '') AS categories,
+       (SELECT COUNT(*)::int FROM BookCopy cp WHERE cp.book_id = b.book_id) AS total_quantity,
+       (SELECT COUNT(*)::int FROM BookCopy cp WHERE cp.book_id = b.book_id AND cp.status = 'available') AS available_quantity
+FROM Book b JOIN Author a ON a.author_id = b.author_id</pre>
+<ul class="plain">
+  <li><strong>검색</strong>: 제목·저자·카테고리 중 하나를 골라 대소문자 구분 없는 부분 일치(<code>ILIKE</code>)로 찾는다. 입력의 <code>%</code>, <code>_</code>, <code>\</code>는 이스케이프해 글자 그대로 찾는다. 카테고리 검색은 <code>EXISTS</code>로 걸러서, 결과에서도 그 책의 모든 카테고리를 보여 준다(그림 4의 Dune).</li>
+  <li><strong>정렬</strong>: 열 머리글을 누르면 제목·저자·카테고리 오름차순/내림차순으로 정렬한다. 컬럼과 방향은 화이트리스트에서만 고르고, 같은 값끼리는 제목으로 한 번 더 정렬한다.</li>
+  <li><strong>복본 목록</strong>: Show Instances를 누르면 <code>/api/books/:id/instances</code>(로그인 필요)가 복본마다 상태, 대출자, 대출일을 JSON으로 돌려준다. 대출 가능한 복본에는 Borrow, 본인이 빌린 복본에는 Return, 남이 빌린 복본에는 비활성화된 Borrowed 버튼이 붙는다.</li>
+</ul>
+<figure class="w85"><img src="assignment4_2_img/03-books.png" alt=""><figcaption>그림 3. 서적 목록과 The Hobbit의 복본 목록 (alice로 로그인. 본인 복본 #1에만 Return)</figcaption></figure>
+<figure class="w85"><img src="assignment4_2_img/04-books-search.png" alt=""><figcaption>그림 4. 카테고리 "fantasy" 검색, 저자 내림차순 정렬</figcaption></figure>
+
+<h3>2.3 인기 서적·저자 차트</h3>
+<p><code>/charts</code>는 최근 3개월(<code>loan_date &gt;= CURRENT_DATE - INTERVAL '3 months'</code>)의 대출을 집계한다. 대출은 복본(<code>BookCopy</code>)을 참조하지만 <code>Book</code> 단위로 <code>GROUP BY</code>하므로 같은 책의 복본은 합산된다. 하나의 질의를 <code>$1</code>에 NULL 또는 카테고리 id를 넣어 전체 차트와 카테고리별 차트에 함께 쓴다.</p>
+<pre class="sql">SELECT b.title, a.author_name AS author, ... AS categories, COUNT(*)::int AS borrow_count
+FROM Loan l JOIN BookCopy cp ON cp.copy_id = l.copy_id
+            JOIN Book b ON b.book_id = cp.book_id JOIN Author a ON a.author_id = b.author_id
+WHERE l.loan_date &gt;= CURRENT_DATE - INTERVAL '3 months'
+  AND ($1::int IS NULL OR EXISTS (SELECT 1 FROM Book_Category bc
+                                  WHERE bc.book_id = b.book_id AND bc.category_id = $1::int))
+GROUP BY b.book_id, a.author_id
+ORDER BY borrow_count DESC, b.title
+LIMIT 10</pre>
+<ul class="plain">
+  <li><strong>전체 인기 서적</strong>: 상위 10권. 그림 5에서 The Hobbit의 6건은 복본 3권의 대출을 합친 수이고, The Lord of the Rings는 전체 대출 5건 중 4건이 3개월보다 오래되어 1건만 집계된다.</li>
+  <li><strong>인기 저자</strong>: 같은 대출을 <code>Author</code>별로 묶은 표를 추가했다. 스켈레톤에는 없었지만 명세가 "인기 서적/저자 차트"를 요구한다.</li>
+  <li><strong>카테고리별 인기 서적</strong>: 드롭다운(알파벳순)에서 고른 카테고리에 속한 책만 집계한다. 값이 없거나 잘못되면 첫 번째 카테고리를 보여 준다.</li>
+</ul>
+<figure class="w70"><img src="assignment4_2_img/05-charts.png" alt=""><figcaption>그림 5. 인기 서적, 인기 저자, 카테고리별 인기 서적 (최근 3개월)</figcaption></figure>
+
+<h3>2.4 대출과 반납</h3>
+<p>대출(<code>POST /books/instances/:id/borrow</code>)은 하나의 트랜잭션 안에서 다음 순서로 처리한다.</p>
+<ol class="plain">
+  <li>회원 행을 <code>FOR UPDATE</code>로 잠근다. 같은 회원의 대출 요청 두 개가 동시에 한도 검사를 통과하는 일을 막는다.</li>
+  <li>복본 행을 <code>FOR UPDATE</code>로 잠그고 상태가 <code>available</code>인지 확인한다.</li>
+  <li>회원의 미반납 대출을 한 번에 센다: 전체 수, 같은 책(<code>book_id</code>)의 수, 연체 수(<code>CURRENT_DATE &gt;= due_date</code>, 즉 대출 후 7일 이상).</li>
+  <li>그 책에 대기 중인 예약이 있으면 가장 먼저 예약한 회원만 빌릴 수 있다(추가 기능 E2).</li>
+  <li><code>Loan</code>에 반납 기한 <code>CURRENT_DATE + 7</code>로 대출을 넣고, 복본 상태를 <code>borrowed</code>로 바꾸고, 그 회원의 대기 예약을 <code>fulfilled</code>로 바꾼다.</li>
+</ol>
+<pre class="sql">SELECT COUNT(*)::int AS open_count,
+       COUNT(*) FILTER (WHERE cp.book_id = $2)::int AS same_book,
+       COUNT(*) FILTER (WHERE CURRENT_DATE &gt;= l.due_date)::int AS overdue
+FROM Loan l JOIN BookCopy cp ON cp.copy_id = l.copy_id
+WHERE l.user_id = $1 AND l.return_date IS NULL</pre>
+<table class="t">
+  <thead><tr><th style="width:36%">요구 사항</th><th>위반 시 메시지 (HTTP 400)</th></tr></thead>
+  <tbody>
+    <tr><td>대출 중이 아닌 책만 대출</td><td>This copy is not available. (최종적으로는 <code>Loan(copy_id) WHERE return_date IS NULL</code> 부분 유일 인덱스가 막음)</td></tr>
+    <tr><td>동시에 최대 3권</td><td>You have reached the maximum borrowing limit (3 books).</td></tr>
+    <tr><td>같은 책 2권 동시 대출 금지</td><td>You are already borrowing a copy of this book.</td></tr>
+    <tr><td>연체 중이면 대출 금지</td><td>You have an overdue book. Return it before borrowing another.</td></tr>
+  </tbody>
+</table>
+<div class="stack">
+  <img src="assignment4_2_img/06-error-same-book.png" alt="">
+  <img src="assignment4_2_img/07-error-limit.png" alt="">
+  <img src="assignment4_2_img/08-error-overdue.png" alt="">
+  <figcaption>그림 6. 같은 책 재대출(alice), 4권째 대출(bob), 연체 중 대출(carol)이 거절되는 화면</figcaption>
+</div>
+<p><strong>반납</strong>(<code>POST /borrowings/:id/return</code>)은 <code>UPDATE Loan SET return_date = CURRENT_DATE WHERE loan_id = $1 AND user_id = $2 AND return_date IS NULL RETURNING copy_id</code> 한 문장으로 처리하고, 같은 트랜잭션에서 복본을 다시 <code>available</code>로 바꾼다. 조건에 세션의 회원 ID가 들어 있으므로 요청을 조작해도 다른 사람의 대출은 반납할 수 없고, 이미 반납한 대출을 다시 반납할 수도 없다.</p>
+
+<h3>2.5 대출 기록</h3>
+<p><code>/borrowings</code>는 로그인한 회원의 모든 대출을 최신순으로 보여 준다. 대출이 복본을 참조하므로 첫 열의 <strong>#번호</strong>로 같은 책 중에서도 정확히 어떤 복본을 빌렸는지 알 수 있다. 반납하지 않은 대출에는 Return 버튼이 있다.</p>
+<figure class="w85"><img src="assignment4_2_img/09-borrowings.png" alt=""><figcaption>그림 7. alice의 대출 기록 (방금 빌린 Dune 복본 #11은 미반납)</figcaption></figure>
+
+<h3>2.6 서적 관리 (관리자)</h3>
+<ul class="plain">
+  <li><strong>도서 추가</strong> (<code>/books/add</code>): 제목, 저자 1명, 카테고리 여러 개, 수량(1~100)을 받는다. Choices.js에서 목록의 항목을 고르면 <code>id:&lt;번호&gt;</code>가, 새 이름을 입력하면 그 문자열이 전송된다. 서버는 <code>id:</code> 값은 실제로 있는 행인지 확인하고, 새 이름은 대소문자를 무시하고 같은 이름이 있으면 재사용하고, 없으면 <code>INSERT ... ON CONFLICT DO UPDATE ... RETURNING</code>으로 만든다. 같은 저자의 같은 제목이 이미 있으면 새 <code>Book</code>을 만들지 않고 복본과 카테고리만 추가한다. 복본은 <code>generate_series</code>로 한 번에, 카테고리 연결은 <code>unnest($2::int[]) ... ON CONFLICT DO NOTHING</code>으로 넣는다. 전체가 하나의 트랜잭션이다.</li>
+  <li><strong>여러 카테고리</strong>: <code>Book_Category</code> 교차 릴레이션으로 한 책이 여러 카테고리에 속한다(그림 9의 Demo Book: Classic, Poetry).</li>
+  <li><strong>도서 제거</strong>: 복본 목록의 Delete로 복본 단위로 지운다. 복본과 책을 차례로 잠근 뒤, 대출 중인 복본은 거절하고(<em>This copy is borrowed. Delete it after it is returned.</em>), 마지막 복본을 지우면 책도 함께 지운다. 책 삭제는 <code>ON DELETE CASCADE</code>로 그 책의 카테고리 연결, 리뷰, 예약까지 정리한다.</li>
+</ul>
+<figure class="w75"><img src="assignment4_2_img/10-add-book.png" alt=""><figcaption>그림 8. 새 저자(Demo Author)와 새 카테고리(Poetry)를 입력해 도서 추가</figcaption></figure>
+<figure class="w85"><img src="assignment4_2_img/11-books-admin.png" alt=""><figcaption>그림 9. 추가 직후 그 책으로 검색된 목록과 관리자용 Delete 버튼</figcaption></figure>
+
+<h3>2.7 카테고리 관리 (관리자)</h3>
+<p>스켈레톤에는 삭제만 있었으나 명세에 맞춰 추가 폼과 <code>POST /categories/add</code>를 만들었다. 이름은 앞뒤 공백을 지우고 1~50자여야 하며, 대소문자만 다른 이름은 중복으로 거절한다. 중복 검사와 삽입을 <code>INSERT ... SELECT ... WHERE NOT EXISTS (lower 비교) ON CONFLICT DO NOTHING</code> 한 문장으로 처리한다. 카테고리를 삭제하면 <code>Book_Category</code> 연결만 CASCADE로 지워지므로 책은 다른 카테고리를 그대로 유지한다.</p>
+
+<h3>2.8 회원 관리 (관리자)</h3>
+<p><code>/users</code>는 모든 회원의 ID와 역할을 보여 주고, ID 또는 역할로 검색할 수 있다. 검색 대상 컬럼은 화이트리스트로 고르고, 서적 검색과 같은 이스케이프를 적용한다.</p>
+<div class="pair">
+  <figure><img src="assignment4_2_img/12-categories.png" alt=""><figcaption>그림 10. 카테고리 관리 (추가 폼과 삭제)</figcaption></figure>
+  <figure><img src="assignment4_2_img/13-users.png" alt=""><figcaption>그림 11. 회원 목록과 검색</figcaption></figure>
+</div>
+
+<h2><span class="no">3</span>로컬 실행 방법</h2>
+<p>명령은 모두 프로젝트 루트에서 실행한다. <code>views/</code>, <code>public/</code>, <code>.env</code>를 현재 폴더 기준으로 찾기 때문이다. 같은 내용이 제출 파일의 <code>README.md</code>에도 있다.</p>
+<ol class="plain">
+  <li><strong>설치</strong>: Node.js(18 이상, LTS 권장)와 PostgreSQL을 설치하고 PostgreSQL 서버를 실행한다.</li>
+  <li><strong>DB 사용자와 데이터베이스 생성</strong> (Linux 예시. Windows·macOS는 <code>psql</code>에서 <code>CREATE USER library WITH PASSWORD '...'; CREATE DATABASE library OWNER library;</code>)
+<pre class="sql">sudo -u postgres createuser -P library          <span class="c"># 새 비밀번호 입력</span>
+sudo -u postgres createdb -O library library</pre></li>
+  <li><strong>패키지 설치</strong>
+<pre class="sql">npm install</pre></li>
+  <li><strong>접속 정보 설정</strong>: <code>.env.example</code>을 <code>.env</code>로 복사하고 2단계의 정보로 고친다.
+<pre class="sql">cp .env.example .env
+<span class="c"># .env</span>
+DATABASE_URL="postgresql://library:&lt;비밀번호&gt;@localhost:5432/library"</pre></li>
+  <li><strong>DB 초기화</strong>: 9개 테이블을 지우고 다시 만든 뒤 시드 데이터를 넣는다. 전체가 한 트랜잭션이라 실패하면 기존 테이블이 그대로 남고, 성공하면 테이블별 행 수를 출력한다.
+<pre class="sql">npm run db:init</pre></li>
+  <li><strong>실행</strong>: 브라우저에서 <code>http://localhost:3000</code>에 접속한다.
+<pre class="sql">npm start</pre></li>
+</ol>
+<table class="t">
+  <thead><tr><th style="width:12%">ID</th><th style="width:14%">비밀번호</th><th style="width:10%">역할</th><th>초기화 직후 상태</th></tr></thead>
+  <tbody>
+    <tr><td><code>admin</code></td><td><code>admin1234</code></td><td>관리자</td><td>대출 없음</td></tr>
+    <tr><td><code>alice</code></td><td><code>user1234</code></td><td>사용자</td><td>The Hobbit, Murder on the Orient Express 대출 중</td></tr>
+    <tr><td><code>bob</code></td><td><code>user1234</code></td><td>사용자</td><td>3권 대출 중 (대출 한도)</td></tr>
+    <tr><td><code>carol</code></td><td><code>user1234</code></td><td>사용자</td><td>10일 전 대출을 미반납 (연체)</td></tr>
+    <tr><td><code>dave</code></td><td><code>user1234</code></td><td>사용자</td><td>Murder on the Orient Express 대출 중</td></tr>
+    <tr><td><code>erin</code>, <code>frank</code></td><td><code>user1234</code></td><td>사용자</td><td>Murder on the Orient Express 예약 대기 1, 2순위</td></tr>
+  </tbody>
+</table>
+<p class="muted">시드에는 저자 5명, 도서 10종(복본 20권), 카테고리 5개, 약 6개월에 걸친 대출 43건, 리뷰 14건, 예약 4건이 들어 있다. 대출 날짜는 초기화한 날을 기준으로 계산되므로 채점·시연 직전에 <code>npm run db:init</code>을 다시 실행하는 것을 권장한다. 관리자 가입 코드는 <code>2022065250</code>이다.</p>
+
+<h2><span class="no">4</span>추가 기능</h2>
+<p>4-1 보고서에서 설계한 대로 비통계 기능 2가지(E1, E2)와 통계 기능 정확히 2가지(S1, S2)를 구현했다. 통계가 2가지를 넘지 않도록, 이 기능들 외의 화면에는 순위나 평균 같은 집계 지표를 따로 두지 않았다(인기 차트는 필수 기능). 모두 4-1에서 설계한 <code>Review</code>, <code>Reservation</code> 릴레이션과 그 제약조건을 그대로 사용한다.</p>
+
+<div class="feature">
+  <header><span class="tag">E1</span><h3>도서 리뷰와 별점</h3><span class="kind">비통계 기능 · <code>Review</code></span></header>
+  <div class="body">
+    <dl>
+      <dt>목적</dt><dd>대출 횟수만으로는 알 수 없는 책의 내용과 만족도를 회원끼리 공유한다.</dd>
+      <dt>화면</dt><dd>목록에서 책 제목을 누르면 상세 페이지 <code>/books/:id</code>가 열린다(로그인 불필요). 책 정보, 평균 별점과 리뷰 수, 모든 리뷰가 최신순으로 나온다.</dd>
+      <dt>동작</dt><dd>그 책의 복본을 한 번이라도 빌린 회원에게만 작성 폼이 보이고, 이미 쓴 리뷰가 있으면 그 내용이 채워진 수정 폼과 삭제 버튼이 보인다. 별점은 1~5 정수, 코멘트는 선택이며 1000자 이하다. 작성과 수정은 한 문장으로 처리한다. <code>WHERE EXISTS</code>가 대출 이력이 없는 회원을 막고, <code>UNIQUE (user_id, book_id)</code> 충돌이 두 번째 작성을 수정으로 바꾼다. 삭제는 <code>user_id</code> 조건 때문에 본인 리뷰만 지워진다.</dd>
+    </dl>
+<pre class="sql">INSERT INTO Review (user_id, book_id, rating, comment)
+SELECT $1::varchar, $2::int, $3::smallint, $4::text
+WHERE EXISTS (SELECT 1 FROM Loan l JOIN BookCopy cp ON cp.copy_id = l.copy_id
+              WHERE l.user_id = $1::varchar AND cp.book_id = $2::int)
+ON CONFLICT (user_id, book_id) DO UPDATE SET rating = EXCLUDED.rating, comment = EXCLUDED.comment
+<span class="c">-- 영향 행이 0이면 403 "Only members who have borrowed this book can review it."</span></pre>
+  </div>
+</div>
+<figure class="w80"><img src="assignment4_2_img/14-book-detail.png" alt=""><figcaption>그림 12. 도서 상세 페이지: 평균 별점, alice의 리뷰가 채워진 수정 폼, 리뷰 목록</figcaption></figure>
+
+<div class="feature">
+  <header><span class="tag">E2</span><h3>대출 예약 대기열</h3><span class="kind">비통계 기능 · <code>Reservation</code></span></header>
+  <div class="body">
+    <dl>
+      <dt>목적</dt><dd>모든 복본이 대출 중인 인기 도서를 기다리는 회원에게 순서를 보장해, 반납 시점을 노려 계속 새로고침해야 하는 불편을 없앤다.</dd>
+      <dt>예약</dt><dd>대출 가능한 복본이 없고, 그 책을 빌리고 있지 않고, 대기 중인 예약도 없을 때 도서 상세 페이지에 Reserve 버튼이 나온다. 서버는 트랜잭션 안에서 그 책의 복본을 <code>FOR SHARE</code>로 잠가 검사 중에 대출·반납이 끼어들지 못하게 하고, <code>ON CONFLICT (user_id, book_id) WHERE status = 'waiting' DO NOTHING</code>으로 4-1의 부분 유일 인덱스를 이용해 중복 예약을 거절한다.</dd>
+      <dt>순번</dt><dd><code>/reservations</code>는 본인 예약을 대기 중인 것부터 보여 주고, 대기 순번을 <code>(reserved_at, reservation_id)</code>가 자기 예약 이하인 대기 예약 수로 계산한다. 대기 중인 예약은 Cancel로 취소(<code>cancelled</code>)할 수 있다.</dd>
+      <dt>대출 연동</dt><dd>대기 예약이 있는 책의 반납된 복본은 1순위 회원만 빌릴 수 있고, 다른 회원은 <em>This book is reserved for another user.</em>로 거절된다. 1순위 회원이 빌리면 같은 트랜잭션에서 예약이 <code>fulfilled</code>가 되고 다음 회원이 1순위가 된다.</dd>
+    </dl>
+  </div>
+</div>
+<figure class="w80"><img src="assignment4_2_img/15-reserve-button.png" alt=""><figcaption>그림 13. 모든 복본이 대출 중인 책의 상세 페이지 (bob에게 보이는 Reserve 버튼)</figcaption></figure>
+<figure class="w80"><img src="assignment4_2_img/16-reservations.png" alt=""><figcaption>그림 14. frank의 예약 목록 (대기 2순위, Cancel 버튼)</figcaption></figure>
+
+<div class="feature stat">
+  <header><span class="tag">S1</span><h3>서적·카테고리별 평점 통계</h3><span class="kind">통계 기능 1/2 · <code>Review</code> <code>Book</code> <code>Book_Category</code> <code>Category</code></span></header>
+  <div class="body">
+    <dl>
+      <dt>목적</dt><dd>인기 차트가 보여 주는 양적 지표(대출 횟수)를 질적 지표(만족도)로 보완한다.</dd>
+      <dt>내용</dt><dd><code>/stats/ratings</code>(로그인 불필요). ① 도서별 평균 별점(소수 둘째 자리)과 리뷰 수. 리뷰가 없는 책은 맨 아래에 '-'로 표시한다. ② 카테고리별 평균 별점, 리뷰 수, 가장 평점이 높은 책(평균이 같으면 리뷰가 많은 책, 그다음 제목순). 별도 통계 테이블 없이 매번 <code>Review</code>에서 집계하므로 원본과 항상 일치한다.</dd>
+    </dl>
+<pre class="sql">SELECT c.category_name AS category, COUNT(r.review_id)::int AS review_count,
+       ROUND(AVG(r.rating), 2) AS avg_rating,
+       (SELECT b.title FROM Book_Category tbc JOIN Book b ON b.book_id = tbc.book_id
+                            JOIN Review tr ON tr.book_id = b.book_id
+        WHERE tbc.category_id = c.category_id
+        GROUP BY b.book_id ORDER BY AVG(tr.rating) DESC, COUNT(*) DESC, b.title LIMIT 1) AS top_book
+FROM Category c LEFT JOIN Book_Category bc ON bc.category_id = c.category_id
+                LEFT JOIN Review r ON r.book_id = bc.book_id
+GROUP BY c.category_id
+ORDER BY avg_rating DESC NULLS LAST, review_count DESC, category</pre>
+  </div>
+</div>
+<figure class="w75"><img src="assignment4_2_img/17-rating-stats.png" alt=""><figcaption>그림 15. 도서별·카테고리별 평점 통계 (그림 8에서 추가한 Demo Book과 Poetry는 리뷰가 없어 맨 아래에 '-')</figcaption></figure>
+
+<div class="feature stat">
+  <header><span class="tag">S2</span><h3>월별 대출·연체 통계와 회원 독서 통계</h3><span class="kind">통계 기능 2/2 · <code>Loan</code> <code>Users</code></span></header>
+  <div class="body">
+    <dl>
+      <dt>목적</dt><dd>관리자에게는 도서관 운영 지표를, 회원에게는 자신의 독서 습관을 보여 준다.</dd>
+      <dt>회원</dt><dd><code>/stats/loans</code>(로그인 필요). 모든 회원은 본인의 누적 대출 수, 반납 수, 기한 내 반납 수, 기한 내 반납률(반납한 대출 중 <code>return_date &lt; due_date</code>의 비율)을 본다.</dd>
+      <dt>관리자</dt><dd>① 대출월별 대출 건수, 연체 건수, 연체율. 4-1 보고서의 정의대로 기한 이후에 반납했거나(<code>return_date &gt;= due_date</code>) 아직 반납하지 않고 기한이 지난 대출을 연체로 센다. ② 회원별 누적 대출 수 순위(다독 순위, <code>RANK()</code>). 다른 회원의 기록이 드러나므로 관리자 전용이며, 두 질의는 세션의 역할이 admin일 때만 실행되어 다른 회원에게는 데이터 자체가 전달되지 않는다.</dd>
+    </dl>
+<pre class="sql">SELECT to_char(loan_date, 'YYYY-MM') AS month,
+       COUNT(*)::int AS loans,
+       COUNT(*) FILTER (WHERE COALESCE(return_date, CURRENT_DATE) &gt;= due_date)::int AS overdue,
+       ROUND(100.0 * COUNT(*) FILTER (WHERE COALESCE(return_date, CURRENT_DATE) &gt;= due_date) / COUNT(*), 1) AS overdue_rate
+FROM Loan GROUP BY month ORDER BY month DESC</pre>
+  </div>
+</div>
+<figure class="w65"><img src="assignment4_2_img/18-loan-stats-admin.png" alt=""><figcaption>그림 16. 관리자 화면: 본인 통계, 월별 대출·연체율, 다독 순위</figcaption></figure>
+<figure class="w65"><img src="assignment4_2_img/19-loan-stats-member.png" alt=""><figcaption>그림 17. 일반 회원(alice) 화면: 본인 통계만 표시</figcaption></figure>
+
+<h2><span class="no">5</span>테스트와 보안 점검</h2>
+<p>각 기능을 구현한 뒤 별도의 테스트용 데이터베이스에 시드를 새로 넣고, 실제 라우터·컨트롤러·뷰를 그대로 띄운 상태에서 HTTP 요청으로 검사했다. 마지막에는 전 기능을 한 번에 다시 점검했다.</p>
+<table class="t">
+  <thead><tr><th style="width:22%">점검</th><th>내용</th><th style="width:13%">결과</th></tr></thead>
+  <tbody>
+    <tr><td>스키마 제약조건</td><td><code>db:init</code> 2회 연속 실행. 잘못된 ID 형식, 역할·상태 값, 같은 복본의 두 번째 미반납 대출, 기한 ≤ 대출일, 별점 6, 중복 리뷰, 중복 대기 예약, 저자·회원 삭제(RESTRICT), FK에 NULL을 각각 넣어 거부되는지, 책 삭제가 복본·대출·예약·리뷰로 CASCADE되는지 확인</td><td>13/13 의도대로</td></tr>
+    <tr><td>필수 기능 전체</td><td>실제 세션과 로그인으로 회원가입·로그인 규칙, 세션 ID 갱신, 검색·정렬과 화이트리스트, 복본 API, 대출 규칙 4가지와 반납, 도서·카테고리·회원 관리, 관리자 경로 7개의 403·로그인 리다이렉트, 차트(원본 대출에서 다시 계산한 값과 비교), 역할별 메뉴 링크</td><td>83/83 통과</td></tr>
+    <tr><td>추가 기능</td><td>리뷰 작성·수정·삭제와 권한, 예약·취소와 1순위 인계, 통계 수치(원본 행에서 JS로 다시 계산한 값과 비교)</td><td>모두 통과</td></tr>
+    <tr><td>시연 대본</td><td>시연 영상의 12개 장면을 순서대로 자동 실행해 화면에 나와야 할 결과 확인</td><td>56/56 통과</td></tr>
+  </tbody>
+</table>
+<ul class="plain">
+  <li><strong>SQL 인젝션</strong>: SQL 문자열에 끼워 넣는 부분은 화이트리스트로 고른 컬럼·방향, 코드에 정한 테이블 이름, 상수뿐이고, 사용자 입력은 모두 바인드 파라미터다. 정렬 값에 <code>title; DROP TABLE Book</code>을 넣어도 기본 정렬로 처리된다.</li>
+  <li><strong>XSS</strong>: 뷰는 <code>&lt;%= %&gt;</code>로 이스케이프해 출력한다. 리뷰·카테고리 이름의 HTML은 글자로 보인다. 복본 표는 클라이언트에서 HTML을 조립하지만, 들어가는 값은 숫자, 정해진 상태 값, CHECK로 문자 집합을 제한한 회원 ID, 서버에서 만든 날짜뿐이다.</li>
+  <li><strong>입력 형식</strong>: 같은 폼 필드를 두 번 보내면 배열로 들어오므로 모든 입력을 문자열인지 확인한 뒤 사용한다. 점검 중 로그인·회원가입이 배열 입력에 500 오류를 내는 것을 발견해 고쳤다.</li>
+  <li><strong>세션</strong>: 로그인 시 세션 ID를 새로 발급하고, 쿠키는 HttpOnly이며 SameSite=Lax로 다른 사이트에서 보낸 폼 요청에는 실리지 않는다.</li>
+</ul>
+
+<h2><span class="no">6</span>한계와 개선 방향</h2>
+<table class="t">
+  <thead><tr><th style="width:26%">항목</th><th>설명</th></tr></thead>
+  <tbody>
+    <tr><td>복본 삭제와 대출 기록</td><td>4-1에서 정한 대로 복본을 지우면 그 복본의 대출 기록도 CASCADE로 지워진다. 기록을 남기려면 복본에 폐기 상태를 두는 소프트 삭제가 대안이다.</td></tr>
+    <tr><td>예약 1순위의 대기</td><td>1순위 회원이 한도 초과나 연체로 바로 빌릴 수 없으면, 그 회원이 취소할 때까지 반납된 복본을 다른 회원이 빌릴 수 없다. 예약 만료 기한을 두면 해결된다.</td></tr>
+    <tr><td>CSRF 토큰</td><td>폼에 CSRF 토큰은 없다. SameSite=Lax 쿠키가 다른 사이트의 POST 요청을 막아 준다.</td></tr>
+    <tr><td>세션 저장소와 비밀 키</td><td>세션은 메모리에 저장되어 서버를 다시 시작하면 모두 로그아웃되고, 세션 서명 키는 스켈레톤 코드에 고정되어 있다. 운영 환경이라면 DB 기반 세션 저장소와 환경 변수의 키를 써야 한다.</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="no">7</span>시연 영상</h2>
+<div class="video">
+  <div class="muted" style="font-size:8pt">로컬 실행 시연 영상 URL</div>
+  <div class="url">(영상 업로드 후 추가)</div>
+</div>
+<p>영상은 <code>npm run db:init</code>과 <code>npm start</code>로 시작해, 회원가입(일반·관리자 코드 오류·관리자) → 로그인과 권한 → 서적 목록 검색·정렬과 복본 → 인기 차트 → 대출 규칙 4가지 → 반납과 대출 기록 → 관리자의 도서 추가·복본 삭제·카테고리 추가·삭제·회원 검색 → E1 리뷰 → E2 예약과 1순위 인계 → S1 평점 통계 → S2 대출 통계 순서로 모든 기능을 시연하고, 각 동작을 자막(또는 음성)으로 설명한다.</p>
+
+</body>
+</html>

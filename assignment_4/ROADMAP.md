@@ -243,5 +243,18 @@ Split into three rounds of typing, each checked and committed on its own:
   5. the demo video URL
 
   Mention any schema changes from 4-1 and why.
+
+  Drafted 2026-11-03 (everything but the video URL):
+  - Source `assignment4_2_report.html`, with its 19 screenshots in `assignment4_2_img/`. Printed to `assignment4_2_2022065250_문상철.pdf`: 13 pages, 2.7 MB, with a searchable text layer.
+  - Sections:
+    1. tech stack and implementation principles; the 4-1 schema is used unchanged
+    2. each required feature, with its SQL and screenshots
+    3. run steps and seed accounts
+    4. E1, E2, S1 and S2 as feature cards
+    5. testing and security
+    6. limitations
+    7. the video URL, as a placeholder
+  - The screenshots come from the real `index.js` on a fresh seed in the throwaway DB, driven by headless Chromium (`playwright-core` in the scratchpad).
+  - **To finish:** put the video URL into §7 (`<div class="url">`), re-print, and look at the pages again.
 - [ ] Demo video with narration or subtitles covering **every** feature. A suggested order: register (user, admin with a wrong and the right code) → login → books search and sort → borrow, including each rule violation → return → history → charts → admin add book, delete copy, add and delete category, users → E1, E2, S1, S2.
 - [ ] ZIP `assignment4_2022065250_문상철.zip` with the source (no `node_modules`, no `.env`), `.env.example`, the init script and the report PDF.
