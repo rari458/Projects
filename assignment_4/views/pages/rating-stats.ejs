@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <%- include('../components/header') %>
+        <main>
+            <div class="card mb-3">
+                <h2 class="mb-3">Ratings by Book</h2>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Author</th>
+                            <th>Reviews</th>
+                            <th>Average Rating</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% bookRatings.forEach(book => { %>
+                            <tr>
+                                <td><a href="/books/<%= book.id %>"><%= book.title %></a></td>
+                                <td><%= book.author %></td>
+                                <td><%= book.review_count %></td>
+                                <td><%= book.avg_rating ?? '-' %></td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2 class="mb-3">Ratings by Category</h2>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Reviews</th>
+                            <th>Average Rating</th>
+                            <th>Top-Rated Book</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% categoryRatings.forEach(category => { %>
+                            <tr>
+                                <td><%= category.category %></td>
+                                <td><%= category.review_count %></td>
+                                <td><%= category.avg_rating ?? '-' %></td>
+                                <td><%= category.top_book ?? '-' %></td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

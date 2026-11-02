@@ -37,7 +37,7 @@ There is no test suite or linter, and `npm test` exits 1 on purpose. To verify a
 Express 5 + EJS + `pg` + `express-session`, CommonJS.
 
 - `index.js`: app setup. It serves `public/`, serves `node_modules` at `/modules` (add-book loads Choices.js this way), and exposes the session to every view through `res.locals.session`. Only `express.urlencoded` is mounted, with no `express.json()`, so new POST endpoints should take HTML form posts. `/` redirects to `/charts`. A generic error handler renders `pages/error`. The page shows only `err.message`, and `err.status` sets just the HTTP status, so a message has to make sense on its own.
-- `routes/routes.js`: the full route table. Access control is per route through `isAuthenticated` / `isAdmin` in `middleware/authMiddleware.js`. `isAuthenticated` redirects to `/login`, even for the JSON instances API, and `isAdmin` raises a 403. `/charts` and `/books` are public. A `router.param('id')` at the top turns any `:id` that isn't 1–9 digits into a 404 before the controller runs, so controllers can `Number(req.params.id)` safely.
+- `routes/routes.js`: the full route table. Access control is per route through `isAuthenticated` / `isAdmin` in `middleware/authMiddleware.js`. `isAuthenticated` redirects to `/login`, even for the JSON instances API, and `isAdmin` raises a 403. `/charts`, `/books`, `/books/:id` and `/stats/ratings` are public. `GET /books/:id` must stay below `/books/add`. A `router.param('id')` at the top turns any `:id` that isn't 1–9 digits into a 404 before the controller runs, so controllers can `Number(req.params.id)` safely.
 - `utils/search.js`: `containsPattern(text)` builds an ILIKE "contains" pattern with `%`, `_` and `\` escaped. Use it for every user-typed search (books and users).
 - Borrow and return are both handled in `bookController` (`postBorrowBook`, `postReturnBook`), even though the return route is `/borrowings/:id/return`. `borrowingController` only renders the history page.
 - `config/db.js`: exports `query(text, params)`, the `pool` and `transaction(fn)`, which runs `fn(client)` between `BEGIN` and `COMMIT` on one connection and rolls back if `fn` throws. Use it for multi-statement operations (borrow and return already do; adding a book with copies/authors/categories and the deletes should too).
@@ -47,12 +47,12 @@ Express 5 + EJS + `pg` + `express-session`, CommonJS.
 
 ## Skeleton state
 
-Search for `TODO` to find the work. Login and registration (Phase 3), the book list and the instances API (Phase 4), borrow, return and the borrowings page (Phase 5), all admin pages (Phase 6) and the charts (Phase 7) query the DB. No `dummy*` arrays are left. Of the Phase 8 extra features, E1 Reviews and E2 Reservations are done:
-- `GET /books/:id` (`bookController.getBookDetailPage`, `pages/book-detail.ejs`, linked from the book titles)
-- `reviewController`
-- `reservationController` (`POST /books/:id/reserve`, `/reservations`, `POST /reservations/:id/cancel`, plus a My Reservations header link)
+Search for `TODO` to find the work. Login and registration (Phase 3), the book list and the instances API (Phase 4), borrow, return and the borrowings page (Phase 5), all admin pages (Phase 6) and the charts (Phase 7) query the DB. No `dummy*` arrays are left. All four Phase 8 extra features are done:
+- E1 Reviews: `GET /books/:id` (`bookController.getBookDetailPage`, `pages/book-detail.ejs`, linked from the book titles) and `reviewController`
+- E2 Reservations: `reservationController` (`POST /books/:id/reserve`, `/reservations`, `POST /reservations/:id/cancel`)
+- S1 and S2: `statsController`, serving `/stats/ratings` (public) and `/stats/loans` (login; its monthly and ranking parts are queried only for admins)
 
-Only the S1/S2 statistics pages (8c) remain.
+Each has a header link. What remains is the Phase 9 test pass and the Phase 10 deliverables.
 
 - `adminCode` in `authController.js` is the student ID `2022065250`.
 - `scripts/init_db.js` is done (Phase 2). It seeds `admin`/`admin1234` and `alice`, `bob`, `carol`, `dave`, `erin`, `frank` (all `user1234`), 10 books with 20 copies, 43 loans, 14 reviews and 4 reservations. Loan dates count back from the day of the init, which sets up the demo cases: bob holds 3 books, carol is overdue, both Orient Express copies are out with erin then frank queued, and some loans are older than 3 months. bob turns overdue too about 3 days after an init, so re-run `npm run db:init` right before recording the demo.
@@ -72,6 +72,8 @@ Queries must return these field names. Alias them in SQL, because the 4-1 schema
 | `pages/charts` | `popularBooks[]` and `popularBooksByCategory` (object keyed by category name, one table per key) with rows of `title, author, categories, borrow_count`. Also `categories[]` with `id, name`, and `selectedCategoryId`. The view compares `selectedCategoryId === category.id`, so ids must be JS numbers (`SERIAL`/int4; `BIGSERIAL` and `COUNT(*)` come back from `pg` as strings). When no `categoryId` is given, default to the first category so the table matches the dropdown. The view prints one table per key with no heading, so put only the selected category in the object. `popularAuthors[]` has `author, borrow_count`. |
 | `pages/book-detail` | `book` (one `BOOK_LIST_SQL` row), `reviewSummary` (`count`, `average`), `reviews[]` (`username, rating, comment, review_date`), `canReview` (the user has a loan of the book), `myReview` (the user's row from `reviews`, or null), `queuePosition` (0 when not waiting), `canReserve` |
 | `pages/reservations` | `reservations[]`: `id, book_id, book_title, book_author, reserved_date, status, queue_position` (0 unless waiting) |
+| `pages/rating-stats` | `bookRatings[]`: `id, title, author, review_count, avg_rating` (NULL without reviews); `categoryRatings[]`: `category, review_count, avg_rating, top_book` |
+| `pages/loan-stats` | `personal`: `loans, returned, on_time, on_time_rate` (NULL with no returns); admin only: `monthly[]` (`month, loans, overdue, overdue_rate`) and `ranking[]` (`rank, username, loans`), both empty arrays for other users |
 | `pages/categories` | `categories[]`: `id, name` |
 | `pages/users` | `users[]`: `id, username, role` (`id` and `username` are both `user_id`), plus `searchBy` (`username`/`role`) and `query` |
 

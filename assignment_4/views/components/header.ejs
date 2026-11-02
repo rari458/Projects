@@ -4,9 +4,11 @@
             <a href="/" class="site-name">Librarian</a>
             <a href="/charts" class="nav-link">Charts</a>
             <a href="/books" class="nav-link">Books</a>
+            <a href="/stats/ratings" class="nav-link">Rating Stats</a>
             <% if (locals.session && session.userId) { %>
                 <a href="/borrowings" class="nav-link">My Borrows</a>
                 <a href="/reservations" class="nav-link">My Reservations</a>
+                <a href="/stats/loans" class="nav-link">Loan Stats</a>
                 <% if (session.role === 'admin') { %>
                     <a href="/categories" class="nav-link">Categories</a>
                     <a href="/users" class="nav-link">Users</a>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <%- include('../components/header') %>
+        <main>
+            <div class="card mb-3">
+                <h2 class="mb-3">My Reading</h2>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Total Loans</th>
+                            <th>Returned</th>
+                            <th>Returned On Time</th>
+                            <th>On-Time Return Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><%= personal.loans %></td>
+                            <td><%= personal.returned %></td>
+                            <td><%= personal.on_time %></td>
+                            <td><%= personal.on_time_rate === null ? '-' : personal.on_time_rate + '%' %></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <% if (session.role === 'admin') { %>
+                <div class="card mb-3">
+                    <h2 class="mb-3">Monthly Loans and Overdue Rate</h2>
+                    <p class="mb-3">A loan is overdue when it was returned on or after its due date, or is still out past it.</p>
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Loans</th>
+                                <th>Overdue</th>
+                                <th>Overdue Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% monthly.forEach(month => { %>
+                                <tr>
+                                    <td><%= month.month %></td>
+                                    <td><%= month.loans %></td>
+                                    <td><%= month.overdue %></td>
+                                    <td><%= month.overdue_rate %>%</td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h2 class="mb-3">Reading Ranking (Admin Only)</h2>
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>User</th>
+                                <th>Total Loans</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% ranking.forEach(member => { %>
+                                <tr>
+                                    <td><%= member.rank %></td>
+                                    <td><%= member.username %></td>
+                                    <td><%= member.loans %></td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
+        </main>
+    </div>
+</body>
+</html>

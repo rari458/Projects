@@ -154,7 +154,7 @@ PostgreSQL 18 is already installed and running in WSL.
 | S1 | Rating statistics | `/stats/ratings`: average rating and review count per book; average, count and top-rated book per category |
 | S2 | Loan statistics | `/stats/loans`: monthly loans and overdue rate (admin); member ranking by total loans, 다독 순위 (admin only, as promised in the 4-1 report); personal totals and on-time return rate (any user) |
 
-- [ ] Each feature needs a controller (e.g. `reviewController`, `reservationController`, `statsController`), routes with the right middleware, views, and header nav links.
+- [x] Each feature needs a controller (e.g. `reviewController`, `reservationController`, `statsController`), routes with the right middleware, views, and header nav links.
 
 Split into three rounds of typing, each checked and committed on its own:
 
@@ -184,8 +184,19 @@ Split into three rounds of typing, each checked and committed on its own:
   - The ROADMAP hand-off works: alice returns, frank and admin are refused, erin borrows, frank becomes #1, then borrows after dave returns.
   - Logged out goes to `/login`.
   - The 8a checks still pass.
-- [ ] **8c: S1 and S2.** `/stats/ratings` and `/stats/loans`, with header links.
-- **Check:** each feature works end to end with seed data. Reservation hand-off: user A holds the last copy, B reserves, A returns, C is refused, B can borrow.
+- [x] **8c: S1 and S2.** `/stats/ratings` and `/stats/loans`, with header links.
+
+  As built (`statsController`):
+  - `/stats/ratings` is public. It shows each book's average (2 decimals) and review count, and each category's average, review count and top-rated book (highest average, then more reviews, then title). The category query is the report's, with `LEFT JOIN Book_Category` so a category without books still shows.
+  - `/stats/loans` needs login. Every member sees their own loans, returned loans, loans returned on time, and the on-time rate over returned loans.
+  - Only an admin also gets loans and overdue rate per month (the report's overdue rule: `COALESCE(return_date, CURRENT_DATE) >= due_date`) and the reading ranking (`RANK()`, every user including 0-loan ones). Those two queries run only for admins.
+
+  Passed 2026-11-03: every number on both pages matched an independent recomputation in JS from the raw rows.
+  - Hobbit 4.67 from 3; Classic 4.57 with LOTR as top.
+  - alice 9 / 7 / 4 / 57.1%.
+  - The ranking has alice, bob and dave tied at 1.
+  - Logged out goes to `/login`; members see only My Reading.
+- **Check:** each feature works end to end with seed data. Reservation hand-off: user A holds the last copy, B reserves, A returns, C is refused, B can borrow. Passed 2026-11-03 (8a, 8b and 8c, with the 8a and 8b suites re-run after 8c).
 
 ## Phase 9: Full test pass
 
