@@ -235,7 +235,7 @@ Split into three rounds of typing, each checked and committed on its own:
   - required and extra features with routes, the project layout
   - the assignment's original requirement checklist, now ticked
 - [x] `DEMO_SCRIPT.md`: a 12-scene recording script with a Korean narration or subtitle line for each action, ordered so each scene leaves the seed in the state the next one needs (the charts come before any borrowing; the same-book refusal comes before alice reaches 3 books). Dry-run in full against the app with real logins on a fresh seed, 56/56. Not part of the ZIP.
-- [ ] Report PDF covering:
+- [x] Report PDF covering:
   1. name, student ID and tech stack (Node.js, Express 5, EJS, PostgreSQL 18, express-session, pg, Choices.js)
   2. each required feature with what was implemented and screenshots
   3. how to run it locally
@@ -244,7 +244,7 @@ Split into three rounds of typing, each checked and committed on its own:
 
   Mention any schema changes from 4-1 and why.
 
-  Drafted 2026-11-03 (everything but the video URL):
+  Drafted 2026-11-03, finished the same day with the video URL:
   - Source `assignment4_2_report.html`, with its 19 screenshots in `assignment4_2_img/`. Printed to `assignment4_2_2022065250_문상철.pdf`: 13 pages, 2.7 MB, with a searchable text layer.
   - Sections:
     1. tech stack and implementation principles; the 4-1 schema is used unchanged
@@ -253,8 +253,13 @@ Split into three rounds of typing, each checked and committed on its own:
     4. E1, E2, S1 and S2 as feature cards
     5. testing and security
     6. limitations
-    7. the video URL, as a placeholder
+    7. the video URL (a clickable link in the PDF)
   - The screenshots come from the real `index.js` on a fresh seed in the throwaway DB, driven by headless Chromium (`playwright-core` in the scratchpad).
-  - **To finish:** put the video URL into §7 (`<div class="url">`), re-print, and look at the pages again.
-- [ ] Demo video with narration or subtitles covering **every** feature. A suggested order: register (user, admin with a wrong and the right code) → login → books search and sort → borrow, including each rule violation → return → history → charts → admin add book, delete copy, add and delete category, users → E1, E2, S1, S2.
-- [ ] ZIP `assignment4_2022065250_문상철.zip` with the source (no `node_modules`, no `.env`), `.env.example`, the init script and the report PDF.
+  - The URL went into §7 (`<div class="url">`) and the PDF was re-printed: still 13 pages, URL on one line in both the page and the text layer.
+- [x] Demo video with narration or subtitles covering **every** feature. Recorded with `DEMO_SCRIPT.md` and uploaded 2026-11-03 to Google Drive as `2022065250_문상철.mp4` (568 MB), shared as "anyone with the link: viewer" (checked through the Drive permissions): https://drive.google.com/file/d/1emrr1m0ibZV2uEmFD-oPrxJ0ibNVay0L/view?usp=sharing
+- [x] ZIP `assignment4_2022065250_문상철.zip` with the source (no `node_modules`, no `.env`), `.env.example`, the init script and the report PDF. Built 2026-11-03 from an explicit list, 38 files (2.1 MB) under one top-level folder of the same name:
+  - in: `config/ controllers/ middleware/ public/ routes/ scripts/ utils/ views/`, `index.js`, `package.json`, `package-lock.json`, `.env.example`, `README.md`, the report PDF
+  - out: `node_modules/`, `.env`, the spec PDFs, the 4-1 files, `CLAUDE.md`, `ROADMAP.md`, `DEMO_SCRIPT.md`, the report HTML and `assignment4_2_img/`
+  - Written with Python's `zipfile`, so the Korean names carry the UTF-8 flag and unpack correctly in Windows Explorer.
+  - Tested on its own: unzipped into an empty folder, `npm ci`, `npm run db:init` on a fresh throwaway cluster, then the app passed 17/17 smoke checks (pages, static files and Choices.js from `/modules`, login, the instances API, the login and admin guards).
+  - **Before submitting:** the user confirms `.env.example` holds only a placeholder, since Claude may not read it.
