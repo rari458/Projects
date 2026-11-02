@@ -47,12 +47,12 @@ Express 5 + EJS + `pg` + `express-session`, CommonJS.
 
 ## Skeleton state
 
-Search for `TODO` to find the work. Login and registration (Phase 3), the book list and the instances API (Phase 4), borrow, return and the borrowings page (Phase 5), and all admin pages (Phase 6) query the DB. Only `chartController` still renders hard-coded `dummy*` arrays (Phase 7). Replace them with queries and delete the dummies.
+Search for `TODO` to find the work. Login and registration (Phase 3), the book list and the instances API (Phase 4), borrow, return and the borrowings page (Phase 5), all admin pages (Phase 6) and the charts (Phase 7) query the DB. No `dummy*` arrays are left. What remains is the Phase 8 extra features, which have no routes or views yet.
 
 - `adminCode` in `authController.js` is the student ID `2022065250`.
 - `scripts/init_db.js` is done (Phase 2). It seeds `admin`/`admin1234` and `alice`, `bob`, `carol`, `dave`, `erin`, `frank` (all `user1234`), 10 books with 20 copies, 43 loans, 14 reviews and 4 reservations. Loan dates count back from the day of the init, which sets up the demo cases: bob holds 3 books, carol is overdue, both Orient Express copies are out with erin then frank queued, and some loans are older than 3 months. bob turns overdue too about 3 days after an init, so re-run `npm run db:init` right before recording the demo.
 - The skeleton had no way to **add** a category, which the spec requires. Phase 6 added `POST /categories/add` and its form in `categories.ejs`. Add-book still creates categories as a side effect too.
-- The README asks for a popular **author** chart too, but `charts.ejs` has only the two book tables.
+- The README asks for a popular **author** chart too, which the skeleton lacked. Phase 7 added a Popular Authors card to `charts.ejs`, fed by `popularAuthors`.
 
 ## Data contract the views expect
 
@@ -64,7 +64,7 @@ Queries must return these field names. Alias them in SQL, because the 4-1 schema
 | `GET /api/books/:id/instances` (JSON, rendered client-side in `books.ejs`) | `[{ id, status, borrowing_id, borrowed_by, borrowed_by_id, borrow_date }]`. Borrow shows only when `status === 'available'` (lowercase). Return shows only when `borrowed_by_id == session.userId`, and the dummy data omits `borrowed_by_id`. Here `borrowed_by` and `borrowed_by_id` are both `user_id`. `createInstancesTable` interpolates these fields into `innerHTML` unescaped, and `session.userId` reaches that script HTML-escaped inside a JS string, so restrict usernames to a safe character set at registration. |
 | `POST /books/add` body | `title`, `quantity`, `authors` (one value), `categories` (missing, a string, or an array). Each value is `id:<n>` for an existing row or raw text for a name newly typed into Choices.js, so normalize and insert the new names. |
 | `pages/borrowings` | `id` (the loan id, used by the Return form), `book_instance_id, book_title, book_author, borrow_date, return_date`. Return shows while `return_date` is falsy. |
-| `pages/charts` | `popularBooks[]` and `popularBooksByCategory` (object keyed by category name, one table per key) with rows of `title, author, categories, borrow_count`. Also `categories[]` with `id, name`, and `selectedCategoryId`. The view compares `selectedCategoryId === category.id`, so ids must be JS numbers (`SERIAL`/int4; `BIGSERIAL` and `COUNT(*)` come back from `pg` as strings). When no `categoryId` is given, default to the first category so the table matches the dropdown. The view prints one table per key with no heading, so put only the selected category in the object. |
+| `pages/charts` | `popularBooks[]` and `popularBooksByCategory` (object keyed by category name, one table per key) with rows of `title, author, categories, borrow_count`. Also `categories[]` with `id, name`, and `selectedCategoryId`. The view compares `selectedCategoryId === category.id`, so ids must be JS numbers (`SERIAL`/int4; `BIGSERIAL` and `COUNT(*)` come back from `pg` as strings). When no `categoryId` is given, default to the first category so the table matches the dropdown. The view prints one table per key with no heading, so put only the selected category in the object. `popularAuthors[]` has `author, borrow_count`. |
 | `pages/categories` | `categories[]`: `id, name` |
 | `pages/users` | `users[]`: `id, username, role` (`id` and `username` are both `user_id`), plus `searchBy` (`username`/`role`) and `query` |
 

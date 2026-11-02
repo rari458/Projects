@@ -34,6 +34,26 @@
                 </table>
             </div>
 
+            <div class="card mb-3">
+                <h2 class="mb-3">Popular Authors (Last 3 Months)</h2>
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Author</th>
+                            <th>Borrow Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% popularAuthors.forEach(author => { %>
+                            <tr>
+                                <td><%= author.author %></td>
+                                <td><%= author.borrow_count %></td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+
             <div class="card">
                 <h2 class="mb-3">Popular Books by Category</h2>
                 <form action="/charts" method="GET" class="d-flex gap-2 mb-3">

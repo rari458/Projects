@@ -126,10 +126,24 @@ PostgreSQL 18 is already installed and running in WSL.
 
 ## Phase 7: Charts (`chartController`, `charts.ejs`)
 
-- [ ] Overall popular books: Loan → BookCopy → Book with `loan_date >= CURRENT_DATE - INTERVAL '3 months'`, `GROUP BY book_id`, `ORDER BY count DESC`, `LIMIT 10`.
-- [ ] Per-category chart: the same query filtered by `Book_Category.category_id = selected`. Default to the first category, and key the result object by category name.
-- [ ] **Popular authors** chart (from the README): group by author and add a table to `charts.ejs`.
-- **Check:** loans older than 3 months don't count, copies of the same book add up, and switching the dropdown updates the category table.
+- [x] Overall popular books: Loan → BookCopy → Book with `loan_date >= CURRENT_DATE - INTERVAL '3 months'`, `GROUP BY book_id`, `ORDER BY count DESC`, `LIMIT 10`.
+- [x] Per-category chart: the same query filtered by `Book_Category.category_id = selected`. Default to the first category, and key the result object by category name.
+- [x] **Popular authors** chart (from the README): group by author and add a table to `charts.ejs`.
+
+  As built:
+  - One `POPULAR_BOOKS_SQL` serves both book charts. `$1 = NULL` counts every book, and a category id keeps only that category's books (`EXISTS` on `Book_Category`). Each row still lists all of the book's categories.
+  - Ties sort by title (books) or name (authors).
+  - The dropdown is alphabetical. A missing, unknown or malformed `categoryId` falls back to its first entry.
+  - The authors card sits between the overall table and the category table.
+- **Check:** loans older than 3 months don't count, copies of the same book add up, and switching the dropdown updates the category table. Passed 2026-11-02.
+
+  On a fresh seed:
+  - LOTR shows 1 of its 5 loans, because the other 4 are older than 3 months.
+  - The Hobbit's 6 loans span copies 1–3.
+  - The chart total of 33 equals the loans since the cutoff.
+  - Classic is the default; Science Fiction and History switch correctly.
+  - `abc`, `999` and a repeated `categoryId` fall back to Classic.
+  - A category with no loans shows an empty table, and no categories at all still renders.
 
 ## Phase 8: Extra features (as committed in the 4-1 report)
 
