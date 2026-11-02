@@ -229,7 +229,12 @@ Split into three rounds of typing, each checked and committed on its own:
 
 ## Phase 10: Deliverables
 
-- [ ] `README.md` 실행 방법: PostgreSQL setup, `.env`, `npm install`, `npm run db:init`, `npm start`, and the seed accounts.
+- [x] `README.md` 실행 방법: PostgreSQL setup, `.env`, `npm install`, `npm run db:init`, `npm start`, and the seed accounts. Rewritten 2026-11-03 in Korean as a project README:
+  - name and student ID, the tech stack with versions, and the 6 run steps (including creating the DB user and database)
+  - the seed accounts with their starting state, and the admin code
+  - required and extra features with routes, the project layout
+  - the assignment's original requirement checklist, now ticked
+- [x] `DEMO_SCRIPT.md`: a 12-scene recording script with a Korean narration or subtitle line for each action, ordered so each scene leaves the seed in the state the next one needs (the charts come before any borrowing; the same-book refusal comes before alice reaches 3 books). Dry-run in full against the app with real logins on a fresh seed, 56/56. Not part of the ZIP.
 - [ ] Report PDF covering:
   1. name, student ID and tech stack (Node.js, Express 5, EJS, PostgreSQL 18, express-session, pg, Choices.js)
   2. each required feature with what was implemented and screenshots
