@@ -1,0 +1,400 @@
+# 테스트 1: 오름차순 기본 삽입 및 리프 분할 (1st line: expected, 2nd line: your result)
+o test_out/test1.tree 3 3
+i 1
+i 2
+i 3
+i 4
+
+# (1, 1) (2, 2) (3, 3) (4, 4)
+l
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 2: 내림차순 삽입 및 반복된 분할 (1st line: expected, 2nd line: your result)
+o test_out/test2.tree 4 4
+i 9
+i 8
+i 7
+i 6
+i 5
+i 4
+i 3
+i 2
+i 1
+
+# (1, 1) (2, 2) (3, 3) (4, 4) (5, 5) (6, 6) (7, 7) (8, 8) (9, 9)
+l
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 3: 랜덤 삽입 및 내부 노드 분할 (1st line: expected, 2nd line: your result)
+o test_out/test3.tree 3 3
+i 10
+i 50
+i 20
+i 40
+i 30
+
+# (10, 10) (20, 20) (30, 30) (40, 40) (50, 50)
+l
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 4: 중복 키 삽입을 통한 값 업데이트 (1st line: expected, 2nd line: your result)
+o test_out/test4.tree 5 5
+i 10 ten
+i 20 twenty
+i 30 thirty
+i 10 TEN
+i 20 TWENTY
+
+# (10, TEN) (20, TWENTY) (30, thirty)
+l
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 5: 존재하지 않는 키 삭제 (1st line: expected, 2nd line: your result)
+o test_out/test5.tree 5 5
+i 1
+i 2
+i 3
+i 4
+d 10
+d 5
+
+# (1, 1) (2, 2) (3, 3) (4, 4)
+l
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 6: 리프 노드 병합 및 루트 변경을 동반한 삭제 (1st line: expected, 2nd line: your result)
+o test_out/test6.tree 4 4
+i 10
+i 20
+i 30
+i 40
+i 50
+d 50
+d 40
+i 55
+i 35
+i 45
+
+# (10, 10) (20, 20) (30, 30) (35, 35) (45, 45) (55, 55)
+l
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 7: 오른쪽 형제 리프 노드에서의 재분배, 병합 및 루트 변경을 동반한 삭제 (1st line: expected, 2nd line: your result)
+o test_out/test7.tree 4 4
+i 10
+i 20
+i 30
+i 40
+i 50
+d 10
+d 20
+i 25
+i 5
+i 15
+
+# (5, 5) (15, 15) (25, 25) (30, 30) (40, 40) (50, 50)
+l
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 8: 왼쪽 형제 리프 노드에서의 재분배 및 병합 테스트를 동반한 삭제 (1st line: expected, 2nd line: your result)
+o test_out/test8.tree 4 4
+i 10
+i 20
+i 30
+i 40
+i 50
+i 60
+i 70
+i 45
+i 80
+d 60
+d 50
+i 65
+i 75
+i 35
+i 42
+i 47
+i 55
+
+# (10, 10) (20, 20) (30, 30) (35, 35) (40, 40) (42, 42) (45, 45) (47, 47) (55, 55) (65, 65) (70, 70) (75, 75) (80, 80)
+l
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 9: 오른쪽 형제 내부 노드에서의 재분배 및 병합을 유발하는 삭제 (1st line: expected, 2nd line: your result)
+o test_out/test9.tree 3 3
+i 10
+i 20
+i 30
+i 40
+i 50
+i 60
+d 10
+d 30
+d 50
+i 45
+
+# (20, 20) (40, 40) (45, 45) (60, 60)
+l
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 10: 왼쪽 형제 내부 노드에서의 재분배 및 병합을 유발하는 삭제 (1st line: expected, 2nd line: your result)
+o test_out/test10.tree 3 3
+i 10
+i 20
+i 30
+i 40
+i 50
+i 60
+i 70
+d 70
+d 50
+d 30
+i 35
+
+# (10, 10) (20, 20) (35, 35) (40, 40) (60, 60)
+l
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 11: 트리의 모든 키 삭제 (1st line: expected, 2nd line: your result)
+o test_out/test11.tree 5 5
+i 10
+i 20
+i 30
+d 10
+d 20
+d 30
+
+# Empty tree.
+l
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 12: 대량 데이터 속에서 키 찾기
+o test_out/test12.tree 4 4
+i 1 Apple
+i 2 Banana
+i 3 Cat
+i 4 Denmark
+i 5 Elephant
+i 6 FinalCut
+i 7 Golf
+i 8 HotelCalifornia
+i 9 Indigo
+i 10 Jack
+i 11 Kite
+i 12 Lemon
+i 13 Mango
+i 14 Night
+i 15 Oxygen
+
+# 테스트 12-1: 앞 부분 키 찾기 (1st line: expected, 2nd line: your result)
+# (2, Banana)
+f 2
+#
+# 테스트 12-2: 중간 키 찾기 (1st line: expected, 2nd line: your result)
+# (8, HotelCalifornia)
+f 8
+#
+# 테스트 12-3: 뒷 부분 키 찾기 (1st line: expected, 2nd line: your result)
+# (14, Night)
+f 14
+#
+# 테스트 12-4: 존재하지 않는 키 찾기 (1st line: expected, 2nd line: your result)
+# Not found.
+f 100
+
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 13: 빈 트리에서 키 찾기 (1st line: expected, 2nd line: your result)
+o test_out/test13.tree 5 5
+
+# Not found.
+f 100
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 14: 삭제된 키 찾기 (1st line: expected, 2nd line: your result)
+o test_out/test14.tree 5 5
+i 10 ten
+i 20 twenty
+i 30 thirty
+d 20
+
+# Not found.
+f 20
+# ================ your tree ================
+t
+c
+#
+
+# 테스트 15: 페이지 해제 점검 (test15.tree 파일 크기가 16KB 인지 확인, 그것 보다 2배 이상 크면 해제가 제대로 일어나지 않은 것임)
+o test_out/test15.tree 3 3
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+i 1
+d 1
+c
+#
+
+# 테스트 16: 페이지 해제 점검2 (test16.tree 파일 크기가 32KB 인지 확인, 그것 보다 2배 이상 크면 해제가 제대로 일어나지 않은 것임)
+o test_out/test16.tree 3 3
+i 1
+i 2
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+i 3
+i 4
+d 4
+d 3
+c
+#
