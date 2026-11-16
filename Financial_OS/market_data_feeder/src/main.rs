@@ -11,11 +11,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (ws_stream, _) = connect_async(url).await.expect("Failed to connect to Binance L2 WS");
     println!("-> [Rust Microstructure Engine] Connected to Binance L2 Orderbook.");
 
-    // Boot the C++ engine directly acrosst the FFI boundary -- no UDP, no Python.
-    let mut engine = Engine::new(100_000.0, "L3_EXECUTTION", 1.0)
+    // Boot the C++ engine directly across the FFI boundary -- no UDP, no Python.
+    let mut engine = Engine::new(100_000.0, "L3_EXECUTION", 1.0)
         .expect("Failed to construct C++ Backtester over FFI");
     engine.set_regime_filter(false, 252);
-    println!("-> [FFI Bridge] Navtive C++ engine booted (strategy  = L3_EXECUTION).");
+    println!("-> [FFI Bridge] Native C++ engine booted (strategy = L3_EXECUTION).");
 
     let (_, mut read) = ws_stream.split();
 

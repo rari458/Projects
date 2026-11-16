@@ -19,8 +19,8 @@ void          fos_bt_free(FosBacktester h);
 
 // Booleans cross the boundary as int (0/1) to avoid C _Bool ABI ambiguity.
 void   fos_bt_set_regime_filter(FosBacktester h, int use_filter, int lookback);
-void   fos_bt_on_market_data(FosBacktester h, const char* symbol,
-                             double t, double open, double high, double low, double close);
+void   fos_bt_on_market_data(FosBacktester h, const char* symbol, double t, double open, double high, double low, double close);
+void   fos_bt_send_micro(FosBacktester h, double t, const char* exchange, double bid, double ask, int is_cancel);
 double fos_bt_total_equity(FosBacktester h);
 double fos_bt_holdings(FosBacktester h, const char* symbol);
 
