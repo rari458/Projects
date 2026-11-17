@@ -140,13 +140,13 @@ spec:
               cpu: "1"
           volumeMounts:
             - name: market-db
-              mountPath: /app/market.duckdb
+              mountPath: /app/data
               readOnly: true
       volumes:
         - name: market-db
           hostPath:
-            path: /host-mount/market.duckdb
-            type: File
+            path: /host-mount/data
+            type: Directory
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

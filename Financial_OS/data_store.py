@@ -1,10 +1,11 @@
 # data_store.py
 
+import os
 import duckdb
 import yfinance as yf
 import pandas as pd
 
-DEFAULT_DB = "market.duckdb"
+DEFAULT_DB = "data/market.duckdb"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS ohlc (
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS ohlc (
 """
 
 def connect(db_path=DEFAULT_DB):
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     con = duckdb.connect(db_path)
     con.execute(_SCHEMA)
     return con

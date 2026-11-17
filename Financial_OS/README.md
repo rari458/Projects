@@ -101,7 +101,7 @@ ctest --test-dir build                # 16 GoogleTest cases
 pip install scikit-build-core
 pip install --no-build-isolation -e .
 
-# Python entry points (run from repo root; data_store's market.duckdb path is relative)
+# Python entry points (run from repo root; data_store's data/market.duckdb path is relative)
 python server/main.py                 # legacy sync REST API on :8000
 streamlit run dashboard.py
 pytest                                 # 37 pytest cases (scoped via testpaths in pyproject.toml)

@@ -33,7 +33,7 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./market.duckdb:/app/market.duckdb:ro
+      - ./data:/app/data:ro
     expose:
       - "9100"
     stop_grace_period: 30s
