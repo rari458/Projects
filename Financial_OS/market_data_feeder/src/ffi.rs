@@ -4,9 +4,9 @@
 // The raw extern "C" surface is unsafe; `Engine` is the safe RAII front: it owns
 // the opaque handle, frees it on Drop, and hands C strings across the boundary
 // with correct lifetimes. Exceptions are already firewalled on the C++ side.
-#![allow(dead_code)] // Wired into the live loop in Stage 3; used by tests untill then.
+#![allow(dead_code)] // Wired into the live loop in Stage 3; used by tests until then.
 
-use std::ffi::{c_char, c_double, c_int, c_void, CString};
+use std::ffi::{CString, c_char, c_double, c_int, c_void};
 
 unsafe extern "C" {
     fn fos_bt_new(capital: c_double, strategy: *const c_char, leverage: c_double) -> *mut c_void;
@@ -59,16 +59,35 @@ impl Engine {
         unsafe { fos_bt_set_regime_filter(self.handle, use_filter as c_int, lookback as c_int) }
     }
 
-    pub fn on_market_data(&mut self, symbol: &str, t: f64, open: f64, high: f64, low: f64, close: f64) {
+    pub fn on_market_data(
+        &mut self,
+        symbol: &str,
+        t: f64,
+        open: f64,
+        high: f64,
+        low: f64,
+        close: f64,
+    ) {
         // A NUL byte would silently truncate the C string; drop such a tick.
-        let Ok(c_symbol) = CString::new(symbol) else { return };
+        let Ok(c_symbol) = CString::new(symbol) else {
+            return;
+        };
         unsafe { fos_bt_on_market_data(self.handle, c_symbol.as_ptr(), t, open, high, low, close) }
     }
 
     pub fn send_micro(&mut self, t: f64, exchange: &str, bid: f64, ask: f64, is_cancel: bool) {
-        let Ok(c_exchange) = CString::new(exchange) else { return };
+        let Ok(c_exchange) = CString::new(exchange) else {
+            return;
+        };
         unsafe {
-            fos_bt_send_micro(self.handle, t, c_exchange.as_ptr(), bid, ask, is_cancel as c_int)
+            fos_bt_send_micro(
+                self.handle,
+                t,
+                c_exchange.as_ptr(),
+                bid,
+                ask,
+                is_cancel as c_int,
+            )
         }
     }
 
@@ -77,8 +96,10 @@ impl Engine {
     }
 
     pub fn holdings(&self, symbol: &str) -> f64 {
-        let Ok(c_symbol) = CString::new(symbol) else { return 0.0 };
-        unsafe {fos_bt_holdings(self.handle, c_symbol.as_ptr()) }
+        let Ok(c_symbol) = CString::new(symbol) else {
+            return 0.0;
+        };
+        unsafe { fos_bt_holdings(self.handle, c_symbol.as_ptr()) }
     }
 }
 
@@ -95,7 +116,8 @@ mod tests {
 
     #[test]
     fn drives_engine_via_ffi() {
-        let mut engine = Engine::new(100_000.0, "L3_EXECUTION", 1.0).expect("engine construction failed");
+        let mut engine =
+            Engine::new(100_000.0, "L3_EXECUTION", 1.0).expect("engine construction failed");
         engine.set_regime_filter(false, 252);
 
         for i in 0..50 {

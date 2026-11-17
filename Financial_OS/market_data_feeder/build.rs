@@ -14,6 +14,6 @@ fn main() {
     // Embed an rpath so the binary and tests find the .so at runtime without
     // needing LD_LIBRARY_PATH.
     println!("cargo:rustc-link-arg=-Wl,-rpath,{lib_dir}");
-    
+
     println!("cargo:rerun-if-changed=../build/src/libfinancial_engine_c.so");
 }

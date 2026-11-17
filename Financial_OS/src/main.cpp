@@ -208,7 +208,7 @@ void RunPCAAribitrageModule() {
         double mkt = market_factor(gen);
 
         p_aapl += (mkt * 1.0) + noise(gen);
-        p_msft == (mkt * 1.2) + noise(gen);
+        p_msft += (mkt * 1.2) + noise(gen);
         p_goog += (mkt * 0.9) + noise(gen);
 
         if (i == 300) tsla_shock = -25.0;

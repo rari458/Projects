@@ -1,0 +1,74 @@
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Financial_OS/**'
+      - '!Financial_OS/**/*.md'
+      - '.github/workflows/financial_os.yml'
+    pull_request:
+      paths:
+        - 'Financial_OS/**'
+        - '!Financial_OS/**/*.md'
+        - '.github/workflows/financial_os.yml'
+
+defaults:
+  run:
+    working-directory: Financial_OS
+
+jobs:
+  cpp:
+    name: C++ build & test (${{ matrix.compiler }})
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # clang is not in the matrix yet: fmt 10.2.1 does not compile under clang, and the
+        # -flto=auto static library's consumers link LLVM bitcode without the LTO plugin.
+        compiler: [gcc]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build python3-dev
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+  rust:
+    name: Rust feeder (fmt, clippy, FFI test)
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned to the local toolchain, so the local fmt and clippy checks predict CI.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.93.1
+          components: rustfmt, clippy
+      - name: Build the C ABI library the feeder links against
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build python3-dev
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DFINANCIAL_OS_BUILD_TESTS=OFF
+          cmake --build build --target financial_engine_c
+      - name: fmt, clippy, FFI test
+        working-directory: Financial_OS/market_data_feeder
+        run: |
+          cargo fmt --check
+          cargo clippy -- -D warnings
+          cargo test
+
+  python:
+    name: pytest
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install dependencies
+        run: pip install pytest duckdb pandas yfinance "celery[redis]" fastapi prometheus-fastapi-instrumentator
+      - name: Test
+        run: pytest

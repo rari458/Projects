@@ -331,7 +331,7 @@ class MarketMakerStrategy : public Strategy {
 public:
     MarketMakerStrategy(double risk_aversion = 0.1, double volatility = 0.2, double kappa = 1.5);
 
-    void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close);
+    void on_market_data(Backtester& engine, const std::string& symbol, double timestamp, double open, double high, double low, double close) override;
     void on_order_book_update(Backtester& engine, const OrderBook& book, double timestamp) override;
 
 private:
@@ -521,7 +521,6 @@ public:
 
 private:
     double last_trade_price_ = 0.0;
-    double vpin_bucket_vol_ = 0.0;
     bool toxicity_shield_active_ = false;
     double arrival_price_ = 0.0;
 
