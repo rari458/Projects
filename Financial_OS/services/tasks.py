@@ -132,3 +132,49 @@ def aggregate_wf_selection(window_results):
         "strategy_picks": picks,
         "windows": per_window,
     }
+    
+# Method name -> Optimizer method. "mc_sharpe" is handled separately because it
+# also takes num_simulations and num_threads. The gateway's OptimizeMethod
+# Literal must list the same names.
+_CLOSE_FORM_METHODS = {
+    "inverse_vol": "optimize_inverse_volatility",
+    "min_variance": "optimize_minimum_variance",
+    "max_sharpe_analytic": "optimize_max_sharpe_analytic",
+    "max_sharpe_shrunk": "optimize_max_sharpe_shrunk",
+    "max_sharpe_robust": "optimize_max_sharpe_robust",
+}
+
+@celery_app.task(
+    name="run_optimize_job",
+    autoretry_for=(duckdb.IOException,),
+    retry_backoff=True,
+    retry_backoff_max=10,
+    retry_jitter=True,
+    max_retries=3,
+)
+
+def run_optimize_job(symbols, start, end, method="mc_sharpe", num_simulations=100000, risk_free_rate=0.02, num_threads=1):
+    if method != "mc_sharpe" and method not in _CLOSE_FORM_METHODS:
+        raise ValueError(f"unknown optimize method {method!r}")
+    con = data_store.connect_readonly()
+    try: rets = data_store.get_returns_matrix(con, symbols, start=start, end=end)
+    finally: con.close()
+    # With fewer than 2 rows the engine does not raise: it returns all-zero
+    # weights and a -1e9 Sharpe, so fail here with a readable error instead.
+    if len(rets) < 2: raise ValueError(f"need at least 2 overlapping return days, got {len(rets)}")
+    opt = fe.Optimizer()
+    for sym in symbols: opt.add_asset(sym, rets[sym].tolist())
+    if method == "mc_sharpe": res = opt.optimize_sharpe_ratio(num_simulations, risk_free_rate, num_threads)
+    else: res = getattr(opt, _CLOSE_FORM_METHODS[method])(risk_free_rate)
+    return {
+        "symbols": symbols,
+        "method": method,
+        "window_start": start,
+        "window_end": end,
+        "days": len(rets),
+        "weights": {sym: float(w) for sym, w in zip(symbols, res.optimal_weights)},
+        "portfolio_return": float(res.portfolio_return),
+        "portfolio_volatility": float(res.portfolio_volatility),
+        "sharpe_ratio": float(res.sharpe_ratio),
+    }
+        

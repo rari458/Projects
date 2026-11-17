@@ -1,8 +1,9 @@
 # services/gateway.py
 
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import date
+from typing import Literal
 from celery import Celery, chord
 from celery.result import AsyncResult
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -137,3 +138,29 @@ def submit_wf_select(req: WfSelectRequest):
     callback = celery_client.signature("aggregate_wf_selection")
     async_result = chord(header, app=celery_client)(callback)
     return {"job_id": async_result.id, "state": "PENDING", "num_windows": len(windows)}
+
+OptimizeMethod = Literal[
+    "mc_sharpe", "inverse_vol", "min_variance",
+    "max_sharpe_analytic", "max_sharpe_shrunk", "max_sharpe_robust",
+]
+    
+class OptimizeRequest(BaseModel):
+    symbols: list[str] = Field(min_length=1)
+    start: str | None = None
+    end: str | None = None
+    method: OptimizeMethod = "mc_sharpe"
+    # Bounds worker memory: the MC search keeps num_simulations x len(symbols) weights.
+    num_simulations: int = Field(default=100000, ge=1, le=1_000_000)
+    risk_free_rate: float = 0.02
+    # The engine treats num_threads as a switch: 1 = one thread, anything else = 
+    # a pool of hardware_concurrency() threads. Only these two values mean anything.
+    num_threads: Literal[0, 1] = 1
+    
+@app.post("/optimize")
+def submit_optimize(req: OptimizeRequest):
+    async_result = celery_client.send_task(
+        "run_optimize_job",
+        args=[req.symbols, req.start, req.end, req.method, 
+            req.num_simulations, req.risk_free_rate, req.num_threads],
+        )
+    return {"job_id": async_result.id, "state": "PENDING"}
