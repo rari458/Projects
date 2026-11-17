@@ -249,3 +249,34 @@ Every failure was `IO Error: Could not set lock on file "/app/data/market.duckdb
 **Known limits:** a walk-forward job whose tasks run across a swap can read two versions of the data. Existing rows never change, so only windows that reach past the old last date can differ. The k8s `ingester` has not been run on a cluster, and if `/host-mount` comes from `minikube mount` over 9p, file locks there may not behave as they do on a bind mount. Like DuckDB itself, B is single-node by construction.
 
 **Why it matters:** the obvious design, writing into the file the readers use and letting retries absorb the conflicts, fails badly here. A 5 s write lock failed 79% of the jobs running alongside it, and even half-second writes failed 9%. Measuring the locking rules first pointed to copy-and-swap, and measuring it under load showed it costs the readers nothing. It also repeats the lesson of stories #7 and #11: the constraint came from an earlier storage decision, an embedded single-file database, and only surfaced once the system gained a writer.
+
+---
+
+## 15. Postgres replaces DuckDB: the copy-and-swap was a bridge (post-roadmap expansion)
+
+**Context:** Story #14 kept DuckDB and worked around its file lock: the ingester writes a copy and swaps it in. That design was chosen knowing it would be replaced, as a step toward a database server that lets readers and writers work at the same time. This story covers the switch and what it measured.
+
+**What changed:** `data_store.py` now uses psycopg 3 against Postgres 18: a Compose service with a named volume, and a StatefulSet on Kubernetes. An ingest downloads first. Then, in **one transaction**, it `COPY`s the rows into a temporary staging table that empties itself on commit and runs one `INSERT ... ON CONFLICT DO NOTHING`, whose row count is exactly the rows that were new. Readers see the whole ingest or none of it, and never wait for it. A second writer inserting the same rows waits on the primary key and then skips them, so concurrent ingests are safe.
+
+What carried over from story #14: the `ingest_symbols` task, the `ingest` queue and its `ingester` service, `POST /ingest` with its tests, and one write function for every local script. What was thrown away: the copy-and-swap internals, the lock file, the `data/` directory mounts, and the ingester's fixed uid and `Recreate` strategy. Tasks now retry on `psycopg.OperationalError` (the database briefly unreachable) instead of on lock errors, which no longer exist. The data-store tests run against a real Postgres: the Compose service locally, a service container in CI, in their own `fos_test` database. They error rather than skip when it is missing.
+
+**The migration was verified, not assumed:** `migrate_duckdb_to_postgres.py` copied all 34,166 rows and compared both sides row by row, with exact float equality: identical. The reference 3-symbol MACD backtest returned the same `1255` bars, `34` trades and `98337.99530891428` final equity, on Compose and on the Kubernetes cluster. The comparison's first version built a set inside a list comprehension, so it rebuilt the set for each of the 34,166 rows and took 2 minutes. Built once, it took 1.2 s. That is the same quadratic-loop mistake as story #2, in a one-off script.
+
+**Measured under load** (the same benchmark and setup as story #14: 3 workers, 2000 three-symbol MACD backtests per run):
+
+| Writes during the run | Jobs failed | Task retries | Throughput |
+|---|---|---|---|
+| None (baseline) | 0 / 2000 | 0 | 113 jobs/s |
+| 11 committed ingests (`POST /ingest`) | 0 / 2000 | 0 | 112 jobs/s |
+| A write transaction held open 5 s: 1,255 inserts plus an update of all 1,349 SPY rows the backtests read, then rolled back | 0 / 2000 | 0 | 112 jobs/s |
+| An `ACCESS EXCLUSIVE` table lock held 5 s | 0 / 2000 | 0 | 21 jobs/s |
+
+The third row is the direct counterpart of story #14's worst case. A 5 s DuckDB write lock failed 1,571 of 2,000 jobs. A 5 s Postgres write transaction that held row locks on every SPY row the readers needed failed none and cost nothing: readers were served the last committed version of those rows. The fourth row shows what still blocks. A table-level lock, the kind `TRUNCATE`, `ALTER TABLE` and `LOCK TABLE` take, makes readers *wait*, so every job still succeeded but throughput fell to a fifth. Ordinary writes never take that lock, but schema changes do, so they need an idle stack. The baseline was 113 jobs/s here against 84 under DuckDB in story #14. Opening a DuckDB file on every task plausibly cost more than a Postgres connection, but the two figures come from different sessions, so this is an observation, not a controlled comparison.
+
+**Kubernetes, verified on a cluster this time:** on a 2-node minikube, workers ran on both nodes, and the ingester ran on the node that did not hold the database. All of them reached it over the network: 300 backtests split 101 / 101 / 100 across the three workers, and the reference result came out identical. This lifts story #11's limit, which required every worker on the one node holding the DuckDB file.
+
+**What the cluster test found:** the limit did not vanish; it moved to the database's storage. minikube's default storage class provisions a `hostPath` volume with no node affinity, so nothing keeps `postgres-0` on the node that holds its data. Three restarts happened to land on the same node and kept all 35,420 rows. With that node cordoned, `postgres-0` started on the other node and initialized a new, empty database there: 47 MB, next to the real 66 MB left behind on the first node. Nothing was lost, but until the pod moved back, every query would have run against an empty table. The manifest now states the requirement: the claim needs a storage class whose volumes carry node affinity, as cloud disk drivers and local-path provisioners provide.
+
+**An environment detail that cost a round trip:** a native PostgreSQL 18 on the WSL host already listened on `127.0.0.1:5432`. The first migration therefore reached that server, not the container, and failed with `password authentication failed for user "fos"`. The scratch tests had used port 55432, so they never touched 5432 and could not catch it. Compose now publishes the container on host port 5433.
+
+**Why it matters:** story #14 measured why DuckDB could not take a writer and built a way around it. This story removed the reason for the workaround, and the same benchmark that recorded 79% failures under a 5 s DuckDB write lock recorded zero under a 5 s Postgres write transaction. Both changes ended the same way, though: the constraint moved rather than disappeared. In story #14 it moved from the file to how the file is mounted, and here from where the workers can run to where the database's storage lives. It took a second node to see it, because on a single node every restart comes back to the same disk.
