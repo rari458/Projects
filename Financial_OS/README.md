@@ -6,7 +6,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-yellow)
 ![Rust](https://img.shields.io/badge/Rust-2024-orange)
 ![Tests](https://img.shields.io/badge/gtest-16%20passing-brightgreen)
-![Tests](https://img.shields.io/badge/pytest-37%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/pytest-41%20passing-brightgreen)
 
 ## What this is
 
@@ -81,7 +81,7 @@ services/              Phase 6 distributed stack: celery_app.py, tasks.py, gatew
 server/                Legacy synchronous FastAPI monolith (data-by-value)
 market_data_feeder/    Rust live feeder (Binance L2 → OBI → C++ FFI)
 data_store.py          DuckDB persistence layer (pure, no C++ import — testable standalone)
-pytests/               pytest suite for data_store.py (14 cases, in-memory DuckDB + monkeypatched yfinance)
+pytests/               pytest suite for data_store.py (18 cases, in-memory DuckDB + monkeypatched yfinance)
 docker-compose.yml     redis + gateway + horizontally-scalable worker pool
 k8s/                   Kubernetes manifests (redis/gateway/worker Deployments+Services, worker HPA) — alternate deployment target to docker-compose
 observability/         prometheus.yml + Grafana provisioning (datasource, dashboard provider, financial-os.json) — all config-as-code, no UI state
@@ -104,7 +104,7 @@ pip install --no-build-isolation -e .
 # Python entry points (run from repo root; data_store's data/market.duckdb path is relative)
 python server/main.py                 # legacy sync REST API on :8000
 streamlit run dashboard.py
-pytest                                 # 37 pytest cases (scoped via testpaths in pyproject.toml)
+pytest                                 # 41 pytest cases (scoped via testpaths in pyproject.toml)
 
 # Distributed stack (Phase 6) -- Docker Compose
 docker compose up -d --build
@@ -130,9 +130,9 @@ cargo run --manifest-path market_data_feeder/Cargo.toml
 
 16 GoogleTest cases (`ctest --test-dir build`), including 5 **characterization / golden-master** tests (`tests/BacktesterCharacterizationTest.cpp`) that pin the Backtester's exact numeric output — 2 price-path strategies (MACD, EMA) and 3 event-driven suites (META_BRAIN, STRUCTURAL_ARB, GLOBAL_MACRO) — so any unintended behavior change during refactoring shows up as a failing test, without asserting the behavior is "correct."
 
-The Python layer has a 37-case pytest suite (`pytest`, scoped via `testpaths` in `pyproject.toml` to `services/tests/` + `pytests/` so it never collides with the root-level `*_test.py` demo scripts, which match pytest's default discovery patterns but are not pytest):
+The Python layer has a 41-case pytest suite (`pytest`, scoped via `testpaths` in `pyproject.toml` to `services/tests/` + `pytests/` so it never collides with the root-level `*_test.py` demo scripts, which match pytest's default discovery patterns but are not pytest):
 - `services/tests/test_gateway.py` (23 cases) — `_add_months`, `_walkforward_windows`, `_wf_train_test_windows`: the date-window math behind the walk-forward endpoints, and the exact spot where hand-typed bugs (singular/plural `window`/`windows`, a missing leading underscore) turned up earlier in development. Several cases are pinned directly against live-verified runs (19 / 7 / 42 windows). Nine more cover `/optimize`: request validation (defaults, an unknown method, `num_threads` other than 0/1, out-of-range `num_simulations`, an empty symbol list); a check that the gateway's method names match the worker's table in `tasks.py`, read through `ast` so the C++ module is never imported; and stubbed `send_task`/`chord` calls that pin `run_optimize_job`'s argument order and the `/wf_select` response. Each of the four hand-typed bugs found while building the optimize job, put back one at a time, fails at least one of them. Four more check that `/jobs`, `/walkforward` and `/wf_select` reject an empty symbol list, and `/wf_select` an empty candidate list, with a 422 at the gateway instead of a job that fails in the worker.
-- `pytests/test_data_store.py` (14 cases) — the DuckDB persistence layer, against an in-memory DB: schema creation, `get_ohlc`/`symbols`/`get_returns_matrix` round-trips, `get_aligned_ohlc` keeping only the dates every symbol has (a mid-series gap, and one symbol starting a day later), and `ingest`/`ingest_many` with `yf.download` monkeypatched (no real network calls) covering MultiIndex-column flattening, empty-response errors, `ON CONFLICT DO NOTHING` idempotency, and partial-failure partitioning.
+- `pytests/test_data_store.py` (18 cases) — the DuckDB persistence layer, against an in-memory DB: schema creation, `get_ohlc`/`symbols`/`get_returns_matrix` round-trips, `get_aligned_ohlc` keeping only the dates every symbol has (a mid-series gap, and one symbol starting a day later), and `ingest`/`ingest_many` with `yf.download` monkeypatched (no real network calls) covering MultiIndex-column flattening, empty-response errors, `ON CONFLICT DO NOTHING` idempotency, and partial-failure partitioning. Four more cover `ingest_snapshot` on real files in a temporary directory: it counts only rows actually inserted, an open reader neither blocks it nor sees the swap until it reopens, a failed write leaves the live file untouched with no temporary file behind, and a run where every download fails does not replace the file.
 
 The Celery task/worker glue itself is still verified by manual/curl + Docker Compose round-trips rather than integration tests — a known, smaller remaining gap.
 

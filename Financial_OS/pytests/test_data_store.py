@@ -165,3 +165,63 @@ def test_get_aligned_ohlc_starts_at_the_latest_first_date(con):
     assert [d.strftime("%Y-%m-%d") for d in dates] == ["2020-01-02", "2020-01-03"]
     assert bars["AAPL"]["closes"] == [110.0, 121.0]
     assert bars["MSFT"]["closes"] == [200.0, 220.0]
+def _count(db_path):
+    con = data_store.connect_readonly(str(db_path))
+    try:
+        return con.execute("SELECT COUNT(*) FROM ohlc").fetchone()[0]
+    finally:
+        con.close()
+
+def test_ingest_snapshot_creates_db_and_counts_inserted_rows(tmp_path, monkeypatch):
+    monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: _fake_download())
+    db = tmp_path / "data" / "market.duckdb"
+
+    first = data_store.ingest_snapshot(["AAPL"], db_path=str(db))
+    again = data_store.ingest_snapshot(["AAPL"], db_path=str(db))
+
+    assert first == ({"AAPL": 3}, {})
+    # ON CONFLICT DO NOTHING skips all three, and the count says so.
+    assert again == ({"AAPL": 0}, {})
+    assert _count(db) == 3
+
+def test_ingest_snapshot_is_not_blocked_by_an_open_reader(tmp_path, monkeypatch):
+    monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: _fake_download())
+    db = tmp_path / "market.duckdb"
+    data_store.ingest_snapshot(["AAPL"], db_path=str(db))
+
+    reader = data_store.connect_readonly(str(db))
+    # A read-write open of the live file would fail here; the snapshot never opens it.
+    data_store.ingest_snapshot(["MSFT"], db_path=str(db))
+    # The open reader keeps the file it opened...
+    assert reader.execute("SELECT COUNT(*) FROM ohlc").fetchone()[0] == 3
+    reader.close()
+    # ...and the next open sees the swapped-in one.
+    assert _count(db) == 6
+
+def test_ingest_snapshot_failure_leaves_live_file_and_no_temp(tmp_path, monkeypatch):
+    monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: _fake_download())
+    db = tmp_path / "market.duckdb"
+    data_store.ingest_snapshot(["AAPL"], db_path=str(db))
+
+    def broken_insert(con, tidy):
+        raise RuntimeError("disk full")
+    monkeypatch.setattr(data_store, "_insert", broken_insert)
+
+    with pytest.raises(RuntimeError):
+        data_store.ingest_snapshot(["MSFT"], db_path=str(db))
+
+    assert _count(db) == 3
+    assert sorted(p.name for p in tmp_path.iterdir()) == [".ingest.lock", "market.duckdb"]
+
+def test_ingest_snapshot_skips_the_swap_when_every_download_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: _fake_download())
+    db = tmp_path / "market.duckdb"
+    data_store.ingest_snapshot(["AAPL"], db_path=str(db))
+    inode = db.stat().st_ino
+
+    monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: pd.DataFrame())
+    inserted, failed = data_store.ingest_snapshot(["NOPE"], db_path=str(db))
+
+    assert inserted == {}
+    assert "NOPE" in failed
+    assert db.stat().st_ino == inode

@@ -1,6 +1,8 @@
 # data_store.py
 
 import os
+import fcntl
+import shutil
 import duckdb
 import yfinance as yf
 import pandas as pd
@@ -33,13 +35,13 @@ def _flatten_yf(df):
         df.columns = df.columns.get_level_values(0)
     return df
 
-def ingest(con, symbol, period="5y", interval="1d"):
+def _download(symbol, period="5y", interval="1d"):
     raw = yf.download(symbol, period=period, interval=interval, progress=False)
     if raw.empty:
         raise ValueError(f"yfinance returned no data for {symbol!r}")
     raw = _flatten_yf(raw)
 
-    tidy = pd.DataFrame({
+    return pd.DataFrame({
         "symbol": symbol,
         "date":   pd.to_datetime(raw.index).date,
         "open":   raw["Open"].astype(float).values,
@@ -48,6 +50,7 @@ def ingest(con, symbol, period="5y", interval="1d"):
         "close":  raw["Close"].astype(float).values,
     })
 
+def _insert(con, tidy):
     con.register("tidy_df", tidy)
     con.execute("""
         INSERT INTO ohlc
@@ -55,6 +58,10 @@ def ingest(con, symbol, period="5y", interval="1d"):
         ON CONFLICT DO NOTHING
     """)
     con.unregister("tidy_df")
+
+def ingest(con, symbol, period="5y", interval="1d"):
+    tidy = _download(symbol, period=period, interval=interval)
+    _insert(con, tidy)
     return len(tidy)
 
 def get_ohlc(con, symbol, start=None, end=None):
@@ -121,3 +128,46 @@ def ingest_many(con, symbols, period="5y", interval="1d"):
         except Exception as exc:
             failed[sym] = str(exc)
     return ok, failed
+
+def ingest_snapshot(symbols, period="5y", interval="1d", db_path=DEFAULT_DB):
+    # Writes never touch the live file. DuckDB refuses a read-write open while any
+    # reader (a worker task) has the file open, and refuses readers while a writer
+    # has it, across containers too (measured). So: download first with no lock
+    # held, write into a copy in the same directory, then os.replace the copy over
+    # the live file in one step. A reader keeps the file it opened; the next open
+    # sees the new one. Returns ({symbol: rows actually inserted}, {symbol: error}).
+    frames, failed = {}, {}
+    for sym in symbols:
+        try:
+            frames[sym] = _download(sym, period=period, interval=interval)
+        except Exception as exc:
+            failed[sym] = str(exc)
+    if not frames:
+        return {}, failed
+
+    directory = os.path.dirname(db_path) or "."
+    os.makedirs(directory, exist_ok=True)
+    # One writer at a time: two writers copying the same snapshot would each
+    # rename over the other, and the first one's rows would silently vanish.
+    with open(os.path.join(directory, ".ingest.lock"), "w") as lock:
+        fcntl.lockf(lock, fcntl.LOCK_EX)
+        tmp = f"{db_path}.tmp-{os.getpid()}"
+        try:
+            if os.path.exists(db_path):
+                shutil.copyfile(db_path, tmp)
+            con = connect(tmp)
+            try:
+                inserted = {}
+                count = "SELECT COUNT(*) FROM ohlc WHERE symbol = ?"
+                for sym, tidy in frames.items():
+                    before = con.execute(count, [sym]).fetchone()[0]
+                    _insert(con, tidy)
+                    inserted[sym] = con.execute(count, [sym]).fetchone()[0] - before
+                con.execute("CHECKPOINT")
+            finally:
+                con.close()
+            os.replace(tmp, db_path)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+    return inserted, failed
