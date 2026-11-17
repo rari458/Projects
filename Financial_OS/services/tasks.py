@@ -196,4 +196,10 @@ def run_optimize_job(symbols, start, end, method="mc_sharpe", num_simulations=10
         "sharpe_ratio": float(res.sharpe_ratio),
         "num_threads": num_threads,
     }
-        
+
+# Routed to the "ingest" queue, which only the ingester service consumes: compute
+# workers mount data/ read-only, and ingest_snapshot needs a single writer anyway.
+@celery_app.task(name="ingest_symbols")
+def ingest_symbols(symbols, period="5y"):
+    inserted, failed = data_store.ingest_snapshot(symbols, period=period)
+    return {"symbols": symbols, "period": period, "inserted": inserted, "failed": failed}

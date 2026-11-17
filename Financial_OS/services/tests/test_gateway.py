@@ -110,3 +110,42 @@ def test_requests_reject_empty_symbols(model, fields):
 def test_wf_select_rejects_empty_candidates():
     with pytest.raises(ValidationError):
         gateway.WfSelectRequest(symbol=["SPY"], start="2021-07-07", end="2026-07-07", candidates=[])
+
+def _task_names(path, call_attrs):
+    # String names in calls like send_task("x") / signature("x"), or name="x" in task(...).
+    tree = ast.parse(Path(path).read_text())
+    names = set()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and getattr(node.func, "attr", None) in call_attrs):
+            continue
+        if node.args and isinstance(node.args[0], ast.Constant):
+            names.add(node.args[0].value)
+        names |= {kw.value.value for kw in node.keywords if kw.arg == "name"}
+    return names
+
+def test_every_task_the_gateway_dispatches_exists_in_the_worker():
+    # The gateway dispatches by name string. A name the worker does not define is
+    # never run, and the job just sits in PENDING with nothing pointing at the typo.
+    sent = _task_names(gateway.__file__, {"send_task", "signature"})
+    defined = _task_names(Path(gateway.__file__).with_name("tasks.py"), {"task"})
+    assert "ingest_symbols" in sent
+    assert sent <= defined
+
+def test_submit_ingest_goes_to_the_ingest_queue(monkeypatch):
+    sent = {}
+    class FakeResult: id = "fake-id"
+    def fake_send_task(name, args=None, **options):
+        sent.update(name=name, args=args, options=options)
+        return FakeResult()
+    monkeypatch.setattr(gateway.celery_client, "send_task", fake_send_task)
+    out = gateway.submit_ingest(gateway.IngestRequest(symbols=["TLT", "IWM"]))
+    assert out == {"job_id": "fake-id", "state": "PENDING"}
+    # On the default queue a compute worker would take it, and its read-only
+    # data mount would fail the write.
+    assert sent == {"name": "ingest_symbols", "args": [["TLT", "IWM"], "5y"],
+                    "options": {"queue": "ingest"}}
+
+@pytest.mark.parametrize("field, value", [("symbols", []), ("period", "7y")])
+def test_ingest_request_rejects(field, value):
+    with pytest.raises(ValidationError):
+        gateway.IngestRequest(**{"symbols": ["TLT"], field: value})

@@ -166,3 +166,18 @@ def submit_optimize(req: OptimizeRequest):
             req.num_simulations, req.risk_free_rate, req.num_threads],
         )
     return {"job_id": async_result.id, "state": "PENDING"}
+
+IngestPeriod = Literal["1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "max"]
+
+class IngestRequest(BaseModel):
+    symbols: list[str] = Field(min_length=1, max_length=100)
+    period: IngestPeriod = "5y"
+
+@app.post("/ingest")
+def submit_ingest(req: IngestRequest):
+    # Explicit queue: only the ingester consumes "ingest", so the one writer the
+    # snapshot design relies on is the only process that ever runs this task.
+    async_result = celery_client.send_task(
+        "ingest_symbols", args=[req.symbols, req.period], queue="ingest",
+    )
+    return {"job_id": async_result.id, "state": "PENDING"}

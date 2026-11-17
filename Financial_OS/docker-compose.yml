@@ -38,6 +38,26 @@ services:
       - "9100"
     stop_grace_period: 30s
 
+  # The single writer: same image as the worker, but it consumes only the "ingest"
+  # queue and mounts data/ read-write. It runs as the host user so the database and
+  # .ingest.lock it creates stay writable by local scripts.
+  ingester:
+    build:
+      context: .
+      dockerfile: services/Dockerfile.worker
+    command: ["celery", "-A", "services.celery_app:celery_app", "worker",
+              "--loglevel=info", "--pool=solo", "-Q", "ingest"]
+    user: "${FOS_UID:-1000}:${FOS_GID:-1000}"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      HOME: /tmp
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+    stop_grace_period: 30s
+
   redis_exporter:
     image: oliver006/redis_exporter:latest
     environment:
