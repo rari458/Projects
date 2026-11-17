@@ -210,3 +210,42 @@ This document records *why*, not just *what*. Each entry captures a question tha
 **Left open:** the engine-level fix would be to size the pool from the container's CPU quota (`/sys/fs/cgroup/cpu.max`) instead of `hardware_concurrency()`. That would make the pool correct under any limit, and would let `num_threads` go back to being an actual count. It was not done because it changes the C++ core for a deployment shape this project only runs locally. The +42% slowdown at 8 replicas is also unexplained. A run that pins one replica per physical core would tell whether hyperthread siblings are the cause.
 
 **Why it matters:** this is the same compounding as stories #7 and #11, one layer down. Phase 4's pool sizes itself from `hardware_concurrency()`, a number that was true on the bare host and became wrong once a container runtime put a CPU quota between the process and the cores. The Compose numbers were the most repeatable of any measurement in this project, three passes with the winner never in doubt. That consistency made them easy to promote to a global default, but it says nothing about a deployment that limits CPU differently.
+
+---
+
+## 14. A writer arrives: the ingestion service writes a copy and swaps it in (post-roadmap expansion)
+
+**Context:** Until this point nothing in the distributed stack wrote to `market.duckdb`. Workers mounted it read-only, and data arrived only when someone ran a local script (`universe_demo.py` and three others) that opened the live file read-write and ingested into it. A write-side ingestion service raised the question of how one writer and the workers' readers can share an embedded single-file database.
+
+**What was measured before designing** (DuckDB 1.5.4, Docker Desktop on WSL2):
+- A read-write open fails while any other process has the file open, read-only included, and every read-only open fails while a writer has it. Only readers can share. The lock holds across the container boundary: a write lock held on the host blocked a container's read-only open (`Conflicting lock is held in PID 0`).
+- A single-file bind mount stays pinned to the file that was there when the container started. After a 3-row file was renamed over a 1-row file on the host, a file mount still showed 1 row and a directory mount showed 3.
+- A reader that has the old file open keeps reading it after the rename, and any other process sees the new file. Within one process, DuckDB keeps reusing an already-open database, so a reopen sees the new file only after every connection to the old one is closed.
+- The file is 2.5 MB, so copying it on every write is cheap.
+
+**Options:** (A) write into the live file and let the workers' retries absorb the conflicts; (B) write a copy and swap it in with `os.replace`; (C) replace DuckDB with a database server such as Postgres. C handles concurrent readers and writers properly and removes story #11's single-node limit, and it is planned. B was built first as a stepping stone. Its task, queue, service and endpoint carry over to C; only the storage internals in `data_store.py` and the directory mounts will be replaced.
+
+**The design (B):** the database moves to `data/`, and containers mount the directory. `data_store.ingest_snapshot` downloads first, with no lock held. It then copies the file within `data/`, inserts into the copy, checkpoints it, and `os.replace`s it over the live file. The copy-write-replace sequence runs under an `fcntl` lock on `data/.ingest.lock`, which was also checked across the container boundary. Without that lock, two writers could each copy the same version, and the second rename would silently drop the first one's rows. `POST /ingest` sends `ingest_symbols` to an `ingest` queue. Its only consumer is a one-replica `ingester` with a read-write mount, running as the host uid so the files it creates stay writable locally. The compute workers keep read-only mounts and the default queue. The four local scripts that wrote in place now call the same function and open their read-only connection after it.
+
+**Measured under load** (`benchmarks/ingest_under_load.py`): 3 workers and 2000 three-symbol MACD backtests per run, with writes running the whole time. Each task holds a read-only connection for its entire run.
+
+| Writes during the run | Jobs failed | Task retries | Throughput |
+|---|---|---|---|
+| None (baseline) | 0 / 2000 | 0 | 84 jobs/s |
+| Copy and swap: `POST /ingest` back to back, 15 swaps of 0.3–1.2 s each, download included | 0 / 2000 | 0 | 82 jobs/s |
+| In place: write lock held 0.5 s, every 1.5 s | 172 / 2000 | 2065 | 65 jobs/s |
+| In place: write lock held 5 s, every 6 s | 1571 / 2000 | 5343 | 78 jobs/s* |
+
+\*Failed jobs end quickly, so throughput flatters this row. The failure count is the meaningful number.
+
+Every failure was `IO Error: Could not set lock on file "/app/data/market.duckdb"`. Each failed job had already been retried three times with backoff by the `autoretry_for=(duckdb.IOException,)` the tasks already had. The 5 s hold does not exaggerate the old scripts. `ingest_many` held its read-write connection while it downloaded each symbol in turn, so `universe_demo.py`'s 26 symbols kept the file locked for several seconds per run. Every swap really did produce a new file: one ingest that inserted no rows still changed the inode from 74505 to 321739.
+
+**A prediction that did not hold:** the argument against writing in place said the writer would rarely find a gap, because workers near saturation keep the file open almost all the time. It did find gaps. Every in-place writer got its lock within 0.22 s, after at most 25 attempts 5 ms apart: each backtest task closes its connection when it finishes, and gaps across the three workers line up often. All of the damage fell on the readers instead.
+
+**Two things found along the way:**
+- **Dependency drift.** Unpinned installs gave CI and the rebuilt worker image DuckDB 2.0.0 while the venv ran 1.5.4. Version 2.0 refuses a new statement while an earlier result is still unfinished, and `fetchone()` leaves it unfinished, so `ingest_snapshot` failed in CI. A file *created* by 2.0 has storage version 999, which 1.5.4 cannot open; a 1.5.4 file that 2.0 modifies stays readable. `constraints.txt` now pins the venv's versions for both images and CI.
+- **Retries are counted as failures.** The worker's metrics label every non-SUCCESS task run `failure`, retries included, so `celery_tasks_total{status="failure"}` overstates real failures. This measurement counts retries as attempts minus jobs instead.
+
+**Known limits:** a walk-forward job whose tasks run across a swap can read two versions of the data. Existing rows never change, so only windows that reach past the old last date can differ. The k8s `ingester` has not been run on a cluster, and if `/host-mount` comes from `minikube mount` over 9p, file locks there may not behave as they do on a bind mount. Like DuckDB itself, B is single-node by construction.
+
+**Why it matters:** the obvious design, writing into the file the readers use and letting retries absorb the conflicts, fails badly here. A 5 s write lock failed 79% of the jobs running alongside it, and even half-second writes failed 9%. Measuring the locking rules first pointed to copy-and-swap, and measuring it under load showed it costs the readers nothing. It also repeats the lesson of stories #7 and #11: the constraint came from an earlier storage decision, an embedded single-file database, and only surfaced once the system gained a writer.
