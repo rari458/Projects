@@ -11,6 +11,84 @@ metadata:
 data:
   REDIS_URL: "redis://redis:6379/0"
 ---
+# Development credentials, as in docker-compose.yml. A real deployment would create
+# this Secret out of band instead of committing it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: financial-os-db
+  namespace: financial-os
+type: Opaque
+stringData:
+  POSTGRES_USER: fos
+  POSTGRES_PASSWORD: fos
+  POSTGRES_DB: market
+  FOS_DATABASE_URL: "postgresql://fos:fos@postgres:5432/market"
+---
+# The market database. Workers reach it over the network through this Service, so
+# unlike the old hostPath DuckDB file they can run on any node (ENGINEERING_DECISIONS #11).
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: financial-os
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: financial-os
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:18-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: financial-os-db
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "fos", "-d", "market"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          volumeMounts:
+            # Postgres 18 images keep data under /var/lib/postgresql, not .../data.
+            - name: pgdata
+              mountPath: /var/lib/postgresql
+  # Needs a storage class whose volumes carry node affinity, so postgres-0 is only
+  # scheduled where its data lives: cloud disk CSI drivers and local-path
+  # provisioners do. minikube's default "standard" class does not. On a 2-node
+  # cluster, postgres-0 forced onto the other node came up as a new, empty
+  # database there (ENGINEERING_DECISIONS #15); restarts on the same node kept
+  # every row.
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -133,24 +211,20 @@ spec:
             # hardware_concurrency() threads would share one core (ENGINEERING_DECISIONS #13).
             - name: FOS_OPTIMIZE_THREADS
               value: "1"
+            - name: FOS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: financial-os-db
+                  key: FOS_DATABASE_URL
           resources:
             requests:
               cpu: "250m"
             limits:
               cpu: "1"
-          volumeMounts:
-            - name: market-db
-              mountPath: /app/data
-              readOnly: true
-      volumes:
-        - name: market-db
-          hostPath:
-            path: /host-mount/data
-            type: Directory
 ---
-# The single writer: the worker image, consuming only the "ingest" queue, with a
-# read-write mount of data/ (the workers' mount is read-only). It writes through
-# data_store.ingest_snapshot, which needs exactly one writer at a time.
+# The worker image, consuming only the "ingest" queue, so slow downloads from
+# Yahoo never occupy a compute worker. Postgres makes concurrent writers safe, so
+# the single-writer settings it had under DuckDB (Recreate, a fixed uid) are gone.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -158,10 +232,6 @@ metadata:
   namespace: financial-os
 spec:
   replicas: 1
-  # Recreate, not RollingUpdate: a rolling update starts the new pod before the
-  # old one stops, so for a moment two writers would share data/.
-  strategy:
-    type: Recreate
   selector:
     matchLabels:
       app: ingester
@@ -171,11 +241,6 @@ spec:
         app: ingester
     spec:
       terminationGracePeriodSeconds: 30
-      # The host user, so the database and lock file it creates stay writable
-      # by local scripts on the node (same choice as docker-compose.yml).
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
       containers:
         - name: ingester
           image: financial-os-worker:latest
@@ -186,16 +251,11 @@ spec:
             - configMapRef:
                 name: financial-os-config
           env:
-            - name: HOME
-              value: /tmp
-          volumeMounts:
-            - name: market-data
-              mountPath: /app/data
-      volumes:
-        - name: market-data
-          hostPath:
-            path: /host-mount/data
-            type: Directory
+            - name: FOS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: financial-os-db
+                  key: FOS_DATABASE_URL
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
