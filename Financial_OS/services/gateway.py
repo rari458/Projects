@@ -19,7 +19,7 @@ def health():
     return {"status": "ok"}
 
 class JobRequest(BaseModel):
-    symbols: list[str]
+    symbols: list[str] = Field(min_length=1)
     start: str | None = None
     end: str | None = None
     strategy: str = "MACD"
@@ -61,7 +61,7 @@ def _walkforward_windows(start, end, test_months, step_months):
     return windows
 
 class WalkforwardRequest(BaseModel):
-    symbols: list[str]
+    symbols: list[str] = Field(min_length=1)
     start: str
     end: str
     strategy: str = "MACD"
@@ -108,10 +108,10 @@ def _wf_train_test_windows(start, end, train_months, test_months, step_months):
 DEFAULT_CANDIDATES = ["EMA", "RSI", "MACD", "BB", "VOL", "OU"]
 
 class WfSelectRequest(BaseModel):
-    symbols: list[str]
+    symbols: list[str] = Field(min_length=1)
     start: str
     end: str
-    candidates: list[str] = DEFAULT_CANDIDATES
+    candidates: list[str] = Field(default=DEFAULT_CANDIDATES, min_length=1)
     train_months: int = 12
     test_months: int = 6
     step_months: int = 6

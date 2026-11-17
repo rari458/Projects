@@ -96,3 +96,17 @@ def test_submit_wf_select_returns_job_id(monkeypatch):
     monkeypatch.setattr(gateway, "chord", lambda header, app: lambda callback: FakeResult())
     req = gateway.WfSelectRequest(symbols=["SPY"], start="2021-07-07", end="2026-07-07")
     assert gateway.submit_wf_select(req) == {"job_id": "fake-id", "state": "PENDING", "num_windows": 8}
+    
+@pytest.mark.parametrize("model, fields", [
+    (gateway.JobRequest, {}),
+    (gateway.WalkforwardRequest, {"start": "2021-07-07", "end": "2026-07-07"}),
+    (gateway.WfSelectRequest, {"start": "2021-07-07", "end": "2026-07-07"}),
+])
+
+def test_requests_reject_empty_symbols(model, fields):
+    # An empty list used to reach the worker and fail there as a job error.
+    with pytest.raises(ValidationError): model(symbols=[], **fields)
+    
+def test_wf_select_rejects_empty_candidates():
+    with pytest.raises(ValidationError):
+        gateway.WfSelectRequest(symbol=["SPY"], start="2021-07-07", end="2026-07-07", candidates=[])
