@@ -1,6 +1,12 @@
 # services/tests/test_gateway.py
 
 from datetime import date
+import ast
+import typing
+from pathlib import Path
+import pytest
+from pydantic import ValidationError
+from services import gateway
 from services.gateway import _add_months, _walkforward_windows, _wf_train_test_windows
 
 def test_add_months_basic():
@@ -39,3 +45,54 @@ def test_wf_train_test_windows_matches_verified_stress_run():
 
 def test_wf_train_test_windows_empty_when_range_too_short():
     assert _wf_train_test_windows("2024-01-01", "2024-06-01", 12, 6, 6) == []
+    
+def _optimize_request(**overrides):
+    return gateway.OptimizeRequest(**{"symbols": ["SPY", "AAPL", "MSFT"], **overrides})
+
+def test_optimize_request_defaults():
+    req = _optimize_request()
+    assert (req.method, req.num_simulations, req.risk_free_rate, req.num_threads) == ("mc_sharpe", 100000, 0.02, 1)
+    
+@pytest.mark.parametrize("field, value", [
+    ("method", "max_sharpe"),       # not one of the six names
+    ("num_threads", 4),             # the engine only tells 1 apart from "all cores"
+    ("num_simulations", 0),
+    ("num_simulations", 1_000_001),
+    ("symbols", []),
+])
+
+def test_optimize_request_rejects(field, value):
+    with pytest.raises(ValidationError): _optimize_request(**{field: value})
+    
+def test_optimize_methods_match_worker():
+    # The gateway cannot import services.tasks (it loads the C++ module), so the
+    # six names live in two places. Read the worker's table without importing it.
+    tree = ast.parse(Path(gateway.__file__).with_name("tasks.py").read_text())
+    table = next(ast.literal_eval(node.value) for node in ast.walk(tree)
+                 if isinstance(node, ast.Assign)
+                 and any(getattr(t, "id", None) == "_CLOSE_FORM_METHODS" for t in node.targets))
+    assert set(typing.get_args(gateway.OptimizeMethod)) == {"mc_sharpe", *table}
+    # Two names mapped to one Optimizer method means one of them runs the wrong optimizer.
+    assert len(set(table.values())) == len(table)
+    
+def test_submit_optimize_sends_args_in_task_order(monkeypatch):
+    sent = {}
+    class FakeResult: id = "fake-id"
+    def fake_send_task(name, args=None, **options):
+        sent.update(name=name, args=args, options=options)
+        return FakeResult()
+    monkeypatch.setattr(gateway.celery_client, "send_task", fake_send_task)
+    out = gateway.submit_optimize(_optimize_request(start="2021-07-01", method="max_sharpe_analytic"))
+    assert out == {"job_id": "fake-id", "state": "PENDING"}
+    assert sent == {
+        "name": "run_optimize_job",
+        # Must match run_optimize_job(symbols, start, end, method, num_simulations, risk_free_rate, num_threads).
+        "args": [["SPY", "AAPL", "MSFT"], "2021-07-01", None, "max_sharpe_analytic", 100000, 0.02, 1],
+        "options": {},
+    }
+    
+def test_submit_wf_select_returns_job_id(monkeypatch):
+    class FakeResult: id = "fake-id"
+    monkeypatch.setattr(gateway, "chord", lambda header, app: lambda callback: FakeResult())
+    req = gateway.WfSelectRequest(symbols=["SPY"], start="2021-07-07", end="2026-07-07")
+    assert gateway.submit_wf_select(req) == {"job_id": "fake-id", "state": "PENDING", "num_windows": 8}
