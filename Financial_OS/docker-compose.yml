@@ -26,6 +26,9 @@ services:
       dockerfile: services/Dockerfile.worker
     environment:
       REDIS_URL: redis://redis:6379/0
+      # No CPU limit here, so the hardware_concurrency() pool has every core to use:
+      # 1.36-2.17x faster than 1 at 1-8 replicas on this host (ENGINEERING_DECISIONS #13).
+      FOS_OPTIMIZE_THREADS: "0"
     depends_on:
       redis:
         condition: service_healthy

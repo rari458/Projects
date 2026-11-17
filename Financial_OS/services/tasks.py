@@ -3,6 +3,7 @@
 import FinancialEngine as fe
 import data_store
 import duckdb
+import os
 from services.celery_app import celery_app
 
 def _run_backtest(con, symbols, start, end, strategy, initial_capital, leverage):
@@ -144,6 +145,16 @@ _CLOSE_FORM_METHODS = {
     "max_sharpe_robust": "optimize_max_sharpe_robust",
 }
 
+# num_threads for mc_sharpe when the request leaves it out. The deployment sets it,
+# because only the deployment knows how much CPU a worker gets: the pool sizes itself
+# with hardware_concurrency(), which reports the host's cores, not a container's CPU
+# limit (ENGINEERING_DECISIONS #13). Checked per call, so a bad value fails optimize
+# jobs with a readable error instead of crash-looping every worker at import.
+def _default_num_threads():
+    raw = os.environ.get("FOS_OPTIMIZE_THREADS", "1")
+    if raw not in ("0", "1"): raise ValueError(f"FOS_OPTIMIZE_THREADS must be 0 or 1, got {raw!r}")
+    return int(raw)
+
 @celery_app.task(
     name="run_optimize_job",
     autoretry_for=(duckdb.IOException,),
@@ -153,7 +164,7 @@ _CLOSE_FORM_METHODS = {
     max_retries=3,
 )
 
-def run_optimize_job(symbols, start, end, method="mc_sharpe", num_simulations=100000, risk_free_rate=0.02, num_threads=1):
+def run_optimize_job(symbols, start, end, method="mc_sharpe", num_simulations=100000, risk_free_rate=0.02, num_threads=None):
     if method != "mc_sharpe" and method not in _CLOSE_FORM_METHODS:
         raise ValueError(f"unknown optimize method {method!r}")
     con = data_store.connect_readonly()
@@ -164,8 +175,12 @@ def run_optimize_job(symbols, start, end, method="mc_sharpe", num_simulations=10
     if len(rets) < 2: raise ValueError(f"need at least 2 overlapping return days, got {len(rets)}")
     opt = fe.Optimizer()
     for sym in symbols: opt.add_asset(sym, rets[sym].tolist())
-    if method == "mc_sharpe": res = opt.optimize_sharpe_ratio(num_simulations, risk_free_rate, num_threads)
-    else: res = getattr(opt, _CLOSE_FORM_METHODS[method])(risk_free_rate)
+    if method == "mc_sharpe":
+        if num_threads is None: num_threads = _default_num_threads()
+        res = opt.optimize_sharpe_ratio(num_simulations, risk_free_rate, num_threads)
+    else:
+        num_threads = None  # the closed-form methods run no thread pool
+        res = getattr(opt, _CLOSE_FORM_METHODS[method])(risk_free_rate)
     return {
         "symbols": symbols,
         "method": method,
@@ -176,5 +191,6 @@ def run_optimize_job(symbols, start, end, method="mc_sharpe", num_simulations=10
         "portfolio_return": float(res.portfolio_return),
         "portfolio_volatility": float(res.portfolio_volatility),
         "sharpe_ratio": float(res.sharpe_ratio),
+        "num_threads": num_threads,
     }
         

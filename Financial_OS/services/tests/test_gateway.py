@@ -51,7 +51,7 @@ def _optimize_request(**overrides):
 
 def test_optimize_request_defaults():
     req = _optimize_request()
-    assert (req.method, req.num_simulations, req.risk_free_rate, req.num_threads) == ("mc_sharpe", 100000, 0.02, 1)
+    assert (req.method, req.num_simulations, req.risk_free_rate, req.num_threads) == ("mc_sharpe", 100000, 0.02, None)
     
 @pytest.mark.parametrize("field, value", [
     ("method", "max_sharpe"),       # not one of the six names
@@ -87,7 +87,7 @@ def test_submit_optimize_sends_args_in_task_order(monkeypatch):
     assert sent == {
         "name": "run_optimize_job",
         # Must match run_optimize_job(symbols, start, end, method, num_simulations, risk_free_rate, num_threads).
-        "args": [["SPY", "AAPL", "MSFT"], "2021-07-01", None, "max_sharpe_analytic", 100000, 0.02, 1],
+        "args": [["SPY", "AAPL", "MSFT"], "2021-07-01", None, "max_sharpe_analytic", 100000, 0.02, None],
         "options": {},
     }
     

@@ -128,6 +128,11 @@ spec:
           envFrom:
             - configMapRef:
                 name: financial-os-config
+          env:
+            # Tied to limits.cpu below: under a 1-CPU limit the pool's
+            # hardware_concurrency() threads would share one core (ENGINEERING_DECISIONS #13).
+            - name: FOS_OPTIMIZE_THREADS
+              value: "1"
           resources:
             requests:
               cpu: "250m"
