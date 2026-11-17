@@ -1,5 +1,6 @@
 # walkforward.py
 
+import os
 import numpy as np
 import FinancialEngine
 import data_store
@@ -58,13 +59,18 @@ def summarize(name, oos):
           f"    ann.vol {ann_vol * 100:8.2f}%")
 
 def main():
-    con = data_store.connect()
-    stored = set(data_store.symbols(con)["symbol"])          
+    stored = set()
+    if os.path.exists(data_store.DEFAULT_DB):
+        con = data_store.connect_readonly()
+        stored = set(data_store.symbols(con)["symbol"])
+        con.close()  # closed before the ingest, so the reopen below sees the new file
     missing = [s for s in UNIVERSE if s not in stored]
     if missing:
         print(f"-> Ingesting {len(missing)} missing symbols...")
-        data_store.ingest_many(con, missing)
+        # ingest_snapshot, not an in-place write: Compose workers may have the file open.
+        data_store.ingest_snapshot(missing)
 
+    con = data_store.connect_readonly()
     returns = data_store.get_returns_matrix(con, UNIVERSE, start="2021-07-01")
     con.close()
 

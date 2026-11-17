@@ -10,15 +10,18 @@ UNIVERSE = [
 ]
 
 def main():
-    con = data_store.connect()
-
     print(f"-> Batch-ingesting {len(UNIVERSE)} symbols into DuckDB (idempotent)...")
-    ok, failed = data_store.ingest_many(con, UNIVERSE, period="5y")
-    print(f"   {len(ok)} ok, {len(failed)} failed")
+    # Write through ingest_snapshot, never in place: the Compose workers may hold the
+    # file open read-only, and DuckDB refuses a read-write open while they do. Open the
+    # read-only connection after the ingest: within one process DuckDB keeps reusing
+    # an already-open database, so an earlier connection would still see the old file.
+    ok, failed = data_store.ingest_snapshot(UNIVERSE, period="5y")
+    print(f"   {len(ok)} ok ({sum(ok.values())} new bars), {len(failed)} failed")
     for sym, err in failed.items():
         print(f"   ! {sym}: {err}")
 
     universe = list(ok.keys())
+    con = data_store.connect_readonly()
     rets = data_store.get_returns_matrix(con, universe, start="2021-07-01")
     print(f"\n-> Aligned {len(rets)} trading days across {len(universe)} symbols")
 

@@ -4,13 +4,17 @@ import FinancialEngine
 import data_store
 
 def main():
-    con = data_store.connect()
-
     universe = ["SPY", "AAPL", "MSFT"]
     print("-> Ingesting universe into DuckDB (idempotent)...")
+    # Write through ingest_snapshot, never in place: the Compose workers may hold the
+    # file open read-only, and DuckDB refuses a read-write open while they do. Open the
+    # read-only connection after the ingest: within one process DuckDB keeps reusing
+    # an already-open database, so an earlier connection would still see the old file.
+    inserted, failed = data_store.ingest_snapshot(universe, period="5y")
     for sym in universe:
-        n = data_store.ingest(con, sym, period="5y")
-        print(f"   {sym}: {n} bars processed")
+        print(f"   {sym}: {inserted.get(sym, 0)} new bars", failed.get(sym, ""))
+
+    con = data_store.connect_readonly()
 
     print("\n-> Stored universe:")
     print(data_store.symbols(con).to_string(index=False))
