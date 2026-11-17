@@ -23,8 +23,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY --from=builder /wheels/*.whl /tmp/
+# constraints.txt pins the versions the local venv is tested with. Unpinned, a rebuild
+# pulled DuckDB 2.0.0, which writes new files that DuckDB 1.5.4 cannot open.
+COPY constraints.txt ./
 RUN pip install --no-cache-dir /tmp/*.whl \
-    && pip install --no-cache-dir "celery[redis]" duckdb pandas yfinance prometheus-client
+    && pip install --no-cache-dir -c constraints.txt \
+       "celery[redis]" duckdb pandas yfinance prometheus-client
 
 COPY data_store.py ./
 COPY services/ ./services/

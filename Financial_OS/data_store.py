@@ -160,9 +160,11 @@ def ingest_snapshot(symbols, period="5y", interval="1d", db_path=DEFAULT_DB):
                 inserted = {}
                 count = "SELECT COUNT(*) FROM ohlc WHERE symbol = ?"
                 for sym, tidy in frames.items():
-                    before = con.execute(count, [sym]).fetchone()[0]
+                    # fetchall, not fetchone: DuckDB 2.0 refuses the next statement
+                    # while a result is unfinished, and fetchone leaves it open.
+                    before = con.execute(count, [sym]).fetchall()[0][0]
                     _insert(con, tidy)
-                    inserted[sym] = con.execute(count, [sym]).fetchone()[0] - before
+                    inserted[sym] = con.execute(count, [sym]).fetchall()[0][0] - before
                 con.execute("CHECKPOINT")
             finally:
                 con.close()

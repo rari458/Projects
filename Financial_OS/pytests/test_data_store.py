@@ -168,7 +168,7 @@ def test_get_aligned_ohlc_starts_at_the_latest_first_date(con):
 def _count(db_path):
     con = data_store.connect_readonly(str(db_path))
     try:
-        return con.execute("SELECT COUNT(*) FROM ohlc").fetchone()[0]
+        return con.execute("SELECT COUNT(*) FROM ohlc").fetchall()[0][0]
     finally:
         con.close()
 

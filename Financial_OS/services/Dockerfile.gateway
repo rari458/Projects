@@ -2,7 +2,11 @@
 FROM python:3.14-slim
 
 WORKDIR /app
-RUN pip install --no-cache-dir "celery[redis]" fastapi uvicorn prometheus-fastapi-instrumentator
+# constraints.txt pins the versions the local venv is tested with, so the image
+# cannot drift to a newer release that nobody has run.
+COPY constraints.txt ./
+RUN pip install --no-cache-dir -c constraints.txt \
+    "celery[redis]" fastapi uvicorn prometheus-fastapi-instrumentator
 
 COPY services/ ./services/
 

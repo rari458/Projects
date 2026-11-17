@@ -100,6 +100,10 @@ ctest --test-dir build                # 16 GoogleTest cases
 # so importing FinancialEngine rebuilds it in build/<wheel_tag>/ after C++ changes
 pip install scikit-build-core
 pip install --no-build-isolation -e .
+# Python dependencies, pinned by constraints.txt to the versions everything is tested with
+# (the Docker images and CI install against the same file)
+pip install -c constraints.txt duckdb pandas yfinance "celery[redis]" fastapi uvicorn \
+    prometheus-fastapi-instrumentator prometheus-client pytest
 
 # Python entry points (run from repo root; data_store's data/market.duckdb path is relative)
 python server/main.py                 # legacy sync REST API on :8000
