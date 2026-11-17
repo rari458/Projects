@@ -1,25 +1,52 @@
+import os
+
 import pandas as pd
+import psycopg
 import pytest
 
 import data_store
 
+# A separate database on the same server, so tests never touch market data.
+# Locally that is the Compose postgres service; CI starts its own container.
+TEST_DSN = os.environ.get("FOS_TEST_DATABASE_URL",
+                          "postgresql://fos:fos@localhost:5433/fos_test")
+
+@pytest.fixture(scope="session")
+def dsn():
+    # Create the test database if needed. No skip when the server is down: a test
+    # suite that silently skips its database tests would pass without running them.
+    info = psycopg.conninfo.conninfo_to_dict(TEST_DSN)
+    admin = psycopg.conninfo.make_conninfo(TEST_DSN, dbname="postgres")
+    with psycopg.connect(admin, autocommit=True) as c:
+        exists = c.execute("SELECT 1 FROM pg_database WHERE datname = %s",
+                           [info["dbname"]]).fetchone()
+        if not exists:
+            c.execute(f'CREATE DATABASE "{info["dbname"]}"')
+    return TEST_DSN
+
 @pytest.fixture
-def con():
-    return data_store.connect(":memory:")
+def con(dsn):
+    c = data_store.connect(dsn)
+    c.execute("TRUNCATE ohlc")
+    yield c
+    c.close()
 
 def _insert(con, symbol, date, o, h, l, c):
     con.execute(
-        "INSERT INTO ohlc VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO ohlc VALUES (%s, %s, %s, %s, %s, %s)",
         [symbol, date, o, h, l, c],
     )
 
 def _dates(result):
     return [d.strftime("%Y-%m-%d") for d in result["dates"]]
 
-def test_connect_creates_ohlc_table():
-    c = data_store.connect(":memory:")
-    tables = c.execute("SELECT table_name FROM information_schema.tables").fetchall()
-    assert("ohlc",) in tables
+def _count(con):
+    return con.execute("SELECT COUNT(*) FROM ohlc").fetchone()[0]
+
+def test_connect_creates_ohlc_table(con):
+    tables = con.execute("SELECT table_name FROM information_schema.tables "
+                         "WHERE table_schema = 'public'").fetchall()
+    assert ("ohlc",) in tables
 
 def test_get_ohlc_round_trip(con):
     _insert(con, "AAPL", "2020-01-02", 1, 2, 0.5, 1.5)
@@ -85,6 +112,33 @@ def test_get_returns_matrix_drops_dates_missing_any_symbol(con):
     assert round(returns["AAPL"].iloc[0], 4) == 0.21
     assert round(returns["MSFT"].iloc[0], 4) == 0.10
 
+def test_get_aligned_ohlc_drops_dates_missing_any_symbol(con):
+    for d, c in (("2020-01-01", 100.0), ("2020-01-02", 110.0), ("2020-01-03", 121.0)):
+        _insert(con, "AAPL", d, 1, 2, 0.5, c)
+    for d, c in (("2020-01-01", 200.0), ("2020-01-03", 220.0)):
+        _insert(con, "MSFT", d, 1, 2, 0.5, c)
+
+    dates, bars = data_store.get_aligned_ohlc(con, ["AAPL", "MSFT"])
+
+    assert [d.strftime("%Y-%m-%d") for d in dates] == ["2020-01-01", "2020-01-03"]
+    # Truncating to the shorter series fed AAPL's 2020-01-02 bar (110.0) on the
+    # same tick as MSFT's 2020-01-03 bar.
+    assert bars["AAPL"]["closes"] == [100.0, 121.0]
+    assert bars["MSFT"]["closes"] == [200.0, 220.0]
+
+def test_get_aligned_ohlc_starts_at_the_latest_first_date(con):
+    # MSFT listed (or was ingested) one day later than AAPL.
+    for d, c in (("2020-01-01", 100.0), ("2020-01-02", 110.0), ("2020-01-03", 121.0)):
+        _insert(con, "AAPL", d, 1, 2, 0.5, c)
+    for d, c in (("2020-01-02", 200.0), ("2020-01-03", 220.0)):
+        _insert(con, "MSFT", d, 1, 2, 0.5, c)
+
+    dates, bars = data_store.get_aligned_ohlc(con, ["AAPL", "MSFT"])
+
+    assert [d.strftime("%Y-%m-%d") for d in dates] == ["2020-01-02", "2020-01-03"]
+    assert bars["AAPL"]["closes"] == [110.0, 121.0]
+    assert bars["MSFT"]["closes"] == [200.0, 220.0]
+
 def _fake_download(multiindex=False):
     dates = pd.date_range("2020-01-01", periods=3, freq="D")
     df = pd.DataFrame(
@@ -100,33 +154,34 @@ def _fake_download(multiindex=False):
         df.columns = pd.MultiIndex.from_product([df.columns, ["AAPL"]])
     return df
 
-def test_ingest_flattens_multiindex_and_inserts_rows(con, monkeypatch):
+def test_ingest_flattens_multiindex_and_inserts_rows(con, dsn, monkeypatch):
     monkeypatch.setattr(
         data_store.yf, "download", lambda *a, **k: _fake_download(multiindex=True)
     )
 
-    n = data_store.ingest(con, "AAPL")
+    assert data_store.ingest_symbols(["AAPL"], dsn=dsn) == ({"AAPL": 3}, {})
+    assert data_store.get_ohlc(con, "AAPL")["closes"] == [102.0, 103.0, 104.0]
 
-    assert n == 3
-    result = data_store.get_ohlc(con, "AAPL")
-    assert result["closes"] == [102.0, 103.0, 104.0]
-
-def test_ingest_raises_on_empty_data(con, monkeypatch):
+def test_ingest_reports_a_symbol_without_data_as_failed(con, dsn, monkeypatch):
     monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: pd.DataFrame())
 
-    with pytest.raises(ValueError):
-        data_store.ingest(con, "NOPE")
+    inserted, failed = data_store.ingest_symbols(["NOPE"], dsn=dsn)
 
-def test_ingest_is_idempotent_on_conflict(con, monkeypatch):
+    assert inserted == {}
+    assert "NOPE" in failed
+
+def test_ingest_counts_only_rows_it_added(con, dsn, monkeypatch):
     monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: _fake_download())
 
-    data_store.ingest(con, "AAPL")
-    data_store.ingest(con, "AAPL")
+    first = data_store.ingest_symbols(["AAPL"], dsn=dsn)
+    again = data_store.ingest_symbols(["AAPL"], dsn=dsn)
 
-    count = con.execute("SELECT COUNT(*) FROM ohlc").fetchone()[0]
-    assert count == 3
+    assert first == ({"AAPL": 3}, {})
+    # ON CONFLICT DO NOTHING skips all three, and the count says so.
+    assert again == ({"AAPL": 0}, {})
+    assert _count(con) == 3
 
-def test_ingest_many_partitions_ok_and_failed(con, monkeypatch):
+def test_ingest_partitions_ok_and_failed(con, dsn, monkeypatch):
     def fake_download(symbol, *a, **k):
         if symbol == "AAPL":
             return _fake_download()
@@ -134,94 +189,43 @@ def test_ingest_many_partitions_ok_and_failed(con, monkeypatch):
 
     monkeypatch.setattr(data_store.yf, "download", fake_download)
 
-    ok, failed = data_store.ingest_many(con, ["AAPL", "BAD"])
+    inserted, failed = data_store.ingest_symbols(["AAPL", "BAD"], dsn=dsn)
 
-    assert ok == {"AAPL": 3}
+    assert inserted == {"AAPL": 3}
     assert "BAD" in failed
-    
-def test_get_aligned_ohlc_drops_dates_missing_any_symbol(con):
-    for d, c in (("2020-01-01", 100.0), ("2020-01-02", 110.0), ("2020-01-03", 121.0)):
-        _insert(con, "AAPL", d, 1, 2, 0.5, c)
-    for d, c in (("2020-01-01", 200.0), ("2020-01-03", 220.0)):
-        _insert(con, "MSFT", d, 1, 2, 0.5, c)
-        
-    dates, bars = data_store.get_aligned_ohlc(con, ["AAPL", "MSFT"])
-    
-    assert [d.strftime("%Y-%m-%d") for d in dates] == ["2020-01-01", "2020-01-03"]
-    # Truncating to the shorter series fed AAPL's 2020-01-02 bar (110.0) on the
-    # same tick as MSFT's 2020-01-03 bar.
-    assert bars["AAPL"]["closes"] == [100.0, 121.0]
-    assert bars["MSFT"]["closes"] == [200.0, 220.0]
-    
-def test_get_aligned_ohlc_starts_at_the_latest_first_date(con):
-    # MSFT listed (or was ingested) one day later than AAPL.
-    for d, c in (("2020-01-01", 100.0), ("2020-01-02", 110.0), ("2020-01-03", 121.0)):
-        _insert(con, "AAPL", d, 1, 2, 0.5, c)
-    for d, c in (("2020-01-02", 200.0), ("2020-01-03", 220.0)):
-        _insert(con, "MSFT", d, 1, 2, 0.5, c)
-        
-    dates, bars = data_store.get_aligned_ohlc(con, ["AAPL", "MSFT"])
-    
-    assert [d.strftime("%Y-%m-%d") for d in dates] == ["2020-01-02", "2020-01-03"]
-    assert bars["AAPL"]["closes"] == [110.0, 121.0]
-    assert bars["MSFT"]["closes"] == [200.0, 220.0]
-def _count(db_path):
-    con = data_store.connect_readonly(str(db_path))
-    try:
-        return con.execute("SELECT COUNT(*) FROM ohlc").fetchall()[0][0]
-    finally:
-        con.close()
 
-def test_ingest_snapshot_creates_db_and_counts_inserted_rows(tmp_path, monkeypatch):
+def test_ingest_is_all_or_nothing(con, dsn, monkeypatch):
     monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: _fake_download())
-    db = tmp_path / "data" / "market.duckdb"
+    real_insert = data_store._insert
 
-    first = data_store.ingest_snapshot(["AAPL"], db_path=str(db))
-    again = data_store.ingest_snapshot(["AAPL"], db_path=str(db))
-
-    assert first == ({"AAPL": 3}, {})
-    # ON CONFLICT DO NOTHING skips all three, and the count says so.
-    assert again == ({"AAPL": 0}, {})
-    assert _count(db) == 3
-
-def test_ingest_snapshot_is_not_blocked_by_an_open_reader(tmp_path, monkeypatch):
-    monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: _fake_download())
-    db = tmp_path / "market.duckdb"
-    data_store.ingest_snapshot(["AAPL"], db_path=str(db))
-
-    reader = data_store.connect_readonly(str(db))
-    # A read-write open of the live file would fail here; the snapshot never opens it.
-    data_store.ingest_snapshot(["MSFT"], db_path=str(db))
-    # The open reader keeps the file it opened...
-    assert reader.execute("SELECT COUNT(*) FROM ohlc").fetchone()[0] == 3
-    reader.close()
-    # ...and the next open sees the swapped-in one.
-    assert _count(db) == 6
-
-def test_ingest_snapshot_failure_leaves_live_file_and_no_temp(tmp_path, monkeypatch):
-    monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: _fake_download())
-    db = tmp_path / "market.duckdb"
-    data_store.ingest_snapshot(["AAPL"], db_path=str(db))
-
-    def broken_insert(con, tidy):
-        raise RuntimeError("disk full")
-    monkeypatch.setattr(data_store, "_insert", broken_insert)
+    def insert_then_fail_on_msft(c, tidy):
+        if tidy["symbol"].iloc[0] == "MSFT":
+            raise RuntimeError("disk full")
+        return real_insert(c, tidy)
+    monkeypatch.setattr(data_store, "_insert", insert_then_fail_on_msft)
 
     with pytest.raises(RuntimeError):
-        data_store.ingest_snapshot(["MSFT"], db_path=str(db))
+        data_store.ingest_symbols(["AAPL", "MSFT"], dsn=dsn)
 
-    assert _count(db) == 3
-    assert sorted(p.name for p in tmp_path.iterdir()) == [".ingest.lock", "market.duckdb"]
+    # AAPL was inserted before MSFT failed, and was rolled back with it.
+    assert _count(con) == 0
 
-def test_ingest_snapshot_skips_the_swap_when_every_download_fails(tmp_path, monkeypatch):
-    monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: _fake_download())
-    db = tmp_path / "market.duckdb"
-    data_store.ingest_snapshot(["AAPL"], db_path=str(db))
-    inode = db.stat().st_ino
+def test_a_reader_neither_waits_for_nor_sees_an_uncommitted_ingest(con, dsn):
+    _insert(con, "AAPL", "2020-01-01", 1, 2, 0.5, 1.5)
+    tidy = pd.DataFrame({"symbol": "MSFT", "date": [pd.Timestamp("2020-01-01").date()],
+                         "open": [1.0], "high": [2.0], "low": [0.5], "close": [1.5]})
 
-    monkeypatch.setattr(data_store.yf, "download", lambda *a, **k: pd.DataFrame())
-    inserted, failed = data_store.ingest_snapshot(["NOPE"], db_path=str(db))
+    with data_store.connect(dsn) as writer:
+        with writer.transaction():
+            data_store._insert(writer, tidy)
+            # The writer holds its transaction open. With DuckDB this reader would
+            # have failed to open the file at all (ENGINEERING_DECISIONS #14).
+            with data_store.connect_readonly(dsn) as reader:
+                assert data_store.symbols(reader)["symbol"].tolist() == ["AAPL"]
+        with data_store.connect_readonly(dsn) as reader:
+            assert data_store.symbols(reader)["symbol"].tolist() == ["AAPL", "MSFT"]
 
-    assert inserted == {}
-    assert "NOPE" in failed
-    assert db.stat().st_ino == inode
+def test_readonly_connection_rejects_writes(con, dsn):
+    with data_store.connect_readonly(dsn) as reader:
+        with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
+            _insert(reader, "AAPL", "2020-01-01", 1, 2, 0.5, 1.5)

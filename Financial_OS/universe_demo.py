@@ -10,12 +10,10 @@ UNIVERSE = [
 ]
 
 def main():
-    print(f"-> Batch-ingesting {len(UNIVERSE)} symbols into DuckDB (idempotent)...")
-    # Write through ingest_snapshot, never in place: the Compose workers may hold the
-    # file open read-only, and DuckDB refuses a read-write open while they do. Open the
-    # read-only connection after the ingest: within one process DuckDB keeps reusing
-    # an already-open database, so an earlier connection would still see the old file.
-    ok, failed = data_store.ingest_snapshot(UNIVERSE, period="5y")
+    print(f"-> Batch-ingesting {len(UNIVERSE)} symbols into Postgres (idempotent)...")
+    # One transaction per ingest: readers, the Compose workers included, see all of
+    # it or none of it, and never wait for it.
+    ok, failed = data_store.ingest_symbols(UNIVERSE, period="5y")
     print(f"   {len(ok)} ok ({sum(ok.values())} new bars), {len(failed)} failed")
     for sym, err in failed.items():
         print(f"   ! {sym}: {err}")

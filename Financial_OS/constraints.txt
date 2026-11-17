@@ -50,6 +50,8 @@ prometheus-fastapi-instrumentator==8.1.0
 prometheus_client==0.26.0
 prompt_toolkit==3.0.52
 protobuf==7.35.1
+psycopg==3.3.9
+psycopg-binary==3.3.9
 pycparser==3.0
 pydantic==2.13.4
 pydantic-settings==2.14.2

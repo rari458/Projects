@@ -2,7 +2,7 @@
 
 import FinancialEngine as fe
 import data_store
-import duckdb
+import psycopg
 import os
 from services.celery_app import celery_app
 
@@ -45,7 +45,7 @@ def _run_backtest(con, symbols, start, end, strategy, initial_capital, leverage)
 
 @celery_app.task(
     name="run_backtest_job",
-    autoretry_for=(duckdb.IOException,),
+    autoretry_for=(psycopg.OperationalError,),
     retry_backoff=True,
     retry_backoff_max=10,
     retry_jitter=True,
@@ -83,7 +83,7 @@ def aggregate_walkforward(window_results):
 
 @celery_app.task(
     name="run_wf_window",
-    autoretry_for=(duckdb.IOException,),
+    autoretry_for=(psycopg.OperationalError,),
     retry_backoff=True,
     retry_backoff_max=10,
     retry_jitter=True,
@@ -160,7 +160,7 @@ def _default_num_threads():
 
 @celery_app.task(
     name="run_optimize_job",
-    autoretry_for=(duckdb.IOException,),
+    autoretry_for=(psycopg.OperationalError,),
     retry_backoff=True,
     retry_backoff_max=10,
     retry_jitter=True,
@@ -197,9 +197,10 @@ def run_optimize_job(symbols, start, end, method="mc_sharpe", num_simulations=10
         "num_threads": num_threads,
     }
 
-# Routed to the "ingest" queue, which only the ingester service consumes: compute
-# workers mount data/ read-only, and ingest_snapshot needs a single writer anyway.
+# Routed to the "ingest" queue, which only the ingester service consumes, so slow
+# downloads from Yahoo never occupy a compute worker. Postgres no longer needs a
+# single writer, but one is still enough.
 @celery_app.task(name="ingest_symbols")
 def ingest_symbols(symbols, period="5y"):
-    inserted, failed = data_store.ingest_snapshot(symbols, period=period)
+    inserted, failed = data_store.ingest_symbols(symbols, period=period)
     return {"symbols": symbols, "period": period, "inserted": inserted, "failed": failed}

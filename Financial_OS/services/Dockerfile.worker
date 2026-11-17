@@ -24,11 +24,11 @@ WORKDIR /app
 
 COPY --from=builder /wheels/*.whl /tmp/
 # constraints.txt pins the versions the local venv is tested with. Unpinned, a rebuild
-# pulled DuckDB 2.0.0, which writes new files that DuckDB 1.5.4 cannot open.
+# pulled DuckDB 2.0.0, whose new files DuckDB 1.5.4 could not open (ENGINEERING_DECISIONS #14).
 COPY constraints.txt ./
 RUN pip install --no-cache-dir /tmp/*.whl \
     && pip install --no-cache-dir -c constraints.txt \
-       "celery[redis]" duckdb pandas yfinance prometheus-client
+       "celery[redis]" "psycopg[binary]" pandas yfinance prometheus-client
 
 COPY data_store.py ./
 COPY services/ ./services/

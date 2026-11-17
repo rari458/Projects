@@ -29,34 +29,54 @@ services:
       # No CPU limit here, so the hardware_concurrency() pool has every core to use:
       # 1.36-2.17x faster than 1 at 1-8 replicas on this host (ENGINEERING_DECISIONS #13).
       FOS_OPTIMIZE_THREADS: "0"
+      FOS_DATABASE_URL: postgresql://fos:fos@postgres:5432/market
     depends_on:
       redis:
         condition: service_healthy
-    volumes:
-      - ./data:/app/data:ro
+      postgres:
+        condition: service_healthy
     expose:
       - "9100"
     stop_grace_period: 30s
 
-  # The single writer: same image as the worker, but it consumes only the "ingest"
-  # queue and mounts data/ read-write. It runs as the host user so the database and
-  # .ingest.lock it creates stay writable by local scripts.
+  # Same image as the worker, but it consumes only the "ingest" queue, so slow
+  # downloads from Yahoo never occupy a compute worker.
   ingester:
     build:
       context: .
       dockerfile: services/Dockerfile.worker
     command: ["celery", "-A", "services.celery_app:celery_app", "worker",
               "--loglevel=info", "--pool=solo", "-Q", "ingest"]
-    user: "${FOS_UID:-1000}:${FOS_GID:-1000}"
     environment:
       REDIS_URL: redis://redis:6379/0
-      HOME: /tmp
+      FOS_DATABASE_URL: postgresql://fos:fos@postgres:5432/market
     depends_on:
       redis:
         condition: service_healthy
-    volumes:
-      - ./data:/app/data
+      postgres:
+        condition: service_healthy
     stop_grace_period: 30s
+
+  # The market database. Readers and the ingester share it without blocking each
+  # other (ENGINEERING_DECISIONS #14 is why DuckDB could not). Host port 5433 is
+  # published (a local Postgres may hold 5432) for scripts and pytest.
+  # pytest uses its own fos_test database. Development credentials only.
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: fos
+      POSTGRES_PASSWORD: fos
+      POSTGRES_DB: market
+    ports:
+      - "5433:5432"
+    volumes:
+      # Postgres 18 images keep data under /var/lib/postgresql, not .../data.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fos -d market"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   redis_exporter:
     image: oliver006/redis_exporter:latest
@@ -91,3 +111,6 @@ services:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - prometheus
+
+volumes:
+  pgdata:

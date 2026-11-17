@@ -4,7 +4,7 @@ import FinancialEngine
 import data_store
 
 def main():
-    con = data_store.connect_readonly()  # read only: Compose workers may have it open
+    con = data_store.connect_readonly()  # this script only reads
     universe = ["SPY", "AAPL", "MSFT"]
 
     rets = data_store.get_returns_matrix(con, universe, start="2021-07-01")

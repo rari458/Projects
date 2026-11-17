@@ -63,6 +63,22 @@ jobs:
   python:
     name: pytest
     runs-on: ubuntu-26.04
+    # pytests/test_data_store.py runs against a real Postgres, and fails rather than
+    # skips without one, so CI starts the same image Compose uses.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: fos
+          POSTGRES_PASSWORD: fos
+          POSTGRES_DB: fos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fos -d fos_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      FOS_TEST_DATABASE_URL: postgresql://fos:fos@localhost:5432/fos_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -71,7 +87,7 @@ jobs:
       - name: Install dependencies
         # constraints.txt pins what the local venv runs; unpinned, CI got DuckDB 2.0.0.
         run: >-
-          pip install -c constraints.txt pytest duckdb pandas yfinance
+          pip install -c constraints.txt pytest "psycopg[binary]" pandas yfinance
           "celery[redis]" fastapi prometheus-fastapi-instrumentator
       - name: Test
         run: pytest

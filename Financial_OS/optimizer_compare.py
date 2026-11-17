@@ -19,9 +19,7 @@ def report(name, result):
     print(f"   Gross exposure:         {gross * 100:6.1f}%  ({shorts} short legs)")
 
 def main():
-    # ingest_snapshot, not an in-place write: Compose workers may have the file open.
-    # The read-only connection comes after it, so it sees the swapped-in file.
-    data_store.ingest_snapshot(UNIVERSE, period="5y")
+    data_store.ingest_symbols(UNIVERSE, period="5y")
     con = data_store.connect_readonly()
 
     rets = data_store.get_returns_matrix(con, UNIVERSE, start="2021-07-01")
