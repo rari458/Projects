@@ -6,7 +6,7 @@
 ![Python](https://img.shields.io/badge/Python-3.9%2B-yellow)
 ![Rust](https://img.shields.io/badge/Rust-2024-orange)
 ![Tests](https://img.shields.io/badge/gtest-16%20passing-brightgreen)
-![Tests](https://img.shields.io/badge/pytest-22%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/pytest-31%20passing-brightgreen)
 
 ## What this is
 
@@ -77,7 +77,7 @@ See [`ENGINEERING_DECISIONS.md`](./ENGINEERING_DECISIONS.md) for the full story 
 ```
 src/, include/        C++20 core — Backtester, Strategy.h (strategy + event catalog), pricing/MC machinery, Optimizer, Bindings.cpp (pybind11 surface)
 tests/, benchmarks/    GoogleTest (16 cases) + Google Benchmark
-services/              Phase 6 distributed stack: celery_app.py, tasks.py, gateway.py, Dockerfile.{worker,gateway}, tests/ (pytest, 10 cases)
+services/              Phase 6 distributed stack: celery_app.py, tasks.py, gateway.py, Dockerfile.{worker,gateway}, tests/ (pytest, 19 cases)
 server/                Legacy synchronous FastAPI monolith (data-by-value)
 market_data_feeder/    Rust live feeder (Binance L2 → OBI → C++ FFI)
 data_store.py          DuckDB persistence layer (pure, no C++ import — testable standalone)
@@ -96,10 +96,15 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build                # 16 GoogleTest cases
 
-# Python entry points (run from repo root; module resolves via ./build/src)
+# Python module: editable scikit-build-core install into the venv (editable.rebuild = true),
+# so importing FinancialEngine rebuilds it in build/<wheel_tag>/ after C++ changes
+pip install scikit-build-core
+pip install --no-build-isolation -e .
+
+# Python entry points (run from repo root; data_store's market.duckdb path is relative)
 python server/main.py                 # legacy sync REST API on :8000
 streamlit run dashboard.py
-pytest                                 # 22 pytest cases (scoped via testpaths in pyproject.toml)
+pytest                                 # 31 pytest cases (scoped via testpaths in pyproject.toml)
 
 # Distributed stack (Phase 6) -- Docker Compose
 docker compose up -d --build
@@ -116,17 +121,17 @@ docker compose up -d --scale worker=3 # horizontal scale-out, byte-identical to 
 kubectl apply -f k8s/financial-os.yaml
 kubectl get pods -n financial-os -w
 
-# Live microstructure feed (two processes)
+# Live microstructure feed: one process, Rust drives the C++ engine over the C ABI
+# (links build/src/libfinancial_engine_c.so, so run the CMake build above first)
 cargo run --manifest-path market_data_feeder/Cargo.toml
-python live_stream_udp.py
 ```
 
 ## Testing
 
 16 GoogleTest cases (`ctest --test-dir build`), including 5 **characterization / golden-master** tests (`tests/BacktesterCharacterizationTest.cpp`) that pin the Backtester's exact numeric output — 2 price-path strategies (MACD, EMA) and 3 event-driven suites (META_BRAIN, STRUCTURAL_ARB, GLOBAL_MACRO) — so any unintended behavior change during refactoring shows up as a failing test, without asserting the behavior is "correct."
 
-The Python layer has a 22-case pytest suite (`pytest`, scoped via `testpaths` in `pyproject.toml` to `services/tests/` + `pytests/` so it never collides with the root-level `*_test.py` demo scripts, which match pytest's default discovery patterns but are not pytest):
-- `services/tests/test_gateway.py` (10 cases) — `_add_months`, `_walkforward_windows`, `_wf_train_test_windows`: the date-window math behind the walk-forward endpoints, and the exact spot where hand-typed bugs (singular/plural `window`/`windows`, a missing leading underscore) turned up earlier in development. Several cases are pinned directly against live-verified runs (19 / 7 / 42 windows).
+The Python layer has a 31-case pytest suite (`pytest`, scoped via `testpaths` in `pyproject.toml` to `services/tests/` + `pytests/` so it never collides with the root-level `*_test.py` demo scripts, which match pytest's default discovery patterns but are not pytest):
+- `services/tests/test_gateway.py` (19 cases) — `_add_months`, `_walkforward_windows`, `_wf_train_test_windows`: the date-window math behind the walk-forward endpoints, and the exact spot where hand-typed bugs (singular/plural `window`/`windows`, a missing leading underscore) turned up earlier in development. Several cases are pinned directly against live-verified runs (19 / 7 / 42 windows). Nine more cover `/optimize`: request validation (defaults, an unknown method, `num_threads` other than 0/1, out-of-range `num_simulations`, an empty symbol list); a check that the gateway's method names match the worker's table in `tasks.py`, read through `ast` so the C++ module is never imported; and stubbed `send_task`/`chord` calls that pin `run_optimize_job`'s argument order and the `/wf_select` response. Each of the four hand-typed bugs found while building the optimize job, put back one at a time, fails at least one of them.
 - `pytests/test_data_store.py` (12 cases) — the DuckDB persistence layer, against an in-memory DB: schema creation, `get_ohlc`/`symbols`/`get_returns_matrix` round-trips, and `ingest`/`ingest_many` with `yf.download` monkeypatched (no real network calls) covering MultiIndex-column flattening, empty-response errors, `ON CONFLICT DO NOTHING` idempotency, and partial-failure partitioning.
 
 The Celery task/worker glue itself is still verified by manual/curl + Docker Compose round-trips rather than integration tests — a known, smaller remaining gap.
@@ -150,7 +155,7 @@ All 6 phases are complete as of 2026-07-09.
 |---|---|---|
 | Kubernetes deployment | ✅ done | `k8s/financial-os.yaml` — Deployments/Services/HPA for redis+gateway+worker on a single-node cluster, verified end-to-end (see highlight #5) |
 | Observability (Prometheus/Grafana) | ✅ done | `observability/` — worker-side exporter on `worker_ready`, `dns_sd_configs` per-replica scraping, `redis_exporter` queue depth, and a provisioned 4-panel dashboard (see highlight #6) |
-| `optimize` distributed job type | planned | run the Optimizer (MC/analytic/shrinkage) as a Celery job, alongside the existing backtest/walk-forward jobs |
+| `optimize` distributed job type | ✅ done | `POST /optimize` → `run_optimize_job`: Monte Carlo max-Sharpe or one of five closed-form methods (inverse volatility, minimum variance, analytic / shrunk / robust max-Sharpe) on the returns matrix from the read-only DuckDB mount. Verified through the Compose stack: the analytic weights match a local run of the same task exactly. `num_threads` is limited to 0 or 1 because the engine treats it as a switch between one thread and a `hardware_concurrency()` pool |
 | Write-side ingestion service | planned | a decoupled write path into the shared DuckDB (workers currently only read via a read-only mount) |
 | Large-universe stress test | planned | push distributed walk-forward further to see the C++ engine itself, not orchestration, become the bottleneck |
 | CI for the `services/` Docker stack | planned (last) | blocked on an unresolved monorepo issue — `.github/workflows/` currently sits one directory below the actual git root |
