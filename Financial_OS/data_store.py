@@ -62,7 +62,7 @@ def get_ohlc(con, symbol, start=None, end=None):
         query += " AND date >= ?"
         params.append(start)
     if end is not None:
-        query += "AND date <= ?"
+        query += " AND date <= ?"
         params.append(end)
     query += " ORDER BY date"
 
@@ -74,6 +74,20 @@ def get_ohlc(con, symbol, start=None, end=None):
         "lows":   df["low"].tolist(),
         "closes": df["close"].tolist(),
     }
+    
+def get_aligned_ohlc(con, symbols, start=None, end=None):
+    # A backtest feeds bar i of every symbol as one tick, so bar i must be the same
+    # date for all of them. Keep only the dates every symbol has: a date missing for
+    # one symbol (a gap, a later listing, an ingest run on another day) is dropped
+    # for all, the same rule get_returns_matrix applies.
+    if not symbols: raise ValueError("need at lease one symbol")
+    series = {sym: get_ohlc(con, sym, start=start, end=end) for sym in symbols}
+    dates = sorted(set.intersection(*(set(s["dates"]) for s in series.values())))
+    aligned = {}
+    for sym, s in series.items():
+        row = {d: i for i, d in enumerate(s["dates"])}
+        aligned[sym] = {key: [s[key][row[d]] for d in dates] for key in ("opens", "highs", "lows", "closes")}
+    return dates, aligned
 
 def symbols(con):
     return con.execute("""

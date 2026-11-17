@@ -8,9 +8,12 @@ from services.celery_app import celery_app
 
 def _run_backtest(con, symbols, start, end, strategy, initial_capital, leverage):
     engine = fe.Backtester(initial_capital, strategy, leverage)
-    series = {sym: data_store.get_ohlc(con, sym, start=start, end=end)
-              for sym in symbols}
-    n = min(len(s["closes"]) for s in series.values())
+    # Bar i of every symbol is fed as the same tick, so it must be the same date.
+    # Truncating each series to the shortest one paired different dates whenever
+    # the symbols' histories did not line up.
+    dates, series = data_store.get_aligned_ohlc(con, symbols, start=start, end=end)
+    n = len(dates)
+    
     for i in range(n):
         for sym in symbols:
             bars = series[sym]

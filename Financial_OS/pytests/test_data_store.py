@@ -138,3 +138,30 @@ def test_ingest_many_partitions_ok_and_failed(con, monkeypatch):
 
     assert ok == {"AAPL": 3}
     assert "BAD" in failed
+    
+def test_get_aligned_ohlc_drops_dates_missing_any_symbol(con):
+    for d, c in (("2020-01-01", 100.0), ("2020-01-02", 110.0), ("2020-01-03", 121.0)):
+        _insert(con, "AAPL", d, 1, 2, 0.5, c)
+    for d, c in (("2020-01-01", 200.0), ("2020-01-03", 220.0)):
+        _insert(con, "MSFT", d, 1, 2, 0.5, c)
+        
+    dates, bars = data_store.get_aligned_ohlc(con, ["AAPL", "MSFT"])
+    
+    assert [d.strftime("%Y-%m-%d") for d in dates] == ["2020-01-01", "2020-01-03"]
+    # Truncating to the shorter series fed AAPL's 2020-01-02 bar (110.0) on the
+    # same tick as MSFT's 2020-01-03 bar.
+    assert bars["AAPL"]["closes"] == [100.0, 121.0]
+    assert bars["MSFT"]["closes"] == [200.0, 220.0]
+    
+def test_get_aligned_ohlc_starts_at_the_latest_first_date(con):
+    # MSFT listed (or was ingested) one day later than AAPL.
+    for d, c in (("2020-01-01", 100.0), ("2020-01-02", 110.0), ("2020-01-03", 121.0)):
+        _insert(con, "AAPL", d, 1, 2, 0.5, c)
+    for d, c in (("2020-01-02", 200.0), ("2020-01-03", 220.0)):
+        _insert(con, "MSFT", d, 1, 2, 0.5, c)
+        
+    dates, bars = data_store.get_aligned_ohlc(con, ["AAPL", "MSFT"])
+    
+    assert [d.strftime("%Y-%m-%d") for d in dates] == ["2020-01-02", "2020-01-03"]
+    assert bars["AAPL"]["closes"] == [110.0, 121.0]
+    assert bars["MSFT"]["closes"] == [200.0, 220.0]
