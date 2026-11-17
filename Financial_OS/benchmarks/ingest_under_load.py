@@ -12,9 +12,10 @@ Every backtest task opens the database read-only. The script reports how the
 jobs ended, how many task attempts Celery made (a DuckDB lock conflict makes a
 task retry, up to 3 times), and, for the writers, how long each write took.
 
-Attempts come from the change in celery_tasks_total in Prometheus. The worker
-labels every non-SUCCESS postrun, retries included, as "failure", so retries
-are counted as attempts minus jobs.
+Attempts come from the change in celery_tasks_total in Prometheus, summed over
+every status label, so retries are counted as attempts minus jobs. (Until the
+fix after ENGINEERING_DECISIONS #14, a retry was labelled "failure", so the
+status label alone could not tell them apart.)
 
 Run from the repo root (inplace mode opens data/market.duckdb from the venv).
 """

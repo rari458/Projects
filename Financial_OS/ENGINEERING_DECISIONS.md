@@ -244,7 +244,7 @@ Every failure was `IO Error: Could not set lock on file "/app/data/market.duckdb
 
 **Two things found along the way:**
 - **Dependency drift.** Unpinned installs gave CI and the rebuilt worker image DuckDB 2.0.0 while the venv ran 1.5.4. Version 2.0 refuses a new statement while an earlier result is still unfinished, and `fetchone()` leaves it unfinished, so `ingest_snapshot` failed in CI. A file *created* by 2.0 has storage version 999, which 1.5.4 cannot open; a 1.5.4 file that 2.0 modifies stays readable. `constraints.txt` now pins the venv's versions for both images and CI.
-- **Retries are counted as failures.** The worker's metrics label every non-SUCCESS task run `failure`, retries included, so `celery_tasks_total{status="failure"}` overstates real failures. This measurement counts retries as attempts minus jobs instead.
+- **Retries are counted as failures.** The worker's metrics label every non-SUCCESS task run `failure`, retries included, so `celery_tasks_total{status="failure"}` overstates real failures. This measurement counts retries as attempts minus jobs instead. Fixed right after: a retry now gets its own `retry` label, and `services/tests/test_metrics.py` checks all three states.
 
 **Known limits:** a walk-forward job whose tasks run across a swap can read two versions of the data. Existing rows never change, so only windows that reach past the old last date can differ. The k8s `ingester` has not been run on a cluster, and if `/host-mount` comes from `minikube mount` over 9p, file locks there may not behave as they do on a bind mount. Like DuckDB itself, B is single-node by construction.
 

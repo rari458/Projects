@@ -49,4 +49,7 @@ def _record_done(task_id=None, task=None, state=None, **_):
     started = _task_start.pop(task_id, None)
     if started is not None:
         TASK_DURATION.labels(task.name).observe(time.perf_counter() - started)
-    TASKS_TOTAL.labels(task.name, "success" if state == "SUCCESS" else "failure").inc()
+    # task_postrun also fires for an attempt that ends in a retry (state RETRY).
+    # Labelling those "failure" overstated failures (ENGINEERING_DECISIONS #14).
+    status = {"SUCCESS": "success", "RETRY": "retry"}.get(state, "failure")
+    TASKS_TOTAL.labels(task.name, status).inc()
