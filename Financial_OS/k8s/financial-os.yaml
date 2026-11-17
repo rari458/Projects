@@ -148,6 +148,55 @@ spec:
             path: /host-mount/data
             type: Directory
 ---
+# The single writer: the worker image, consuming only the "ingest" queue, with a
+# read-write mount of data/ (the workers' mount is read-only). It writes through
+# data_store.ingest_snapshot, which needs exactly one writer at a time.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingester
+  namespace: financial-os
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: a rolling update starts the new pod before the
+  # old one stops, so for a moment two writers would share data/.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ingester
+  template:
+    metadata:
+      labels:
+        app: ingester
+    spec:
+      terminationGracePeriodSeconds: 30
+      # The host user, so the database and lock file it creates stay writable
+      # by local scripts on the node (same choice as docker-compose.yml).
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: ingester
+          image: financial-os-worker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["celery", "-A", "services.celery_app:celery_app", "worker",
+                    "--loglevel=info", "--pool=solo", "-Q", "ingest"]
+          envFrom:
+            - configMapRef:
+                name: financial-os-config
+          env:
+            - name: HOME
+              value: /tmp
+          volumeMounts:
+            - name: market-data
+              mountPath: /app/data
+      volumes:
+        - name: market-data
+          hostPath:
+            path: /host-mount/data
+            type: Directory
+---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
