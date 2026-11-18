@@ -19,10 +19,15 @@ endif()
 include(FetchContent)
 
 # --- Core dependencies (always needed: static lib + Python module) ---
+# DOWNLOAD_EXTRACT_TIMESTAMP FALSE on every dependency: extracted files get the time
+# they were unpacked, so upgrading a dependency rebuilds it. TRUE kept each archive's
+# own dates, and after fmt 10.2.1 -> 11.2.0 (a release dated before the existing
+# objects) an incremental build kept fmt 10's libfmt.a and failed to link with
+# undefined fmt::v11::vprint. FALSE is also CMake's default under policy CMP0135.
 FetchContent_Declare(
     fmt
     URL https://github.com/fmtlib/fmt/archive/11.2.0.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE
 )
 FetchContent_MakeAvailable(fmt)
 
@@ -30,20 +35,20 @@ FetchContent_Declare(
     bs_thread_pool
     URL
     https://github.com/bshoshany/thread-pool/archive/refs/tags/v5.1.0.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE
 )
 FetchContent_MakeAvailable(bs_thread_pool)
 
 FetchContent_Declare(
     pybind11
     URL https://github.com/pybind/pybind11/archive/refs/tags/v2.11.1.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE
 )
 
 FetchContent_Declare(
     eigen
     URL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE
 )
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(EIGEN_BUILD DOC OFF)
@@ -57,7 +62,7 @@ if(FINANCIAL_OS_BUILD_TESTS)
     FetchContent_Declare(
         googletest
         URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        DOWNLOAD_EXTRACT_TIMESTAMP FALSE
     )
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
@@ -65,7 +70,7 @@ if(FINANCIAL_OS_BUILD_TESTS)
     FetchContent_Declare(
         benchmark
         URL https://github.com/google/benchmark/archive/refs/tags/v1.8.3.zip
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        DOWNLOAD_EXTRACT_TIMESTAMP FALSE
     )
     set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
     set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
