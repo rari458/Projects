@@ -148,14 +148,14 @@ _CLOSE_FORM_METHODS = {
     "max_sharpe_robust": "optimize_max_sharpe_robust",
 }
 
-# num_threads for mc_sharpe when the request leaves it out. The deployment sets it,
-# because only the deployment knows how much CPU a worker gets: the pool sizes itself
-# with hardware_concurrency(), which reports the host's cores, not a container's CPU
-# limit (ENGINEERING_DECISIONS #13). Checked per call, so a bad value fails optimize
-# jobs with a readable error instead of crash-looping every worker at import.
+# num_threads for mc_sharpe when the request leaves it out. 0 = every CPU this worker
+# may use: the engine reads its container's CPU quota (ENGINEERING_DECISIONS #16), so
+# the deployment no longer has to choose. FOS_OPTIMIZE_THREADS can still cap it.
+# Checked per call, so a bad value fails optimize jobs with a readable error instead
+# of crash-looping every worker at import.
 def _default_num_threads():
-    raw = os.environ.get("FOS_OPTIMIZE_THREADS", "1")
-    if raw not in ("0", "1"): raise ValueError(f"FOS_OPTIMIZE_THREADS must be 0 or 1, got {raw!r}")
+    raw = os.environ.get("FOS_OPTIMIZE_THREADS", "0")
+    if not raw.isdigit(): raise ValueError(f"FOS_OPTIMIZE_THREADS must be a count >= 0, got {raw!r}")
     return int(raw)
 
 @celery_app.task(
@@ -195,6 +195,7 @@ def run_optimize_job(symbols, start, end, method="mc_sharpe", num_simulations=10
         "portfolio_volatility": float(res.portfolio_volatility),
         "sharpe_ratio": float(res.sharpe_ratio),
         "num_threads": num_threads,
+        "usable_cpus": fe.Optimizer.usable_cpus(),
     }
 
 # Routed to the "ingest" queue, which only the ingester service consumes, so slow

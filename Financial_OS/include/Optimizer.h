@@ -21,6 +21,8 @@ struct OptimizationResult {
 class Optimizer {
 public:
     void add_asset(const std::string& symbol, const std::vector<double>& returns);
+    // num_threads: 0 uses every CPU this process may use (usable_cpus()); N uses at
+    // most N of them. 1 runs on the calling thread without the pool.
     OptimizationResult optimize_sharpe_ratio(int num_simulations, double risk_free_rate, unsigned int num_threads = 0);
     OptimizationResult optimize_inverse_volatility(double risk_free_rate = 0.0);
     OptimizationResult optimize_minimum_variance(double risk_free_rate = 0.0);
@@ -28,6 +30,9 @@ public:
     OptimizationResult optimize_max_sharpe_shrunk(double risk_free_rate = 0.0);
     OptimizationResult optimize_max_sharpe_robust(double risk_free_rate = 0.0);
     std::vector<std::vector<double>> calculate_covariance_matrix() const;
+    // CPUs this process may actually run on: the affinity mask capped by the cgroup
+    // CPU quota. hardware_concurrency() counts the machine's CPUs and ignores both.
+    static unsigned int usable_cpus();
 
 private:
     std::vector<std::string> symbols_;

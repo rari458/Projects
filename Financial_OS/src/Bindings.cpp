@@ -249,7 +249,8 @@ PYBIND11_MODULE(FinancialEngine, m) {
         .def("optimize_minimum_variance", &Optimizer::optimize_minimum_variance, py::arg("risk_free_rate") = 0.0)
         .def("optimize_max_sharpe_analytic", &Optimizer::optimize_max_sharpe_analytic, py::arg("risk_free_rate") = 0.0)
         .def("optimize_max_sharpe_shrunk", &Optimizer::optimize_max_sharpe_shrunk, py::arg("risk_free_rate") = 0.0)
-        .def("optimize_max_sharpe_robust", &Optimizer::optimize_max_sharpe_robust, py::arg("risk_free_rate") = 0.0);
+        .def("optimize_max_sharpe_robust", &Optimizer::optimize_max_sharpe_robust, py::arg("risk_free_rate") = 0.0)
+        .def_static("usable_cpus", &Optimizer::usable_cpus);
 
     py::class_<Gene>(m, "Gene")
         .def_readonly("fast", &Gene::fast)

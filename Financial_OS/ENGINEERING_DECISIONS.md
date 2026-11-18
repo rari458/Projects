@@ -207,7 +207,7 @@ This document records *why*, not just *what*. Each entry captures a question tha
 
 **What the reported value caught on the first run:** the first Compose check of a request without `num_threads` came back with `"num_threads": 1`. `docker-compose.yml` had been typed as `FOS_OPTIMIZE_THERADS`. Compose passes any variable name through without complaint, so the worker looked up the correct name, found nothing, and fell back to its safe default. The job succeeded with sensible weights, so the result field was the only sign that the setting never arrived. With the name fixed, the same request returned `"num_threads": 0`. This is story #12's failure class at the configuration layer: a misspelled setting can't be told apart from a correct one left at its default. That is the reason the job result reports the value that actually ran.
 
-**Left open:** the engine-level fix would be to size the pool from the container's CPU quota (`/sys/fs/cgroup/cpu.max`) instead of `hardware_concurrency()`. That would make the pool correct under any limit, and would let `num_threads` go back to being an actual count. It was not done because it changes the C++ core for a deployment shape this project only runs locally. The +42% slowdown at 8 replicas is also unexplained. A run that pins one replica per physical core would tell whether hyperthread siblings are the cause.
+**Left open:** the engine-level fix would be to size the pool from the container's CPU quota (`/sys/fs/cgroup/cpu.max`) instead of `hardware_concurrency()` (done later; see story #16). That would make the pool correct under any limit, and would let `num_threads` go back to being an actual count. It was not done because it changes the C++ core for a deployment shape this project only runs locally. The +42% slowdown at 8 replicas is also unexplained. A run that pins one replica per physical core would tell whether hyperthread siblings are the cause.
 
 **Why it matters:** this is the same compounding as stories #7 and #11, one layer down. Phase 4's pool sizes itself from `hardware_concurrency()`, a number that was true on the bare host and became wrong once a container runtime put a CPU quota between the process and the cores. The Compose numbers were the most repeatable of any measurement in this project, three passes with the winner never in doubt. That consistency made them easy to promote to a global default, but it says nothing about a deployment that limits CPU differently.
 
@@ -282,3 +282,35 @@ The third row is the direct counterpart of story #14's worst case. A 5 s DuckDB 
 **An environment detail that cost a round trip:** a native PostgreSQL 18 on the WSL host already listened on `127.0.0.1:5432`. The first migration therefore reached that server, not the container, and failed with `password authentication failed for user "fos"`. The scratch tests had used port 55432, so they never touched 5432 and could not catch it. Compose now publishes the container on host port 5433.
 
 **Why it matters:** story #14 measured why DuckDB could not take a writer and built a way around it. This story removed the reason for the workaround, and the same benchmark that recorded 79% failures under a 5 s DuckDB write lock recorded zero under a 5 s Postgres write transaction. Both changes ended the same way, though: the constraint moved rather than disappeared. In story #14 it moved from the file to how the file is mounted, and here from where the workers can run to where the database's storage lives. It took a second node to see it, because on a single node every restart comes back to the same disk.
+
+---
+
+## 16. The thread pool learns how many CPUs it may use (post-roadmap expansion)
+
+**Context:** story #13 left the Optimizer's Monte Carlo pool sized by `std::thread::hardware_concurrency()`, which reports the machine's CPUs (16 here), not what a container may use. The workaround was a per-deployment default: `FOS_OPTIMIZE_THREADS` was `0` (all cores) on Compose, which has no CPU limit, and `1` on k8s, whose workers are capped at 1 CPU. The story predicted that a 16-thread pool under a 1-CPU quota would be throttled and probably slower, but never measured it.
+
+**Measured first:** the 26-asset, 100k-trial search was timed inside the existing worker image under `docker run --cpus`, 20 calls per setting, reading the cgroup's `cpu.stat` throttling counters around the timed calls:
+
+| CPU limit | `num_threads=0` (16-thread pool) | `num_threads=1` | Throttled periods with the pool |
+|---|---|---|---|
+| none | 12.9 ms median, 16.9 ms p90 | 79.0 ms | 0 |
+| `--cpus 2` | 49.1 ms, **95.4 ms p90** | 78.7 ms | every one (10/10) |
+| `--cpus 1` | **105.5 ms, 197.2 ms p90** | 84.7 ms | every one (28/28) |
+
+Under a 1-CPU quota, "use all cores" was 25% slower than one thread at the median and 2.1x worse at the p90: story #13's suspicion, now measured.
+
+**The change:** `Optimizer::usable_cpus()` starts from `hardware_concurrency()`, caps it by the affinity mask (`sched_getaffinity`, which `--cpuset-cpus` sets), and caps that by the CFS quota (`/sys/fs/cgroup/cpu.max`, with the cgroup v1 files as a fallback), rounding the quota up. One static pool of that size serves every call, and `num_threads` became a real count: `0` uses the whole pool, `N` splits the trials into at most `N` blocks, and `1` runs inline without the pool. It is exposed to Python as `Optimizer.usable_cpus()` and reported in every optimize result. The gateway now accepts `0` to `256` instead of only `0` or `1`. The worker's default became `0` everywhere, so the per-deployment `FOS_OPTIMIZE_THREADS` lines in `docker-compose.yml` and the k8s manifest were deleted rather than adjusted. Two new GoogleTest cases check that `usable_cpus()` stays within the machine and that every thread count, including more threads than any machine has, returns a fully invested portfolio. Both compilers pass all 18.
+
+**Prediction, recorded before the change was built:** about 80–85 ms with no throttling at 1 CPU, about 40–45 ms with the p90 close to the median at 2 CPUs, and no change without a limit. **Measured after**, in a worker image built from the change:
+
+| CPU limit | Pool size | `num_threads=0` median | p90 | Throttled periods |
+|---|---|---|---|---|
+| none | 16 | 11.6 ms | 13.0 ms | 0 |
+| `--cpus 2` | 2 | 47.6 ms | 54.5 ms | 0 of 9 |
+| `--cpus 1` | 1 | 81.4 ms | 88.4 ms | 0 of 16 |
+| `--cpus 1.5` | 2 (rounded up) | 64.2 ms | 69.6 ms | 12 of 12, but 0.5 s throttled in total |
+| `--cpuset-cpus 0,1`, no quota | 2 | 47.0 ms | 51.9 ms | 0 |
+
+The 1-CPU prediction held (81.4 ms, no throttling), and so did the unlimited one. **The 2-CPU prediction was half wrong.** The median barely moved, 49.1 ms to 47.6 ms, not the predicted 40–45 ms. The whole gain was in the tail: the p90 fell 43%, and throttling stopped. Sixteen threads under a 2-CPU quota did the same total work. What they added was stalls: whole periods in which every thread waited for the quota to refill, and a call finished only when its slowest block did. **Rounding up held:** at 1.5 CPUs, two threads finished in 64.2 ms, while one thread takes about 81 ms. The cost was some throttling, 0.5 s in total against the 16-thread pool's 7.3 s at 2 CPUs.
+
+**Why it matters:** story #13 fixed the symptom where it showed up, in the deployment config: each deployment had to know its own CPU limit and set a matching default. That is the kind of setting that goes stale the first time someone changes `limits.cpu`. Here the engine asks the kernel instead, so every deployment now runs with the same default. The measurement also corrected the expectation of what oversubscription costs. At a whole-CPU quota the cost lands mostly in the slowest calls, not the typical one, so a median-only benchmark would have called the change pointless at 2 CPUs.

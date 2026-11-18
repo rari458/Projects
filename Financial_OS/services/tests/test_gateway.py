@@ -55,7 +55,8 @@ def test_optimize_request_defaults():
     
 @pytest.mark.parametrize("field, value", [
     ("method", "max_sharpe"),       # not one of the six names
-    ("num_threads", 4),             # the engine only tells 1 apart from "all cores"
+    ("num_threads", -1),
+    ("num_threads", 257),
     ("num_simulations", 0),
     ("num_simulations", 1_000_001),
     ("symbols", []),
@@ -63,6 +64,10 @@ def test_optimize_request_defaults():
 
 def test_optimize_request_rejects(field, value):
     with pytest.raises(ValidationError): _optimize_request(**{field: value})
+
+def test_optimize_request_accepts_a_thread_count():
+    # Until the pool learned the container's CPU quota, only 0 and 1 meant anything.
+    assert _optimize_request(num_threads=4).num_threads == 4
     
 def test_optimize_methods_match_worker():
     # The gateway cannot import services.tasks (it loads the C++ module), so the

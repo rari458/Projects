@@ -152,11 +152,10 @@ class OptimizeRequest(BaseModel):
     # Bounds worker memory: the MC search keeps num_simulations x len(symbols) weights.
     num_simulations: int = Field(default=100000, ge=1, le=1_000_000)
     risk_free_rate: float = 0.02
-    # The engine treats num_threads as a switch: 1 = one thread, anything else =
-    # a pool of hardware_concurrency() threads. Only these two values mean anything.
-    # Left out, the worker uses its deployment's FOS_OPTIMIZE_THREADS (Compose 0,
-    # k8s, 1), because only the deployment knows how much CPU a worker has.
-    num_threads: Literal[0, 1] | None = None
+    # A thread count: 0 = every CPU the worker may use, N = at most N. The engine
+    # caps it at the CPUs its container may use, so no value can oversubscribe it.
+    # Left out, the worker's FOS_OPTIMIZE_THREADS applies (default 0).
+    num_threads: int | None = Field(default=None, ge=0, le=256)
     
 @app.post("/optimize")
 def submit_optimize(req: OptimizeRequest):

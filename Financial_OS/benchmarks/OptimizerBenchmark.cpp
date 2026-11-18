@@ -35,4 +35,5 @@ void RunOptimize(benchmark::State& state, unsigned int num_threads) {
 } // namespace
 
 BENCHMARK_CAPTURE(RunOptimize, serial_1_thread, 1u)->Arg(10000)->Arg(100000)->Unit(benchmark::kMillisecond);
+BENCHMARK_CAPTURE(RunOptimize, parallel_2_threads, 2u)->Arg(10000)->Arg(100000)->Unit(benchmark::kMillisecond);
 BENCHMARK_CAPTURE(RunOptimize, parallel_auto, 0u)->Arg(10000)->Arg(100000)->Unit(benchmark::kMillisecond);

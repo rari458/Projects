@@ -5,6 +5,13 @@
 #include <random>
 #include "BS_thread_pool.hpp"
 #include <thread>
+#include <algorithm>
+#include <cstdlib>
+#include <fstream>
+#include <string>
+#ifdef __linux__
+#include <sched.h>
+#endif
 
 void Optimizer::add_asset(const std::string& symbol, const std::vector<double>& returns) {
     symbols_.push_back(symbol);
@@ -61,6 +68,37 @@ std::pair<double, double> Optimizer::calculate_portfolio_metrics(
     return {port_return, std::sqrt(port_variance)};
 }
 
+unsigned int Optimizer::usable_cpus() {
+    // A container can use fewer CPUs than the machine has: its affinity mask
+    // (--cpuset-cpus) and its CFS quota (--cpus, a k8s limits.cpu) both cap it. A pool
+    // sized past that cap only gets throttled: under a 1-CPU quota, 16 threads ran
+    // 25% slower than one, with a 2.1x worse p90 (ENGINEERING_DECISIONS #13, #16).
+    unsigned int n = std::max(1u, std::thread::hardware_concurrency());
+#ifdef __linux__
+    cpu_set_t set;
+    if (sched_getaffinity(0, sizeof(set), &set) == 0) {
+        n = std::min(n, static_cast<unsigned int>(CPU_COUNT(&set)));
+    }
+    long quota = -1;
+    long period = 0;
+    std::ifstream v2("/sys/fs/cgroup/cpu.max");  // cgroup v2: "<quota|max> <period>"
+    std::string q;
+    if (v2 >> q >> period) {
+        if (q != "max") quota = std::strtol(q.c_str(), nullptr, 10);
+    } else {  // cgroup v1
+        std::ifstream qf("/sys/fs/cgroup/cpu/cpu.cfs_quota_us");
+        std::ifstream pf("/sys/fs/cgroup/cpu/cpu.cfs_period_us");
+        if (!(qf >> quota) || !(pf >> period)) quota = -1;
+    }
+    if (quota > 0 && period > 0) {
+        // Rounded up, as the JVM does: a 1.5-CPU quota gets 2 threads, which can
+        // still use all of it, where 1 thread would leave half a CPU idle.
+        n = std::min(n, static_cast<unsigned int>((quota + period - 1) / period));
+    }
+#endif
+    return std::max(1u, n);
+}
+
 OptimizationResult Optimizer::optimize_sharpe_ratio(int num_simulations, 
     double risk_free_rate, unsigned int num_threads) {
     size_t n_assets = symbols_.size();
@@ -79,8 +117,9 @@ OptimizationResult Optimizer::optimize_sharpe_ratio(int num_simulations,
     std::vector<double> ann_rets(num_simulations, 0.0);
     std::vector<double> ann_vols(num_simulations, 0.0);
 
-    static BS::thread_pool single_threaded_pool(1);
-    static BS::thread_pool auto_threaded_pool(std::thread::hardware_concurrency());
+    // One pool, sized once to the CPUs this process may use; num_threads only caps
+    // how many of them a call splits its trials across.
+    static BS::thread_pool pool(usable_cpus());
 
     auto run_trial = [&](int sim) {
         thread_local std::mt19937 gen(std::random_device{}());
@@ -111,10 +150,12 @@ OptimizationResult Optimizer::optimize_sharpe_ratio(int num_simulations,
         }
     };
 
-    if (num_threads == 1) {
-        single_threaded_pool.submit_loop(0, num_simulations, run_trial).wait();
+    const auto usable = static_cast<unsigned int>(pool.get_thread_count());
+    const unsigned int threads = (num_threads == 0) ? usable : std::min(num_threads, usable);
+    if (threads == 1) {
+        for (int sim = 0; sim < num_simulations; ++sim) run_trial(sim);
     } else {
-        auto_threaded_pool.submit_loop(0, num_simulations, run_trial).wait();
+        pool.submit_loop(0, num_simulations, run_trial, threads).wait();
     }
 
     auto best_it = std::max_element(sharpes.begin(), sharpes.end());

@@ -12,6 +12,7 @@ add_executable(UnitTests
 	TreeTest.cpp
 	GreeksTest.cpp
     BacktesterCharacterizationTest.cpp
+    OptimizerTest.cpp
     ../src/StrategyRegistration.cpp
 )
 
