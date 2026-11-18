@@ -74,16 +74,19 @@ spec:
             # Postgres 18 images keep data under /var/lib/postgresql, not .../data.
             - name: pgdata
               mountPath: /var/lib/postgresql
-  # Needs a storage class whose volumes carry node affinity, so postgres-0 is only
-  # scheduled where its data lives: cloud disk CSI drivers and local-path
-  # provisioners do. minikube's default "standard" class does not. On a 2-node
-  # cluster, postgres-0 forced onto the other node came up as a new, empty
-  # database there (ENGINEERING_DECISIONS #15); restarts on the same node kept
-  # every row.
+  # The volume must stay with its data: postgres-0 may only run where its volume
+  # lives (local-path) or the volume must follow it (cloud disk classes).
+  # minikube's default "standard" class does neither, and on a 2-node cluster a
+  # postgres-0 forced onto the other node came up as a new, empty database
+  # (ENGINEERING_DECISIONS #15). So the class is named explicitly: a cluster
+  # without it leaves the claim Pending instead of quietly using unsuitable
+  # storage. On minikube: minikube addons enable storage-provisioner-rancher.
+  # Elsewhere, replace local-path with a class that meets the same requirement.
   volumeClaimTemplates:
     - metadata:
         name: pgdata
       spec:
+        storageClassName: local-path
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
