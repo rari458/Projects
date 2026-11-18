@@ -91,3 +91,21 @@ jobs:
           "celery[redis]" fastapi prometheus-fastapi-instrumentator
       - name: Test
         run: pytest
+
+  compose:
+    name: Compose stack smoke test
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the images and start the stack
+        # Only what jobs need: redis and postgres start as dependencies, while
+        # Prometheus, Grafana and redis_exporter stay off.
+        run: docker compose up -d --build --wait gateway worker ingester
+      - name: Seed a synthetic series
+        # CI cannot rely on reaching Yahoo, so three made-up symbols stand in.
+        run: docker compose exec -T worker python - < ci/seed_synthetic.py
+      - name: Smoke test through the gateway
+        run: python3 ci/smoke_test.py
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail 200
