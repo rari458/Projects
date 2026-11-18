@@ -41,7 +41,11 @@ if(MSVC)
     target_compile_options(FinancialEngine PRIVATE /W4 /WX)
 else()
     target_compile_options(FinancialEngine PRIVATE -Wall -Wextra -Werror -flto=auto)
-    target_link_options(FinancialEngine PRIVATE -flto=auto)
+    # INTERFACE, not PRIVATE: a static library is never linked itself, so a private
+    # link option reached no binary. Every program linking FinancialEngine has to
+    # link its LTO objects with -flto; gcc's linker plugin coped without the flag,
+    # clang's does not (ld: "file format not recognized").
+    target_link_options(FinancialEngine INTERFACE -flto=auto)
 endif()
 
 add_executable(FinancialOS main.cpp PayoffRegistration.cpp StrategyRegistration.cpp)

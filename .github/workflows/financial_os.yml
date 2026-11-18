@@ -22,15 +22,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # clang is not in the matrix yet: fmt 10.2.1 does not compile under clang, and the
-        # -flto=auto static library's consumers link LLVM bitcode without the LTO plugin.
-        compiler: [gcc]
+        # clang joined once fmt moved past 10.2.1 (which fails to compile under clang)
+        # and FinancialEngine's -flto=auto link option became INTERFACE, so binaries
+        # linking its LLVM bitcode get the LTO plugin. The golden masters pass under both.
+        compiler: [gcc, clang]
     steps:
       - uses: actions/checkout@v4
       - name: Install toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build python3-dev
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            echo "CC=clang" >> "$GITHUB_ENV"
+            echo "CXX=clang++" >> "$GITHUB_ENV"
+          fi
+      - name: Compiler version
+        run: ${CXX:-c++} --version | head -1
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
       - name: Build

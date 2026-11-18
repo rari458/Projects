@@ -21,7 +21,7 @@ include(FetchContent)
 # --- Core dependencies (always needed: static lib + Python module) ---
 FetchContent_Declare(
     fmt
-    URL https://github.com/fmtlib/fmt/archive/10.2.1.zip
+    URL https://github.com/fmtlib/fmt/archive/11.2.0.zip
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(fmt)
